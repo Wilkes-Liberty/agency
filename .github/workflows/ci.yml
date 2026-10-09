@@ -98,7 +98,12 @@ jobs:
 
   functional:
     name: Drupal ${{ matrix.minor }} / PHP ${{ matrix.php }}${{ matrix.suffix }}
-    runs-on: ubuntu-latest
+    # Pin the runner image. Its preinstalled servers are MySQL 8.0 and
+    # PostgreSQL 16, which are the versions this matrix claims to test.
+    # Starting them here avoids a Docker Hub anonymous pull. Those pulls
+    # share a per-IP quota across GitHub-hosted runners and fail the job
+    # before checkout.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -107,39 +112,57 @@ jobs:
           - { minor: '10.6', core: '~10.6.0', php: '8.2', driver: mysql, suffix: '' }
           - { minor: '11.3', core: '~11.3.0', php: '8.3', driver: mysql, suffix: '' }
           # Lock, savepoint and transaction behaviour differ by database engine,
-          # not by core minor. Repeat the 11.x floor on PostgreSQL 16 so later
-          # domain transaction tests execute on both engines.
+          # not by core minor. Repeat the 11.x floor on PostgreSQL 16 so domain
+          # transaction tests execute on both engines.
           - { minor: '11.3', core: '~11.3.0', php: '8.3', driver: pgsql, suffix: ' / PostgreSQL 16' }
           - { minor: '11.4', core: '~11.4.0', php: '8.4', driver: mysql, suffix: '' }
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_DATABASE: agency_test
-          MYSQL_USER: agency_test
-          MYSQL_PASSWORD: test_only
-          MYSQL_ROOT_PASSWORD: test_only_root
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -ptest_only_root --silent"
-          --health-interval 5s --health-timeout 5s --health-retries 10
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: agency_test
-          POSTGRES_USER: agency_test
-          POSTGRES_PASSWORD: test_only
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U agency_test -d agency_test"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v7
         with:
           path: module
           persist-credentials: false
+      - name: Start the matrix database
+        env:
+          DRIVER: ${{ matrix.driver }}
+        run: |
+          set -euo pipefail
+          if [ "$DRIVER" = mysql ]; then
+            sudo systemctl start mysql
+            # The runner image test logs in as root over the local socket.
+            # Drupal connects as agency_test over 127.0.0.1, which matches
+            # the '%' account created below.
+            version="$(mysql -uroot -proot -N -s -e 'SELECT VERSION()')"
+            echo "MySQL server ${version}"
+            case "$version" in
+              8.0.*) ;;
+              *) echo "::error::Expected MySQL 8.0, found ${version}"; exit 1 ;;
+            esac
+            mysql -uroot -proot <<'SQL'
+          CREATE DATABASE IF NOT EXISTS agency_test;
+          CREATE USER IF NOT EXISTS 'agency_test'@'%' IDENTIFIED BY 'test_only';
+          GRANT ALL PRIVILEGES ON agency_test.* TO 'agency_test'@'%';
+          FLUSH PRIVILEGES;
+          SQL
+            mysql --protocol=TCP -h 127.0.0.1 -uagency_test -ptest_only agency_test -e 'SELECT 1'
+          elif [ "$DRIVER" = pgsql ]; then
+            sudo systemctl start postgresql
+            version="$(sudo -u postgres psql -tAc 'SHOW server_version')"
+            echo "PostgreSQL server ${version}"
+            case "$version" in
+              16.*) ;;
+              *) echo "::error::Expected PostgreSQL 16, found ${version}"; exit 1 ;;
+            esac
+            # The official Postgres image makes POSTGRES_USER a superuser.
+            # Match that privilege for the synthetic test role.
+            sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE agency_test WITH LOGIN SUPERUSER PASSWORD 'test_only';
+          SQL
+            sudo -u postgres createdb --owner=agency_test agency_test
+            PGPASSWORD=test_only psql -h 127.0.0.1 -U agency_test -d agency_test -c 'SELECT 1'
+          else
+            echo "::error::Unknown database driver ${DRIVER}"
+            exit 1
+          fi
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -188,6 +211,28 @@ jobs:
           done
           echo '::error::Test server did not start'
           exit 1
+      - name: Run domain transaction and concurrency tests
+        working-directory: drupal
+        env:
+          SIMPLETEST_DB: ${{ matrix.driver }}://agency_test:test_only@127.0.0.1/agency_test
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          export BROWSERTEST_OUTPUT_DIRECTORY="$PWD/web/sites/simpletest/browser_output"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/domain-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Kernel"
+          php -r '
+            $xml = simplexml_load_file("domain-junit.xml");
+            if ($xml === false) { exit(1); }
+            $required = ["testConcurrentDrainersCommit", "testConcurrentDrainersRollback", "testConcurrentDomainCommit", "testConcurrentDomainRollback", "testDeliveryMarkerFailure", "testSummarySavepointFailure"];
+            $executed = [];
+            foreach ($xml->xpath("//testcase") as $case) {
+              if (isset($case->skipped)) { exit(1); }
+              $executed[] = (string) $case["name"];
+            }
+            echo "Executed domain tests: " . count($executed) . "\n";
+            if (array_diff($required, $executed)) { exit(1); }
+          '
       - name: Run installed-host functional tests
         working-directory: drupal
         env:
@@ -213,10 +258,9 @@ jobs:
           '
       - name: Stop test server
         if: always()
-        working-directory: drupal
         run: |
-          if [ -f server.pid ]; then
-            kill "$(cat server.pid)" || true
+          if [ -f drupal/server.pid ]; then
+            kill "$(cat drupal/server.pid)" || true
           fi
       - uses: actions/upload-artifact@v4
         if: always()
@@ -224,5 +268,6 @@ jobs:
           name: agency-core-${{ matrix.minor }}-${{ matrix.driver }}
           path: |
             drupal/junit.xml
+            drupal/domain-junit.xml
             drupal/composer.lock
             drupal/server.log

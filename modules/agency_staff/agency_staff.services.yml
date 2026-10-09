@@ -1,0 +1,30 @@
+services:
+  agency_staff.identity:
+    class: Drupal\agency_staff\Identity\UnavailableIdentityProvider
+  agency_staff.store:
+    class: Drupal\agency_staff\Storage\DomainStore
+    arguments: ['@database', '@entity_type.manager', '@agency_staff.observations']
+  agency_staff.policy:
+    class: Drupal\agency_staff\Policy
+    arguments: ['@config.factory', '@datetime.time']
+  agency_staff.access:
+    class: Drupal\agency_staff\Access\ActorAccess
+    arguments: ['@agency_staff.identity', '@agency_staff.store', '@current_user', '@entity_type.manager', '@field_guard.explicit_permission_checker', '@datetime.time']
+  agency_staff.outbox:
+    class: Drupal\agency_staff\EvidenceOutbox
+    arguments: ['@database', '@audit_chain.logger', '@uuid', '@datetime.time']
+  logger.channel.agency_staff:
+    parent: logger.channel_base
+    arguments: ['agency_staff']
+  agency_staff.observations:
+    class: Drupal\agency_staff\ObservationRecorder
+    arguments: ['@database', '@agency_staff.outbox', '@agency_staff.identity', '@current_user', '@state', '@datetime.time', '@logger.channel.agency_staff']
+  agency_staff.reads:
+    class: Drupal\agency_staff\RelationshipReads
+    arguments: ['@agency_staff.store', '@agency_staff.access', '@agency_staff.policy', '@datetime.time', '@agency_staff.outbox', '@agency_staff.observations']
+  agency_staff.commands:
+    class: Drupal\agency_staff\RelationshipCommands
+    arguments: ['@agency_staff.store', '@agency_staff.access', '@agency_staff.identity', '@agency_staff.policy', '@agency_staff.reads', '@agency_staff.outbox', '@datetime.time']
+  agency_staff.invitations:
+    class: Drupal\agency_staff\InvitationCommands
+    arguments: ['@agency_staff.store', '@agency_staff.access', '@agency_staff.identity', '@agency_staff.policy', '@agency_staff.reads', '@agency_staff.commands', '@request_stack', '@datetime.time']

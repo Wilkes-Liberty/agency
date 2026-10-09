@@ -19,9 +19,12 @@ engines remain independent dependencies.
 - `agency_staff` is the capability boundary for workforce relationships and the
   Discovery workspace.
 
-Enabling `agency_staff` does not create relationships, accounts, roles, or
-invitations. Those behaviors arrive as complete vertical slices with storage,
-authorization, evidence, and tests.
+`agency_staff` provides invitation-only Discovery domain services, internal
+entity storage, scoped workspace/summary projections and a durable evidence
+outbox. See the [provisional service contract](docs/DISCOVERY_CONTRACT.md).
+The host supplies authentication, transport and the participant interface.
+The default identity adapter denies access. Enabling the module creates no
+relationships, accounts, roles or invitations, and sends no notifications.
 
 ## Configuration boundary
 
@@ -33,6 +36,7 @@ as a package default. The schema declares these keys:
 - `policy.acknowledgement_period`
 - `policy.follow_up_period`
 - `policy.retention_after_close`
+- `policy.summary_window` (optional, enables expiring terminal summaries)
 - `policy.retained_information_statement`
 - `policy.fallback_contact_route`
 - `policy.close_reasons`
@@ -47,6 +51,9 @@ optional fractional seconds. Use `P7D`, `PT12H`, `PT1H30M` or `PT0.5S`; express
 fractional days or hours using smaller whole units. Week values stand alone
 (`P2W`), without other components. The retained-information statement and fallback
 contact route are tenant-authored text.
+Discovery rejects zero durations. Calendar years/months clamp to the last day
+of the target month in UTC before adding the remaining days/time. Summary
+expiry is independent of record retention.
 
 ## Storage and dependencies
 

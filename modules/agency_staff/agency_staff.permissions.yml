@@ -1,0 +1,12 @@
+coordinate agency discovery:
+  title: 'Coordinate assigned Discovery relationships'
+  description: 'Requires explicit grant, host credential eligibility and assignment.'
+  restrict access: true
+suspend agency discovery access:
+  title: 'Suspend access to assigned Discovery relationships'
+  description: 'Removes participant workspace and summary access.'
+  restrict access: true
+recover agency discovery ownership:
+  title: 'Recover Discovery ownership when the assigned coordinator is unavailable'
+  description: 'View and reassign ownerless Discovery contexts; requires coordinator eligibility and explicit coordination permission.'
+  restrict access: true

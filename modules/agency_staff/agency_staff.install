@@ -1,0 +1,75 @@
+<?php
+
+/**
+ * @file
+ * Installs Discovery integration state; business records use the Entity API.
+ */
+
+use Drupal\agency_staff\Storage\DomainStore;
+
+/**
+ * Implements hook_schema().
+ */
+function agency_staff_schema(): array {
+  return [
+    'agency_staff_mutex' => [
+      'description' => 'Serializes the initial Discovery domain.',
+      'fields' => [
+        'id' => ['type' => 'int', 'not null' => TRUE],
+        'value' => ['type' => 'int', 'not null' => TRUE],
+      ],
+      'primary key' => ['id'],
+    ],
+    'agency_staff_outbox' => [
+      'description' => 'Immutable evidence intents with mutable delivery marker.',
+      'fields' => [
+        'id' => ['type' => 'varchar', 'length' => 36, 'not null' => TRUE],
+        'relationship_uuid' => ['type' => 'varchar', 'length' => 128, 'not null' => TRUE],
+        'operation' => ['type' => 'varchar', 'length' => 64, 'not null' => TRUE],
+        'metadata' => ['type' => 'text', 'size' => 'big', 'not null' => TRUE],
+        'denial' => ['type' => 'int', 'size' => 'tiny', 'not null' => TRUE],
+        'recorded' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
+        'delivered' => ['type' => 'int', 'size' => 'big', 'not null' => FALSE],
+      ],
+      'primary key' => ['id'],
+      'indexes' => ['queued' => ['delivered', 'recorded'], 'relationship' => ['relationship_uuid']],
+    ],
+    'agency_staff_intent' => [
+      'description' => 'Bounded idempotency fingerprints and minimal receipts.',
+      'fields' => [
+        'id' => ['type' => 'varchar', 'length' => 64, 'not null' => TRUE],
+        'payload_hash' => ['type' => 'varchar', 'length' => 64, 'not null' => TRUE],
+        'receipt' => ['type' => 'text', 'size' => 'big', 'not null' => TRUE],
+      ],
+      'primary key' => ['id'],
+    ],
+  ];
+}
+
+/**
+ * Implements hook_install().
+ */
+function agency_staff_install(): void {
+  \Drupal::database()->insert('agency_staff_mutex')->fields(['id' => 1, 'value' => 0])->execute();
+}
+
+/**
+ * Adds Discovery storage to an already enabled foundation module.
+ */
+function agency_staff_update_10001(): void {
+  $database = \Drupal::database();
+  foreach (agency_staff_schema() as $name => $definition) {
+    if (!$database->schema()->tableExists($name)) {
+      $database->schema()->createTable($name, $definition);
+    }
+  }
+  if (!$database->select('agency_staff_mutex', 'm')->condition('id', 1)->countQuery()->execute()->fetchField()) {
+    agency_staff_install();
+  }
+  $updates = \Drupal::entityDefinitionUpdateManager();
+  foreach (DomainStore::TYPES as $type) {
+    if (!$updates->getEntityType($type)) {
+      $updates->installEntityType(\Drupal::entityTypeManager()->getDefinition($type));
+    }
+  }
+}

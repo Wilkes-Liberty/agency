@@ -1,6 +1,6 @@
 name: Agency Staff
 type: module
-description: 'Provides the initial capability shell for future workforce workflows.'
+description: 'Provides invitation-only Discovery relationships with scoped access and durable evidence.'
 core_version_requirement: ^10.6 || ^11.3
 package: Agency
 dependencies:

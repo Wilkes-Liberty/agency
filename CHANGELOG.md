@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Invitation-only Discovery domain services, five internal content entities,
+  revisioned state, scoped workspace and expiring summary reads, and explicit
+  host identity/eligibility integration.
+- Durable required evidence, denial intent, idempotency and transactional drain
+  through Audit Chain's public keyed logger; no notification delivery.
+- Failure-first domain checks for authorization, recovery, rollback, calendar
+  policy, independent database writers and nested summary savepoints.
+
 - Manual GitHub-to-DrupalCode synchronization guidance with explicit commit and
   tag review, ancestry checks, SSH authentication and publication boundaries.
 
@@ -23,7 +31,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Field Guard as the shared explicit-permission dependency for Agency Staff.
 - Repository editor settings, review ownership and contribution templates.
 
+### Changed
+
+- Supported-core jobs run on the GitHub-hosted Ubuntu 24.04 image and start its
+  preinstalled MySQL 8.0 and PostgreSQL 16 servers.
+
 ### Corrected
+
+- Discovery consent leaves a dated agency handoff with participant Stop and
+  coordinator next-action/close support. Replies preserve existing agency
+  promises; read models expose current policy facts, reply choices, owner-only
+  action modes and appropriately scoped participant notes.
+- Invitation inspection supplies a tenant support route and an active inviter
+  display name without exposing an owner's contact details.
 
 - Composer's description identifies the package as a foundation.
 
