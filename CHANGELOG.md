@@ -16,6 +16,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Corrected
 
+- The translatable configuration test fixture declares its language code.
 - Security advisory coverage guidance distinguishes opted-in covered releases
   from development and uncovered releases.
 
