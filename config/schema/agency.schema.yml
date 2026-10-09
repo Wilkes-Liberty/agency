@@ -1,0 +1,63 @@
+agency.settings:
+  type: config_object
+  label: 'Agency settings'
+  constraints:
+    FullyValidatable: ~
+  mapping:
+    display_name:
+      type: label
+      label: 'Agency display name'
+    policy:
+      type: mapping
+      label: 'Operating policy'
+      mapping:
+        invitation_validity:
+          type: string
+          label: 'Invitation validity period'
+          constraints:
+            Regex:
+              pattern: '/^(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
+              message: 'The invitation validity period must be an ISO 8601 duration with whole-number components, except fractional seconds.'
+        acknowledgement_period:
+          type: string
+          label: 'Acknowledgement period'
+          constraints:
+            Regex:
+              pattern: '/^(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
+              message: 'The acknowledgement period must be an ISO 8601 duration with whole-number components, except fractional seconds.'
+        follow_up_period:
+          type: string
+          label: 'Follow-up period'
+          constraints:
+            Regex:
+              pattern: '/^(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
+              message: 'The follow-up period must be an ISO 8601 duration with whole-number components, except fractional seconds.'
+        retention_after_close:
+          type: string
+          label: 'Retention period after close'
+          constraints:
+            Regex:
+              pattern: '/^(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
+              message: 'The retention period must be an ISO 8601 duration with whole-number components, except fractional seconds.'
+        retained_information_statement:
+          type: text
+          label: 'Retained information statement'
+        fallback_contact_route:
+          type: text
+          label: 'Fallback contact route'
+        close_reasons:
+          type: sequence
+          label: 'Close reasons'
+          sequence:
+            type: mapping
+            label: 'Close reason'
+            mapping:
+              id:
+                type: machine_name
+                label: 'Identifier'
+              label:
+                type: label
+                label: 'Participant-facing label'
+              message:
+                type: text
+                label: 'Participant-facing message'

@@ -1,0 +1,46 @@
+# Changelog
+
+All notable changes to Agency are documented here. The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
+adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- Product direction, integration principles, architecture, development and
+  contributor guidance.
+- GitHub supported-core functional checks, package/coding standards and shared
+  attribution verification.
+- PHPStan analysis on the GitHub development primary.
+- A PostgreSQL 16 functional lane beside the MySQL 8.0 lanes, ready to exercise
+  domain transaction behavior on both engines when those tests land.
+- Tenant policy fields for the retained-information statement and fallback
+  contact route.
+- Field Guard as the shared explicit-permission dependency for Agency Staff.
+- Repository editor settings, review ownership and contribution templates.
+
+### Corrected
+
+- Duration validation describes its supported format and rejects a trailing newline.
+- The Agency Staff module listing describes the current capability shell.
+
+- The translatable configuration test fixture declares its language code.
+- The PHP floor is 8.2, and the Drupal 10.6 compatibility leg exercises that
+  floor.
+- Policy periods require ISO 8601 durations; unknown policy keys and malformed
+  close reasons fail typed-configuration validation.
+- Drupal 11.3 and later expose the agency-name requirement through the status
+  report's class-based hook while Drupal 10.6 retains its supported legacy hook.
+- The functional-test server uses absolute document-root and router paths so
+  requests remain routable throughout the installed-host suite.
+- Security advisory coverage guidance distinguishes opted-in covered releases
+  from development and uncovered releases.
+
+### Package foundation
+
+- Initial `agency` and `agency_staff` package structure.
+- Tenant configuration schema for the agency display name and operating-policy
+  keys, without tenant values or policy periods in package defaults.
+- A runtime requirements error when the agency display name is missing.
+- Drupal.org GitLab CI, coding-standard, and static-analysis configuration.
