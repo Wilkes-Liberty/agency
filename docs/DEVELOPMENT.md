@@ -77,11 +77,13 @@ installs the new internal entities and outbox tables without tenant defaults.
 ## Supported-core verification
 
 The GitHub matrix pins Drupal 10.6 and 11.3 separately and tests the current supported
-11.4 minor. The Drupal 10.6 leg runs on the package's PHP 8.2 floor. Those legs use
-MySQL 8.0; one more leg repeats Drupal 11.3 on PostgreSQL 16 because lock, savepoint
-and transaction behavior differs by engine. Each job asserts the resolved version and
-candidate symlink and requires executed, non-skipped functional tests. A separate job
-runs PHPStan against a Drupal 11.4 analysis host.
+11.4 minor. The Drupal 10.6 leg runs on the package's PHP 8.2 floor. The functional
+job runs on the GitHub-hosted Ubuntu 24.04 runner and starts that image's MySQL 8.0
+or PostgreSQL 16 server for the leg under test, then checks the server version.
+MySQL covers 10.6, 11.3 and 11.4. One more leg repeats Drupal 11.3 on PostgreSQL 16
+because lock, savepoint and transaction behavior differs by engine. Each job asserts
+the resolved version and candidate symlink and requires executed, non-skipped
+functional tests. A separate job runs PHPStan against a Drupal 11.4 analysis host.
 Every database lane also executes the domain suite and explicitly checks that
 the independent-writer, delivery-marker and summary-savepoint cases ran without
 skips. The CLI-only workers accept kernel-test-prefixed connection options via

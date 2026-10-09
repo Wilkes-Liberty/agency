@@ -31,6 +31,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Field Guard as the shared explicit-permission dependency for Agency Staff.
 - Repository editor settings, review ownership and contribution templates.
 
+### Changed
+
+- Supported-core jobs run on the GitHub-hosted Ubuntu 24.04 image and start its
+  preinstalled MySQL 8.0 and PostgreSQL 16 servers.
+
 ### Corrected
 
 - Discovery consent leaves a dated agency handoff with participant Stop and
