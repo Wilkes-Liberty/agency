@@ -124,6 +124,10 @@ suspension also prevents replay. No replay recreates or extends a grant.
 Existing receipts are located after authorization and before validation for a
 new intent: an elapsed action deadline or subsequent policy change does not
 invalidate a receipt. New intents still require current policy and contact checks.
+If presentation policy is missing during an authorized replay, return the
+committed minimal receipt, omit `workspace`, and set `workspace_unavailable` to
+`policy_unavailable`. The client can confirm the original intent without drawing
+a stale workspace. Lost authority still refuses the entire replay.
 
 | Command | Inputs and effect |
 | --- | --- |

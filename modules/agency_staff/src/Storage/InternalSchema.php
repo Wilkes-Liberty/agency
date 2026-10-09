@@ -27,6 +27,14 @@ final class InternalSchema extends SqlContentEntityStorageSchema {
     foreach ($keys as $name => $columns) {
       $schema[$table]['unique keys'][$name] = $columns;
     }
+    $indexes = match ($entity_type->id()) {
+      'agency_discovery' => ['principal_lookup' => ['principal_uuid'], 'owner_lookup' => ['owner_uid']],
+      'agency_invitation' => ['relationship_lookup' => ['relationship_uuid']],
+      default => [],
+    };
+    foreach ($indexes as $name => $columns) {
+      $schema[$table]['indexes'][$name] = $columns;
+    }
     return $schema;
   }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\agency_staff;
 
+use Drupal\agency_staff\Storage\TransactionBoundary;
 use Drupal\agency_staff\Access\ActorAccess;
 use Drupal\agency_staff\Entity\InternalRecord;
 use Drupal\agency_staff\Exception\Refusal;
@@ -198,7 +199,7 @@ final class RelationshipCommands {
       if ($replay) {
         $result = ['outcome' => 'committed', 'receipt' => $replay];
         if ($participant) {
-          $result['workspace'] = $this->reads->workspace($relationship);
+          $result += $this->reads->replayProjection($relationship);
         }
         return $result;
       }
@@ -498,10 +499,10 @@ final class RelationshipCommands {
       $savepoint = $this->store->database->startTransaction();
       try {
         $grant->set('status', 'summary_only')->set('readable_until', $until)->setDetails($summary)->save();
-        $savepoint->commitOrRelease();
+        TransactionBoundary::commit($savepoint);
       }
       catch (\Throwable) {
-        $savepoint->rollBack();
+        $savepoint?->rollBack();
         $this->store->clear();
       }
     }

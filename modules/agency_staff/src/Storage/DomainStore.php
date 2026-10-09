@@ -49,11 +49,11 @@ final class DomainStore {
       $this->clear();
       $result = $work();
       $committing = TRUE;
-      $transaction->commitOrRelease();
+      TransactionBoundary::commit($transaction);
       return $result;
     }
     catch (Refusal $exception) {
-      $transaction->rollBack();
+      $transaction?->rollBack();
       $this->observations?->report($exception->reason);
       return ['outcome' => 'refused', 'reason' => $exception->reason];
     }
@@ -61,7 +61,7 @@ final class DomainStore {
       // A commit acknowledgment can be lost after persistence. Do not assert
       // rollback in that case, even if a cleanup rollback also succeeds.
       try {
-        $transaction->rollBack();
+        $transaction?->rollBack();
       }
       catch (\Throwable) {
         $committing = TRUE;

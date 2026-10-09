@@ -87,7 +87,6 @@ final class InvitationCommands {
     }
     return $this->store->transaction(function () use ($token, $key): array {
       $principal = $this->access->principal();
-      $this->policy->name();
       if (!preg_match('/^[a-f0-9]{64}$/', $token)) {
         throw new Refusal('invitation_closed');
       }
@@ -124,11 +123,11 @@ final class InvitationCommands {
           return [
             'outcome' => 'committed',
             'receipt' => $replay,
-            'workspace' => $this->reads->workspace($relationship),
-          ];
+          ] + $this->reads->replayProjection($relationship);
         }
         throw new Refusal('already_used');
       }
+      $this->policy->name();
       if ((int) $generation->scalar('expires') <= $this->time->getCurrentTime() || $relationship->scalar('state') !== 'invited') {
         throw new Refusal('invitation_closed');
       }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\agency_staff;
 
+use Drupal\agency_staff\Storage\TransactionBoundary;
 use Drupal\audit_chain\AuditChainLoggerInterface;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Component\Uuid\UuidInterface;
@@ -116,7 +117,7 @@ final class EvidenceOutbox {
         $claim->forUpdate();
         $row = $claim->execute()->fetchAssoc();
         if (!$row) {
-          $transaction->commitOrRelease();
+          TransactionBoundary::commit($transaction);
           break;
         }
         // A competing drainer may have committed while this SELECT waited.
@@ -124,19 +125,19 @@ final class EvidenceOutbox {
         $recheck->forUpdate();
         $fresh = $recheck->execute()->fetchAssoc();
         if ($fresh['delivered'] !== NULL) {
-          $transaction->commitOrRelease();
+          TransactionBoundary::commit($transaction);
           continue;
         }
         $this->logger->logKeyed('agency_staff', $row['operation'], json_decode($row['metadata'], TRUE, 16, JSON_THROW_ON_ERROR));
         $this->database->update('agency_staff_outbox')->fields([
           'delivered' => $this->time->getCurrentTime(),
         ])->condition('id', $row['id'])->execute();
-        $transaction->commitOrRelease();
+        TransactionBoundary::commit($transaction);
         $delivered++;
       }
       catch (\Throwable) {
         try {
-          $transaction->rollBack();
+          $transaction?->rollBack();
         }
         catch (\Throwable) {
           // The row remains the source for reconciliation after reconnect.

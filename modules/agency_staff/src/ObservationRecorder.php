@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\agency_staff;
 
+use Drupal\agency_staff\Storage\TransactionBoundary;
 use Drupal\agency_staff\Identity\IdentityProviderInterface;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Database\Connection;
@@ -44,10 +45,10 @@ final class ObservationRecorder {
       $transaction = $this->database->startTransaction();
       try {
         $this->outbox->recordObservation($reason, $actor);
-        $transaction->commitOrRelease();
+        TransactionBoundary::commit($transaction);
       }
       catch (\Throwable $exception) {
-        $transaction->rollBack();
+        $transaction?->rollBack();
         throw $exception;
       }
     }

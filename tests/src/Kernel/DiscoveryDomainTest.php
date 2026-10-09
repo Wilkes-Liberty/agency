@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\agency\Kernel;
 
+use Drupal\agency_staff\Storage\TransactionBoundary;
 use Drupal\agency_staff\ObservationRecorder;
 use Psr\Log\LoggerInterface;
 use Drupal\Core\State\StateInterface;
@@ -310,6 +311,37 @@ final class DiscoveryDomainTest extends KernelTestBase {
   }
 
   /**
+   * Removing presentation policy must not erase an authorized receipt replay.
+   */
+  public function testAcceptanceReplayWithoutDisplayPolicy(): void {
+    $commands = $this->container->get('agency_staff.commands');
+    $invitations = $this->container->get('agency_staff.invitations');
+    $started = $commands->startDiscovery($this->input(), 'replay-start');
+    $id = $started['receipt']['relationship_id'];
+    $issued = $invitations->issue($id, 'replay-issue', $started['version']);
+    $token = $issued['invitation']['token'];
+    $accepted = $invitations->accept($token, 'replay-accept');
+    $this->assertSame('committed', $accepted['outcome']);
+    $reply = $commands->respond($id, ['choice' => 'message'], 'replay-reply', $accepted['version']);
+    $this->assertSame('committed', $reply['outcome']);
+    $this->config('agency.settings')->set('display_name', '')->save();
+    foreach ([
+      $invitations->accept($token, 'replay-accept'),
+      $commands->respond($id, ['choice' => 'message'], 'replay-reply', $accepted['version']),
+    ] as $offset => $replay) {
+      $this->assertSame('committed', $replay['outcome']);
+      $this->assertSame(($offset === 0 ? $accepted : $reply)['receipt'], $replay['receipt']);
+      $this->assertArrayNotHasKey('workspace', $replay);
+      $this->assertSame('policy_unavailable', $replay['workspace_unavailable']);
+    }
+    $this->assertSame('policy_unavailable', $this->container->get('agency_staff.reads')->forActor($id)['reason']);
+    $suspended = $commands->suspendAccess($id, [], 'suspend-before-replay', $reply['version']);
+    $this->assertSame('committed', $suspended['outcome']);
+    $denied = $invitations->accept($token, 'replay-accept');
+    $this->assertSame(['outcome' => 'refused', 'reason' => 'invitation_closed'], $denied);
+  }
+
+  /**
    * A prepared response cannot hide consent to a still-current proposal.
    */
   public function testPreparedProposalActions(): void {
@@ -489,12 +521,12 @@ final class DiscoveryDomainTest extends KernelTestBase {
     $nested = $database->startTransaction();
     $outbox->recordRequired('respond', '11111111-1111-4111-8111-111111111111', str_repeat('a', 64), 'exploring', 'agency');
     $nested->rollBack();
-    $root->commitOrRelease();
+    TransactionBoundary::commit($root);
     $this->assertCount(1, $database->select('agency_staff_outbox', 'o')->fields('o')->execute()->fetchAll());
     $root = $database->startTransaction();
     $nested = $database->startTransaction();
     $outbox->recordRequired('respond', '11111111-1111-4111-8111-111111111111', str_repeat('a', 64), 'exploring', 'agency');
-    $nested->commitOrRelease();
+    TransactionBoundary::commit($nested);
     $root->rollBack();
     $this->assertSame(1, (int) $database->select('agency_staff_outbox', 'o')->countQuery()->execute()->fetchField());
   }
@@ -798,7 +830,7 @@ final class DiscoveryDomainTest extends KernelTestBase {
       $this->signingKey();
       $transaction = $database->startTransaction();
       $this->container->get('agency_staff.outbox')->recordRequired('respond', '11111111-1111-4111-8111-111111111111', str_repeat('a', 64), 'exploring', 'agency');
-      $transaction->commitOrRelease();
+      TransactionBoundary::commit($transaction);
     }
     $prefix = sys_get_temp_dir() . '/agency-concurrency-' . bin2hex(random_bytes(8));
     $ready = $prefix . '-ready';

@@ -178,6 +178,23 @@ final class RelationshipReads {
   }
 
   /**
+   * Keeps an authorized replay receipt when presentation policy is unavailable.
+   */
+  public function replayProjection(InternalRecord $relationship): array {
+    // Do not turn lost authority into a successful receipt-only response.
+    $this->access->participant($relationship);
+    try {
+      return ['workspace' => $this->projection($relationship)];
+    }
+    catch (Refusal $exception) {
+      if ($exception->reason !== 'policy_unavailable') {
+        throw $exception;
+      }
+      return ['workspace_unavailable' => 'policy_unavailable'];
+    }
+  }
+
+  /**
    * Derives coordinator actions independently of participant workspace actions.
    */
   private function coordinatorActions(InternalRecord $relationship, bool $ownerless): array {

@@ -16,36 +16,36 @@ agency.settings:
           label: 'Invitation validity period'
           constraints:
             Regex:
-              pattern: '/^(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
-              message: 'The invitation validity period must be an ISO 8601 duration with whole-number components, except fractional seconds.'
+              pattern: '/^(?=[^1-9]*[1-9])(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
+              message: 'The invitation validity period must be a positive ISO 8601 duration with whole-number components, except fractional seconds.'
         acknowledgement_period:
           type: string
           label: 'Acknowledgement period'
           constraints:
             Regex:
-              pattern: '/^(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
-              message: 'The acknowledgement period must be an ISO 8601 duration with whole-number components, except fractional seconds.'
+              pattern: '/^(?=[^1-9]*[1-9])(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
+              message: 'The acknowledgement period must be a positive ISO 8601 duration with whole-number components, except fractional seconds.'
         follow_up_period:
           type: string
           label: 'Follow-up period'
           constraints:
             Regex:
-              pattern: '/^(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
-              message: 'The follow-up period must be an ISO 8601 duration with whole-number components, except fractional seconds.'
+              pattern: '/^(?=[^1-9]*[1-9])(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
+              message: 'The follow-up period must be a positive ISO 8601 duration with whole-number components, except fractional seconds.'
         retention_after_close:
           type: string
           label: 'Retention period after close'
           constraints:
             Regex:
-              pattern: '/^(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
-              message: 'The retention period must be an ISO 8601 duration with whole-number components, except fractional seconds.'
+              pattern: '/^(?=[^1-9]*[1-9])(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
+              message: 'The retention period must be a positive ISO 8601 duration with whole-number components, except fractional seconds.'
         summary_window:
           type: string
           requiredKey: false
           label: 'Closing-summary viewing period'
           constraints:
             Regex:
-              pattern: '/^(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
+              pattern: '/^(?=[^1-9]*[1-9])(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
               message: 'The viewing period must be a positive ISO 8601 duration.'
         retained_information_statement:
           type: text

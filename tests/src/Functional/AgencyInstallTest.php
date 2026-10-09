@@ -103,6 +103,24 @@ final class AgencyInstallTest extends BrowserTestBase {
       ->validate();
     $this->assertCount(0, $violations, (string) $violations);
 
+    // Every saved period must reject all-zero components, including fractions.
+    foreach ([
+      'invitation_validity',
+      'acknowledgement_period',
+      'follow_up_period',
+      'retention_after_close',
+      'summary_window',
+    ] as $period) {
+      foreach (['PT0S', 'P0D', 'P0W', 'P0Y0M0DT0H0M0.000S'] as $zero) {
+        $invalid = $settings;
+        $invalid['policy'][$period] = $zero;
+        $violations = $this->container->get('config.typed')
+          ->createFromNameAndData('agency.settings', $invalid)
+          ->validate();
+        $this->assertNotCount(0, $violations, $period . ': ' . $zero);
+      }
+    }
+
     // Reject malformed input and unsupported fractions with clear guidance.
     foreach (['seven days', 'P1W1D', 'P0.5D', 'PT1.5H', "P1D\n"] as $duration) {
       $invalid_duration = $settings;
