@@ -1,0 +1,39 @@
+agency.settings:
+  type: config_object
+  label: 'Agency settings'
+  mapping:
+    display_name:
+      type: label
+      label: 'Agency display name'
+    policy:
+      type: mapping
+      label: 'Operating policy'
+      mapping:
+        invitation_validity:
+          type: string
+          label: 'Invitation validity period'
+        acknowledgement_period:
+          type: string
+          label: 'Acknowledgement period'
+        follow_up_period:
+          type: string
+          label: 'Follow-up period'
+        retention_after_close:
+          type: string
+          label: 'Retention period after close'
+        close_reasons:
+          type: sequence
+          label: 'Close reasons'
+          sequence:
+            type: mapping
+            label: 'Close reason'
+            mapping:
+              id:
+                type: machine_name
+                label: 'Identifier'
+              label:
+                type: label
+                label: 'Participant-facing label'
+              message:
+                type: text
+                label: 'Participant-facing message'

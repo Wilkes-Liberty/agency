@@ -1,0 +1,23 @@
+# PHPStan configuration for Agency.
+# Drupal CI provides phpstan-drupal and analyses the module in place.
+includes:
+  - phar://phpstan.phar/conf/bleedingEdge.neon
+
+parameters:
+  level: 6
+  reportUnmatchedIgnoredErrors: false
+  paths:
+    - .
+  excludePaths:
+    - vendor (?)
+  fileExtensions:
+    - php
+    - module
+    - inc
+    - install
+  ignoreErrors:
+    - identifier: missingType.iterableValue
+    - identifier: missingType.generics
+    # PHPUnit 9 on Drupal 10.6 has no Attributes namespace. PHP treats the
+    # unresolved attributes as inert there; PHPUnit 11 uses them on Drupal 11.
+    - "#Attribute class PHPUnit.*Attributes.* does not exist#"

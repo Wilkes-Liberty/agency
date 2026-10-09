@@ -1,0 +1,35 @@
+<?php
+
+/**
+ * @file
+ * Install and update functions for Agency.
+ */
+
+use Drupal\Core\Hook\Attribute\LegacyRequirementsHook;
+
+/**
+ * Implements hook_requirements().
+ */
+#[LegacyRequirementsHook]
+function agency_requirements(string $phase): array {
+  if ($phase !== 'runtime') {
+    return [];
+  }
+
+  try {
+    agency_require_display_name();
+    return [];
+  }
+  catch (\LogicException) {
+    // The status report surfaces the same guard used by runtime consumers.
+  }
+
+  return [
+    'agency_display_name' => [
+      'title' => t('Agency configuration'),
+      'value' => t('Agency name is not configured'),
+      'severity' => REQUIREMENT_ERROR,
+      'description' => t('Set the agency name before inviting anyone or rendering a participant workspace.'),
+    ],
+  ];
+}
