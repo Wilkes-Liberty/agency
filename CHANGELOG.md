@@ -8,6 +8,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Manual GitHub-to-DrupalCode synchronization guidance with explicit commit and
+  tag review, ancestry checks, SSH authentication and publication boundaries.
+
 - Product direction, integration principles, architecture, development and
   contributor guidance.
 - GitHub supported-core functional checks, package/coding standards and shared
@@ -21,6 +24,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Repository editor settings, review ownership and contribution templates.
 
 ### Corrected
+
+- Composer's description identifies the package as a foundation.
 
 - Duration validation describes its supported format and rejects a trailing newline.
 - The Agency Staff module listing describes the current capability shell.
