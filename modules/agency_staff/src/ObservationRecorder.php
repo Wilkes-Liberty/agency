@@ -53,7 +53,7 @@ final class ObservationRecorder {
     }
     catch (\Throwable) {
       // Never include exception text, request IDs, payloads or contact details.
-      $this->logger->warning('Discovery observation persistence unavailable: {reason}.', ['reason' => $reason]);
+      $this->warn('Discovery observation persistence unavailable: {reason}.', ['reason' => $reason]);
     }
     if ($reason !== 'not_found') {
       try {
@@ -61,8 +61,20 @@ final class ObservationRecorder {
         $this->state->set('agency_staff.alert.' . $reason, $this->time->getCurrentTime());
       }
       catch (\Throwable) {
-        $this->logger->warning('Discovery operational alert persistence unavailable.');
+        $this->warn('Discovery operational alert persistence unavailable.');
       }
+    }
+  }
+
+  /**
+   * Prevents a failing logging backend from replacing the protected response.
+   */
+  private function warn(string $message, array $context = []): void {
+    try {
+      $this->logger->warning($message, $context);
+    }
+    catch (\Throwable) {
+      // Every observation sink can fail; the original refusal remains primary.
     }
   }
 

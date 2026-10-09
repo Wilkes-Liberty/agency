@@ -41,6 +41,7 @@ agency.settings:
               message: 'The retention period must be an ISO 8601 duration with whole-number components, except fractional seconds.'
         summary_window:
           type: string
+          requiredKey: false
           label: 'Closing-summary viewing period'
           constraints:
             Regex:

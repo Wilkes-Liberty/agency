@@ -208,7 +208,7 @@ final class RelationshipCommands {
       $state = $relationship->scalar('state');
       if (!in_array($operation, ['suspendAccess', 'revokeInvitation'], TRUE)
         && !in_array($state, ['exploring', 'prepared', 'paused'], TRUE)
-        && !($state === 'invited' && $operation === 'setNextAction' && array_keys($input) === ['owner'])) {
+        && !($operation === 'setNextAction' && array_keys($input) === ['owner'])) {
         throw new Refusal('not_found');
       }
       if (!$denial) {

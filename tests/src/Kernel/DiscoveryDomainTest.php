@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\agency\Kernel;
 
+use Drupal\agency_staff\ObservationRecorder;
+use Psr\Log\LoggerInterface;
+use Drupal\Core\State\StateInterface;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\encrypt\EncryptServiceInterface;
 use Drupal\audit_chain\AuditChainLogger;
@@ -187,6 +190,95 @@ final class DiscoveryDomainTest extends KernelTestBase {
     $this->assertSame([], $this->container->get('agency_staff.reads')->forActor('missing')['workspace'] ?? []);
     $relationship = $this->container->get('agency_staff.store')->find('agency_discovery', ['uuid' => $id]);
     $this->assertFalse($relationship->access('view', User::load(1)));
+  }
+
+  /**
+   * Observation and fallback-logger failure cannot replace the domain refusal.
+   */
+  public function testObservationSinkFailurePreservesRefusal(): void {
+    $database = $this->container->get('database');
+    $state = $this->createMock(StateInterface::class);
+    $state->method('set')->willThrowException(new \RuntimeException('Synthetic state outage.'));
+    $logger = $this->createMock(LoggerInterface::class);
+    $logger->expects($this->exactly(2))->method('warning')->willThrowException(new \RuntimeException('Synthetic logging outage.'));
+    $observations = new ObservationRecorder(
+      $database, $this->container->get('agency_staff.outbox'), $this->identity,
+      $this->container->get('current_user'), $state,
+      $this->container->get('datetime.time'), $logger,
+    );
+    $this->container->set('agency_staff.observations', $observations);
+    $database->schema()->dropTable('agency_staff_outbox');
+    $result = $this->container->get('agency_staff.commands')->startDiscovery($this->input(), 'start-during-outage');
+    $this->assertSame(['outcome' => 'refused', 'reason' => 'recording_unavailable'], $result);
+    $this->assertSame([], $this->container->get('agency_staff.store')->all('agency_discovery'));
+  }
+
+  /**
+   * Terminal ownership recovery cannot extend or recreate summary access.
+   */
+  public function testTerminalOwnerRecoveryAndSuspension(): void {
+    [$id, $version] = $this->accepted();
+    $commands = $this->container->get('agency_staff.commands');
+    $reads = $this->container->get('agency_staff.reads');
+    $closed = $commands->close($id, [
+      'category' => 'not_now',
+      'message' => 'Thank you.',
+      'contact' => $this->input()['owner_contact'],
+    ], 'close-owner-recovery', $version);
+    $before = $reads->summary($id);
+    Role::create([
+      'id' => 'discovery_recovery',
+      'label' => 'Recovery',
+      'permissions' => [
+        'recover agency discovery ownership',
+      ],
+    ])->save();
+    $next = User::create([
+      'name' => 'recovery-coordinator',
+      'status' => 1,
+      'roles' => [
+        'discovery_coordinator',
+        'discovery_recovery',
+      ],
+    ]);
+    $next->save();
+    $this->coordinator->block()->save();
+    $this->container->get('current_user')->setAccount($next);
+    $this->assertSame(['setNextAction'], $reads->queue()['contexts'][0]['permitted_actions']);
+    $recovered = $commands->setNextAction($id, [
+      'owner' => [
+        'uid' => (int) $next->id(),
+        'contact' => $this->input()['owner_contact'],
+      ],
+    ], 'recover-terminal-owner', $closed['version']);
+    $this->assertSame('committed', $recovered['outcome']);
+    $this->assertSame($before, $reads->summary($id), 'Reassignment preserves the exact summary and viewing deadline.');
+    $this->assertSame('committed', $commands->suspendAccess($id, [], 'suspend-terminal-summary', 0)['outcome']);
+    $this->assertSummaryDenied($id);
+  }
+
+  /**
+   * Agency obligations sort ahead of overdue optional participant actions.
+   */
+  public function testQueueResponsibilityOrdering(): void {
+    [$participant] = $this->accepted('participant');
+    [$agency, $version] = $this->accepted('agency');
+    $commands = $this->container->get('agency_staff.commands');
+    $action = $this->input()['next_action'];
+    $action['side'] = 'agency';
+    $this->assertSame('committed', $commands->setNextAction($agency, $action, 'agency-action', $version)['outcome']);
+    [$late, $version] = $this->accepted('late');
+    $this->assertSame('committed', $commands->setNextAction($late, $action, 'late-action', $version)['outcome']);
+    foreach ([$participant, $late] as $id) {
+      $row = $this->container->get('agency_staff.store')->find('agency_discovery', ['uuid' => $id]);
+      $data = $row->details();
+      $data['next_action']['expected_by'] = time() - 60;
+      $row->setDetails($data)->save();
+    }
+    $queue = $this->container->get('agency_staff.reads')->queue()['contexts'];
+    $this->assertSame([$late, $agency, $participant], array_column($queue, 'id'));
+    $this->assertTrue($queue[0]['agency_late']);
+    $this->assertFalse($queue[2]['agency_late']);
   }
 
   /**

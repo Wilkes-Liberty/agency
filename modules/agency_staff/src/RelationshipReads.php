@@ -153,11 +153,13 @@ final class RelationshipReads {
       usort($contexts, static fn(array $a, array $b): int => [
         !$a['agency_late'],
         !$a['owner_unavailable'],
+        ($a['next_action']['side'] ?? NULL) !== 'agency',
         $a['next_action']['expected_by'] ?? PHP_INT_MAX,
         $a['id'],
       ] <=> [
         !$b['agency_late'],
         !$b['owner_unavailable'],
+        ($b['next_action']['side'] ?? NULL) !== 'agency',
         $b['next_action']['expected_by'] ?? PHP_INT_MAX,
         $b['id'],
       ]);
@@ -180,15 +182,14 @@ final class RelationshipReads {
    */
   private function coordinatorActions(InternalRecord $relationship, bool $ownerless): array {
     if ($ownerless) {
-      return in_array($relationship->scalar('state'), ['invited', 'exploring', 'prepared', 'paused'], TRUE)
-        ? ['setNextAction'] : [];
+      return ['setNextAction'];
     }
     $state = $relationship->scalar('state');
     $actions = match ($state) {
       'invited' => ['setNextAction', 'revokeInvitation'],
       'exploring', 'prepared' => ['setNextAction', 'pauseRelationship', 'close', 'moveForward', 'revokeInvitation'],
       'paused' => ['setNextAction', 'close', 'revokeInvitation'],
-      default => ['revokeInvitation'],
+      default => ['setNextAction', 'revokeInvitation'],
     };
     if ($state === 'paused' && ($relationship->details()['pause_origin'] ?? '') === 'agency') {
       $actions[] = 'resumeRelationship';
