@@ -1,0 +1,20 @@
+# PHPStan configuration for Agency.
+# Drupal CI provides phpstan-drupal and analyses the module in place.
+includes:
+  - phar://phpstan.phar/conf/bleedingEdge.neon
+
+parameters:
+  level: 6
+  reportUnmatchedIgnoredErrors: false
+  paths:
+    - .
+  excludePaths:
+    - vendor (?)
+  fileExtensions:
+    - php
+    - module
+    - inc
+    - install
+  ignoreErrors:
+    - identifier: missingType.iterableValue
+    - identifier: missingType.generics

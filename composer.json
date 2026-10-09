@@ -1,0 +1,37 @@
+{
+    "name": "drupal/agency",
+    "description": "Agency operations for Drupal, organized around Win, Staff, Prove, and Settle capabilities.",
+    "type": "drupal-module",
+    "keywords": [
+        "Drupal",
+        "agency operations",
+        "business operations",
+        "workforce",
+        "CRM"
+    ],
+    "homepage": "https://www.drupal.org/project/agency",
+    "license": "GPL-2.0-or-later",
+    "minimum-stability": "dev",
+    "authors": [
+        {
+            "name": "Jeremy Michael Cerda",
+            "email": "jmcerda@wilkesliberty.com",
+            "homepage": "https://www.drupal.org/u/jmcerda",
+            "role": "Maintainer"
+        },
+        {
+            "name": "Wilkes & Liberty, LLC",
+            "homepage": "https://wilkesliberty.com",
+            "role": "Sponsor"
+        }
+    ],
+    "support": {
+        "issues": "https://www.drupal.org/project/issues/agency",
+        "source": "https://git.drupalcode.org/project/agency"
+    },
+    "require": {
+        "php": ">=8.1",
+        "drupal/core": "^10.6 || ^11.3",
+        "drupal/audit_chain": "^1.10"
+    }
+}

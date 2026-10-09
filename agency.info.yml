@@ -1,0 +1,5 @@
+name: Agency
+type: module
+description: 'Provides the shared foundation for portable agency and business operations.'
+core_version_requirement: ^10.6 || ^11.3
+package: Agency
