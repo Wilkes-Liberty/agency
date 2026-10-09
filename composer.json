@@ -1,6 +1,6 @@
 {
     "name": "drupal/agency",
-    "description": "Agency operations for Drupal, organized around Win, Staff, Prove, and Settle capabilities.",
+    "description": "Foundation for an agency operations platform for Drupal, connecting people, clients, agreements, delivery, and payment.",
     "type": "drupal-module",
     "keywords": [
         "Drupal",
