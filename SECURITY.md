@@ -2,11 +2,19 @@
 
 ## Reporting a vulnerability
 
-Agency is covered by the Drupal Security Team's advisory policy once it has a
-stable release. Report suspected vulnerabilities through the Drupal Security
-Team rather than the public issue queue:
+Agency is in development. Security advisory coverage is not automatic on a
+stable release: the project must meet Drupal's eligibility and opt-in rules.
+Confirm coverage for the affected release on the
+[project page](https://www.drupal.org/project/agency).
+
+For development or uncovered releases, contact the maintainer privately at
+<jmcerda@wilkesliberty.com> with the affected version and reproduction steps.
+For releases explicitly covered by Drupal's advisory policy, follow the Drupal
+Security Team reporting process:
 
 <https://www.drupal.org/security-team/report-issue>
+
+Coverage policy: <https://www.drupal.org/docs/develop/managing-a-drupalorg-theme-module-or-distribution-project/security-coverage>.
 
 Do not open a public issue for a suspected vulnerability.
 

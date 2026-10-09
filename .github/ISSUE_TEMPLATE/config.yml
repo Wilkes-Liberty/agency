@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Module bugs and feature requests
+    url: https://www.drupal.org/project/issues/agency
+    about: Use the Drupal.org queue for Agency module behavior.
+  - name: Security reporting
+    url: https://github.com/Wilkes-Liberty/agency/blob/1.x/SECURITY.md
+    about: Read the private reporting instructions before disclosing a vulnerability.
