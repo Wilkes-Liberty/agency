@@ -22,6 +22,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Corrected
 
+- Duration validation describes its supported format and rejects a trailing newline.
+- The Agency Staff module listing describes the current capability shell.
+
 - The translatable configuration test fixture declares its language code.
 - The PHP floor is 8.2, and the Drupal 10.6 compatibility leg exercises that
   floor.

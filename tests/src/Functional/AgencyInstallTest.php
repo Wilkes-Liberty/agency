@@ -103,25 +103,27 @@ final class AgencyInstallTest extends BrowserTestBase {
       ->validate();
     $this->assertCount(0, $violations, (string) $violations);
 
-    $invalid_duration = $settings;
-    $invalid_duration['policy']['invitation_validity'] = 'seven days';
-    $violations = $this->container->get('config.typed')
-      ->createFromNameAndData('agency.settings', $invalid_duration)
-      ->validate();
-    $this->assertStringContainsString(
-      'invitation validity period must be an iso 8601 duration',
-      strtolower((string) $violations),
-    );
+    // Reject malformed input and unsupported fractions with clear guidance.
+    foreach (['seven days', 'P1W1D', 'P0.5D', 'PT1.5H', "P1D\n"] as $duration) {
+      $invalid_duration = $settings;
+      $invalid_duration['policy']['invitation_validity'] = $duration;
+      $violations = $this->container->get('config.typed')
+        ->createFromNameAndData('agency.settings', $invalid_duration)
+        ->validate();
+      $this->assertStringContainsString(
+        'whole-number components, except fractional seconds',
+        (string) $violations,
+      );
+    }
 
-    $mixed_week_duration = $settings;
-    $mixed_week_duration['policy']['invitation_validity'] = 'P1W1D';
-    $violations = $this->container->get('config.typed')
-      ->createFromNameAndData('agency.settings', $mixed_week_duration)
-      ->validate();
-    $this->assertStringContainsString(
-      'invitation validity period must be an iso 8601 duration',
-      strtolower((string) $violations),
-    );
+    foreach (['P2W', 'PT1H30M', 'PT0.5S'] as $duration) {
+      $valid_duration = $settings;
+      $valid_duration['policy']['invitation_validity'] = $duration;
+      $violations = $this->container->get('config.typed')
+        ->createFromNameAndData('agency.settings', $valid_duration)
+        ->validate();
+      $this->assertCount(0, $violations, (string) $violations);
+    }
 
     $bad_identifier = $settings;
     $bad_identifier['policy']['close_reasons'][0]['id'] = 'Not a machine name';

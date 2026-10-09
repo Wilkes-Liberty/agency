@@ -1,6 +1,6 @@
 name: Agency Staff
 type: module
-description: 'Provides workforce relationships and the Discovery workspace for Agency.'
+description: 'Provides the initial capability shell for future workforce workflows.'
 core_version_requirement: ^10.6 || ^11.3
 package: Agency
 dependencies:

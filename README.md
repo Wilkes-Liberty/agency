@@ -42,8 +42,11 @@ Invitation and participant-workspace code must call
 `agency_require_display_name()` and refuse to operate in that state.
 Policy values and participant-facing close wording belong to the installing
 agency and must be configured before any real invitation is prepared.
-Period values use ISO 8601 durations such as `P7D` or `PT12H`. The retained
-information statement and fallback contact route are tenant-authored text.
+Period values use a supported ISO 8601 subset: whole-number components, with
+optional fractional seconds. Use `P7D`, `PT12H`, `PT1H30M` or `PT0.5S`; express
+fractional days or hours using smaller whole units. Week values stand alone
+(`P2W`), without other components. The retained-information statement and fallback
+contact route are tenant-authored text.
 
 ## Storage and dependencies
 

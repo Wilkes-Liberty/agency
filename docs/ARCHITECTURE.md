@@ -52,7 +52,8 @@ personnel, client or financial records.
 
 The package does not ship an agency name, policy periods, retained-information statement,
 fallback contact route or close reasons. Hosts supply reviewed configuration. Policy
-periods use ISO 8601 durations. Missing required configuration must remain distinguishable
+periods use the ISO 8601 subset documented in the README (whole-number components
+with optional fractional seconds; weeks cannot mix with other components). Missing required configuration must remain distinguishable
 from a valid empty or disabled policy; it must not silently authorize a business action.
 
 The current display-name guard is a foundation for later entry points. It does not by
