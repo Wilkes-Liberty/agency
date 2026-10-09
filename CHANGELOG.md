@@ -8,6 +8,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Product direction, integration principles, architecture, development and
+  contributor guidance.
+- GitHub supported-core functional checks, package/coding standards and shared
+  attribution verification.
+- Repository editor settings, review ownership and contribution templates.
+
+### Corrected
+
+- The translatable configuration test fixture declares its language code.
+- Security advisory coverage guidance distinguishes opted-in covered releases
+  from development and uncovered releases.
+
+### Package foundation
+
 - Initial `agency` and `agency_staff` package structure.
 - Tenant configuration schema for the agency display name and operating-policy
   keys, without tenant values or policy periods in package defaults.

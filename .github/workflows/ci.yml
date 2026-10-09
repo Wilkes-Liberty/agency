@@ -1,0 +1,152 @@
+name: CI
+
+on:
+  push:
+    branches: ['1.x']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  standards:
+    name: Package and Drupal standards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+      - name: Validate package
+        run: composer validate --no-check-publish --strict
+      - name: Install Drupal Coder
+        run: |
+          composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+          composer global require drupal/coder:^8.3.24 --no-interaction --no-progress
+          echo "$(composer global config home)/vendor/bin" >> "$GITHUB_PATH"
+      - name: Check coding standards
+        run: phpcs --standard=phpcs.xml.dist .
+
+  functional:
+    name: Drupal ${{ matrix.minor }} / PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { minor: '10.6', core: '~10.6.0', php: '8.1' }
+          - { minor: '11.3', core: '~11.3.0', php: '8.3' }
+          - { minor: '11.4', core: '~11.4.0', php: '8.4' }
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: agency_test
+          MYSQL_USER: agency_test
+          MYSQL_PASSWORD: test_only
+          MYSQL_ROOT_PASSWORD: test_only_root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -ptest_only_root --silent"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: module
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: gd, pdo_mysql
+          tools: composer:v2
+          coverage: none
+      - name: Build disposable Drupal host
+        env:
+          CORE_CONSTRAINT: ${{ matrix.core }}
+        run: |
+          composer create-project "drupal/recommended-project:${CORE_CONSTRAINT}" drupal --no-interaction --no-install --no-progress
+          cd drupal
+          composer config --no-plugins allow-plugins.composer/installers true
+          composer config --no-plugins allow-plugins.drupal/core-composer-scaffold true
+          composer config --no-plugins allow-plugins.drupal/core-project-message true
+          composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+          composer config --no-plugins allow-plugins.phpstan/extension-installer true
+          composer config repositories.agency --json '{"type":"path","url":"../module","options":{"symlink":true,"versions":{"drupal/agency":"1.x-dev"}}}'
+          composer require -W --no-interaction --no-progress 'drupal/agency:1.x-dev'
+          composer require -W --dev --no-interaction --no-progress "drupal/core-dev:${CORE_CONSTRAINT}"
+      - name: Assert the candidate and core version
+        working-directory: drupal
+        env:
+          EXPECTED_MINOR: ${{ matrix.minor }}
+        run: |
+          test -L web/modules/contrib/agency
+          test "$(realpath web/modules/contrib/agency)" = "$(realpath ../module)"
+          core="$(php -r 'require "vendor/autoload.php"; echo \Composer\InstalledVersions::getPrettyVersion("drupal/core");')"
+          echo "Testing Drupal ${core}"
+          case "$core" in
+            "$EXPECTED_MINOR".*) ;;
+            *) echo '::error::Resolved core does not match the matrix leg'; exit 1 ;;
+          esac
+      - name: Start test server
+        working-directory: drupal
+        run: |
+          mkdir -p web/sites/simpletest/browser_output
+          php -S 127.0.0.1:8888 -t web web/.ht.router.php > server.log 2>&1 &
+          echo "$!" > server.pid
+          for attempt in $(seq 1 20); do
+            echo "Waiting for test server (attempt ${attempt})"
+            if curl --silent --output /dev/null http://127.0.0.1:8888/; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo '::error::Test server did not start'
+          exit 1
+      - name: Run installed-host functional tests
+        working-directory: drupal
+        env:
+          SIMPLETEST_DB: mysql://agency_test:test_only@127.0.0.1/agency_test
+          SIMPLETEST_BASE_URL: http://127.0.0.1:8888
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          export BROWSERTEST_OUTPUT_DIRECTORY="$PWD/web/sites/simpletest/browser_output"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Functional"
+          # PHP expressions are intentionally passed literally to PHP.
+          # shellcheck disable=SC2016
+          php -r '
+            $xml = simplexml_load_file("junit.xml");
+            if ($xml === false) { exit(1); }
+            $executed = 0;
+            foreach ($xml->xpath("//testcase") as $case) {
+              if (!isset($case->skipped)) { $executed++; }
+            }
+            echo "Executed tests: $executed\n";
+            if ($executed < 2) { exit(1); }
+          '
+      - name: Stop test server
+        if: always()
+        working-directory: drupal
+        run: |
+          if [ -f server.pid ]; then
+            kill "$(cat server.pid)" || true
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agency-core-${{ matrix.minor }}
+          path: |
+            drupal/junit.xml
+            drupal/composer.lock
+            drupal/server.log

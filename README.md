@@ -1,7 +1,12 @@
 # Agency
 
-Agency is a Drupal package for agency and business operations. Its capability
-boundaries are Agency Win, Agency Staff, Agency Prove, and Agency Settle.
+Agency is a Drupal package connecting people, clients, agreements, delivery and
+payment across the life of a working relationship. Its product journeys are
+Win, Staff, Prove and Settle; those journeys do not prescribe module boundaries.
+
+This is an early package foundation, not a complete agency application. See the
+[working North Star](docs/NORTH_STAR.md) for the intended experience, including
+integration with the tools people already use.
 
 The base module owns shared, tenant-neutral configuration. Capability modules
 own their business records and workflows. General CMS concerns remain with the
@@ -49,7 +54,19 @@ through its public contract rather than copying its implementation.
 - Drupal 10.6 or later on the 10.x line
 - Drupal 11.3 or later on the 11.x line
 
-The Drupal.org GitLab pipeline exercises the oldest supported core branches.
+GitHub and Drupal.org CI are configured to exercise supported core branches.
+Actual passing results, not the presence of a workflow, establish compatibility.
+
+## Development and contribution
+
+- [Contributing](CONTRIBUTING.md): issue routing, focused changes and review.
+- [Development](docs/DEVELOPMENT.md): Composer, standards and installed-host tests.
+- [Architecture](docs/ARCHITECTURE.md): domain, host, integration and evidence boundaries.
+- [Maintaining](docs/MAINTAINING.md): development line, remotes and release verification.
+- [Security](SECURITY.md): private vulnerability reporting and coverage status.
+
+Module bugs and feature requests belong in the
+[Drupal.org issue queue](https://www.drupal.org/project/issues/agency).
 
 ## Maintainers
 

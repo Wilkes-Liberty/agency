@@ -69,6 +69,7 @@ final class AgencyInstallTest extends BrowserTestBase {
    */
   public function testPolicyConfigurationSchema(): void {
     $settings = [
+      'langcode' => 'en',
       'display_name' => 'Example agency',
       'policy' => [
         'invitation_validity' => 'tenant-defined',
