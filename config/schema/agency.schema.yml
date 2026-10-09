@@ -51,8 +51,27 @@ agency.settings:
           type: text
           label: 'Retained information statement'
         fallback_contact_route:
-          type: text
+          type: mapping
           label: 'Fallback contact route'
+          mapping:
+            kind:
+              type: string
+              label: 'Channel kind'
+              constraints:
+                Length:
+                  min: 1
+                  max: 32
+                Regex:
+                  pattern: '/^[a-z][a-z0-9_]*\z/'
+            value:
+              type: string
+              label: 'Contact value'
+              constraints:
+                Length:
+                  min: 1
+                  max: 255
+                Regex:
+                  pattern: '/^(?!\s*$)[^\x00]+\z/u'
         close_reasons:
           type: sequence
           label: 'Close reasons'

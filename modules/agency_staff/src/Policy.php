@@ -51,8 +51,17 @@ final class Policy {
   /**
    * Returns the tenant's public support route, independent of any invitation.
    */
-  public function supportContact(): string {
-    return $this->policyText('fallback_contact_route');
+  public function supportContact(): array {
+    $route = $this->value('fallback_contact_route');
+    if (!is_array($route)) {
+      throw new Refusal('policy_unavailable');
+    }
+    try {
+      return RelationshipCommands::contact($route);
+    }
+    catch (Refusal) {
+      throw new Refusal('policy_unavailable');
+    }
   }
 
   /**

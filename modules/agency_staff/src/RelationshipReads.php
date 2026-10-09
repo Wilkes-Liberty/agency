@@ -150,7 +150,7 @@ final class RelationshipReads {
         $row['display_name'] = $person?->scalar('display_name');
         $row['response'] = $data['response'] ?? NULL;
         if ((int) $relationship->scalar('owner_uid') === (int) $owner->id() && !$ownerless) {
-          $row['pause_note'] = $data['pause_note'] ?? NULL;
+          $row['pause_note'] = $relationship->scalar('state') === 'paused' ? ($data['pause_note'] ?? NULL) : NULL;
           $row['withdrawal_note'] = $data['withdrawal_note'] ?? NULL;
         }
         $row['audit_pending'] = $this->outbox->pending($relationship->uuid());

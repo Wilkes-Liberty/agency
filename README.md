@@ -38,7 +38,8 @@ as a package default. The schema declares these keys:
 - `policy.retention_after_close`
 - `policy.summary_window` (optional, enables expiring terminal summaries)
 - `policy.retained_information_statement`
-- `policy.fallback_contact_route`
+- `policy.fallback_contact_route`: explicit `{kind, value}` contact mapping;
+  legacy plain-text values must be replaced without inferring the channel.
 - `policy.close_reasons`
 
 Drupal's status report returns an error while `display_name` is absent or blank.
