@@ -703,14 +703,14 @@ final class DiscoveryDomainTest extends KernelTestBase {
     [$id] = $this->accepted();
     $this->installChain();
     $this->signingKey();
-    $this->installFailureTrigger('agency_staff_outbox', 'TRUE');
+    $this->installFailureConstraint('agency_staff_outbox', 'delivered IS NOT NULL');
     try {
       $this->assertSame(0, $this->container->get('agency_staff.outbox')->drain());
       $this->assertSame(0, (int) $this->container->get('database')->select('audit_chain_log', 'l')->countQuery()->execute()->fetchField());
       $this->assertTrue($this->container->get('agency_staff.outbox')->pending($id));
     }
     finally {
-      $this->removeFailureTrigger('agency_staff_outbox');
+      $this->removeFailureConstraint('agency_staff_outbox');
     }
     $this->assertSame(3, $this->container->get('agency_staff.outbox')->drain());
     $this->assertTrue($this->container->get('audit_chain.logger')->verify()['ok']);
@@ -721,7 +721,7 @@ final class DiscoveryDomainTest extends KernelTestBase {
    */
   public function testSummarySavepointFailure(): void {
     [$id] = $this->accepted();
-    $this->installFailureTrigger('agency_entitlement', "NEW.status = 'summary_only'");
+    $this->installFailureConstraint('agency_entitlement', "status = 'summary_only'");
     try {
       $result = $this->container->get('agency_staff.commands')->withdrawRelationship($id, [], 'stop-grant-failure', 0);
       $this->assertSame('committed', $result['outcome'], json_encode($result));
@@ -732,43 +732,28 @@ final class DiscoveryDomainTest extends KernelTestBase {
       $this->assertSame(1, (int) $this->container->get('database')->select('agency_staff_outbox', 'o')->condition('operation', 'withdrawRelationship')->countQuery()->execute()->fetchField());
     }
     finally {
-      $this->removeFailureTrigger('agency_entitlement');
+      $this->removeFailureConstraint('agency_entitlement');
     }
   }
 
   /**
    * Injects a database write failure using synthetic test-only SQL.
    */
-  private function installFailureTrigger(string $table, string $condition): void {
+  private function installFailureConstraint(string $table, string $condition): void {
     $database = $this->container->get('database');
     $this->assertContains($database->driver(), ['pgsql', 'mysql']);
-    if ($database->driver() === 'pgsql') {
-      $database->query("CREATE FUNCTION {agency_failure}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF $condition THEN RAISE EXCEPTION 'Synthetic write failure'; END IF; RETURN NEW; END $$", [], [
-
-        'allow_delimiter_in_query' => TRUE,
-      ]);
-      $database->query('CREATE TRIGGER agency_failure BEFORE UPDATE ON {' . $table . '} FOR EACH ROW EXECUTE FUNCTION {agency_failure}()');
-    }
-    else {
-      $database->query('CREATE TRIGGER {agency_failure} BEFORE UPDATE ON {' . $table . "} FOR EACH ROW BEGIN IF $condition THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Synthetic write failure'; END IF; END", [], [
-
-        'allow_delimiter_in_query' => TRUE,
-      ]);
-    }
+    $name = 'agency_failure_' . substr(hash('sha256', $database->getPrefix()), 0, 12);
+    $database->query('ALTER TABLE {' . $table . '} ADD CONSTRAINT ' . $name . ' CHECK (NOT (' . $condition . '))');
   }
 
   /**
    * Removes only the deliberately installed test fault.
    */
-  private function removeFailureTrigger(string $table): void {
+  private function removeFailureConstraint(string $table): void {
     $database = $this->container->get('database');
-    if ($database->driver() === 'pgsql') {
-      $database->query('DROP TRIGGER agency_failure ON {' . $table . '}');
-      $database->query('DROP FUNCTION {agency_failure}()');
-    }
-    else {
-      $database->query('DROP TRIGGER {agency_failure}');
-    }
+    $name = 'agency_failure_' . substr(hash('sha256', $database->getPrefix()), 0, 12);
+    $clause = $database->driver() === 'mysql' ? ' DROP CHECK ' : ' DROP CONSTRAINT ';
+    $database->query('ALTER TABLE {' . $table . '}' . $clause . $name);
   }
 
   /**
