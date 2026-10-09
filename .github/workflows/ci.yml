@@ -188,6 +188,28 @@ jobs:
           done
           echo '::error::Test server did not start'
           exit 1
+      - name: Run domain transaction and concurrency tests
+        working-directory: drupal
+        env:
+          SIMPLETEST_DB: ${{ matrix.driver }}://agency_test:test_only@127.0.0.1/agency_test
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          export BROWSERTEST_OUTPUT_DIRECTORY="$PWD/web/sites/simpletest/browser_output"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/domain-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Kernel"
+          php -r '
+            $xml = simplexml_load_file("domain-junit.xml");
+            if ($xml === false) { exit(1); }
+            $required = ["testConcurrentDrainersCommit", "testConcurrentDrainersRollback", "testConcurrentDomainCommit", "testConcurrentDomainRollback", "testDeliveryMarkerFailure", "testSummarySavepointFailure"];
+            $executed = [];
+            foreach ($xml->xpath("//testcase") as $case) {
+              if (isset($case->skipped)) { exit(1); }
+              $executed[] = (string) $case["name"];
+            }
+            echo "Executed domain tests: " . count($executed) . "\n";
+            if (array_diff($required, $executed)) { exit(1); }
+          '
       - name: Run installed-host functional tests
         working-directory: drupal
         env:
@@ -224,5 +246,6 @@ jobs:
           name: agency-core-${{ matrix.minor }}-${{ matrix.driver }}
           path: |
             drupal/junit.xml
+            drupal/domain-junit.xml
             drupal/composer.lock
             drupal/server.log

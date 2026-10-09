@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Invitation-only Discovery domain services, five internal content entities,
+  revisioned state, scoped workspace and expiring summary reads, and explicit
+  host identity/eligibility integration.
+- Durable required evidence, denial intent, idempotency and transactional drain
+  through Audit Chain's public keyed logger; no notification delivery.
+- Failure-first domain checks for authorization, recovery, rollback, calendar
+  policy, independent database writers and nested summary savepoints.
+
 - Manual GitHub-to-DrupalCode synchronization guidance with explicit commit and
   tag review, ancestry checks, SSH authentication and publication boundaries.
 

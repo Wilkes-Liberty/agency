@@ -1,9 +1,9 @@
 # Architecture
 
 Agency is a reusable Drupal module package for agency and business operations.
-The initial foundation provides the base module and an `agency_staff` shell.
-Domain storage, invitations, authorization, application APIs and user interfaces
-are separate implementation slices.
+The base module provides shared configuration. `agency_staff` implements the
+initial invitation-only Discovery domain. Host APIs and user interfaces consume
+its [service contract](DISCOVERY_CONTRACT.md) through explicit adapters.
 
 ## Package structure
 
@@ -13,6 +13,7 @@ are separate implementation slices.
 | `config/schema` | Typed tenant-configuration contract |
 | `modules/agency_staff` | Initial workforce capability boundary |
 | `tests/src/Functional` | Installed-host package verification |
+| `tests/src/Kernel`, `tests/fixtures` | Domain authorization, rollback and independent database writers |
 | `docs` | Product direction, boundaries and development guidance |
 
 The four product loops are journeys across domains. Final package boundaries should
@@ -56,10 +57,10 @@ periods use the ISO 8601 subset documented in the README (whole-number component
 with optional fractional seconds; weeks cannot mix with other components). Missing required configuration must remain distinguishable
 from a valid empty or disabled policy; it must not silently authorize a business action.
 
-The current display-name guard is a foundation for later entry points. It does not by
-itself implement invitation, authorization or workspace behavior. The invitation domain
-slice must refuse to prepare an invitation when its validity, acknowledgement or follow-up
-period is absent or invalid, and must cover those failure paths in an installed-host test.
+Discovery refuses invitation preparation when its required name, validity,
+acknowledgement, follow-up or retention configuration is absent or invalid.
+The optional summary window grants a separate expiring projection; failure to
+prepare that grant cannot preserve workspace access after a successful Stop.
 
 ## Workflow integration seams
 

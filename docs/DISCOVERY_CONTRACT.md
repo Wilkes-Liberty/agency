@@ -42,7 +42,10 @@ its owner's unrestricted account. This module supplies no such host adapter.
 single authorized workspace, or a list of authorized workspace contexts.
 `RelationshipReads::summary(string $relationshipId): array` is a separate
 capability. `RelationshipReads::queue(): array` is coordinator-only and scoped
-to the current owner. Reads revalidate identity, binding and entitlement on each
+to the current owner. `RelationshipReads::summaries(): array` separately lists
+currently authorized past conversations as opaque `id`, `kind`, and the curated
+`summary`; clients need not retain identifiers from earlier sessions. Reads
+revalidate identity, binding and entitlement on each
 call and bypass Drupal's entity memory cache. No shared response cache is safe:
 host responses must use `Cache-Control: private, no-store`.
 
@@ -55,11 +58,13 @@ Workspace fields:
 | `waiting_on` | Stored `participant` or `agency`; `display_waiting_on` may be `nobody` for a participant pause. |
 | `agency_name` | Configured organization display name; missing name refuses the workspace. |
 | `owner` | Display name and typed contact route. Never a Drupal user identifier. |
-| `next_action` | At most one: summary, why it helps, owning side, absolute `expected_by`, and `optional`. |
+| `owner_changed_at` | Timestamp of a reassignment notice, or null. |
+| `next_action` | At most one: `code`, `summary`, `why_it_helps`, `side`, absolute `expected_by`, and `optional`. Coordinator text has null code. A server-generated `agency_response` code has null text and is localized by the host catalog. |
 | `agency_late` | Server-derived boolean; never derived for participant-owned actions. |
 | `updated_at`, `version` | Server time and monotonically increasing relationship version. |
 | `pause_origin` | `participant`, `agency`, or null. Participant cannot resume an agency pause. |
 | `proposal` | Curated target purpose/message awaiting explicit participant consent, or null. |
+| `agreed_next_step` | Accepted target purpose/message, or null; never a new access grant. |
 | `permitted_actions` | Server-calculated command identifiers; unknown identifiers are ignored by clients. |
 
 Missing, unrelated, revoked, suspended, deactivated and rebound contexts return
@@ -67,6 +72,16 @@ the same `not_found` refusal without any relationship fields. List reads omit
 them. Public adapters use the same status, shape and cache policy for every
 such case. Internal entity objects, principal IDs, notes from other records,
 raw evidence and outbox rows never appear in participant projections.
+Identity is resolved before protected identifier lookup, including during an
+outage, so missing and existing identifiers have the same observable response.
+
+The restricted `recover agency discovery ownership` permission, in addition to
+eligible human coordination authority, exposes ownerless contexts in the queue.
+An owner is unavailable when missing, blocked or no longer explicitly eligible.
+Recovery permits only an owner-only `setNextAction` payload; it preserves state,
+pause origin and current obligations. Ordinary mutations require assignment.
+An active eligible owner's contexts cannot be taken over through this permission.
+Queue rows carry `owner_unavailable`, `last_agency_action_at` and captured notices.
 
 Application/recruiting is a later relationship kind. Submitted, review,
 interview and decision labels are not Discovery enum values. Future application
@@ -106,13 +121,16 @@ any accompanying projection is freshly authorized. **Terminal participant
 retries are an explicit exception:** after withdrawal the entitlement no longer
 authorizes the command, so even the original key returns `not_found`. A later
 suspension also prevents replay. No replay recreates or extends a grant.
+Existing receipts are located after authorization and before validation for a
+new intent: an elapsed action deadline or subsequent policy change does not
+invalidate a receipt. New intents still require current policy and contact checks.
 
 | Command | Inputs and effect |
 | --- | --- |
 | `startDiscovery` | Coordinator supplies display name, typed contact, owner/contact, first next action. Resolve intended issuer/subject first. Creates an `invited` context, pending entitlement and thin person/principal rows; no delivery. |
 | `issue` / `resend` | Coordinator captures an invitation, with policy-derived expiry and a cryptographically random bearer credential stored only as a hash. Resend supersedes all earlier active generations. Capture is not sending. |
 | `accept` | POST plus token, current authenticated exact intended issuer/subject and key. Lock, verify expiry/generation/pending grant, consume, activate and record in one transaction. Used token cannot bind again; an already bound subject may separately open its existing workspace. |
-| `setNextAction` | Assigned coordinator sets summary, purpose, owning side, date and `optional`. Owning side determines `waiting_on`. No required participant task in Discovery. |
+| `setNextAction` | Assigned coordinator sets summary, purpose, owning side, date and `optional`. Optional `owner` contains a proposed existing `uid` and typed `contact`; the server validates eligibility and explicit permission before reassignment and records `owner_changed_at`. Owning side determines `waiting_on`. No required participant task in Discovery. |
 | `respond` | Participant choice and optional bounded plain-text note. `not_now` records a reply without pausing. `decline_proposal` clears only the proposal and leaves the conversation exploring, waiting on the agency. |
 | `pauseRelationship` | Participant pause clears participant obligations and retains workspace access. Agency pause requires an agency-owned update date. |
 | `resumeRelationship` | Only the pausing side can resume. Server resumes to exploring, waiting on agency, with policy-derived acknowledgement date. |
@@ -166,6 +184,16 @@ Metadata is allowlisted to opaque event/context identifiers, operation, state,
 waiting side, timestamps and actor hash. Contact points, free-text notes,
 credentials and file data are forbidden in stored and chained metadata.
 
+Refused protected calls record a separate minimized observation after rollback:
+only a generated event ID, fixed reason, subject hash and timestamp. Guessed
+relationship IDs, tokens, request payloads and contacts are never retained in
+these observations. Identity and persistence failures also set bounded latest-
+observation timestamps for the authorized coordinator queue's `alerts` list.
+These are historical observations, not claims that an outage is still active.
+If evidence persistence itself is unavailable, the standard logger receives only
+a fixed failure code; no protected access or successful receipt is created.
+The host must rate-limit these ports and route operational alerts appropriately.
+
 The first implementation serializes domain mutations with a seeded database
 mutex row. Reads acquire the same boundary before fresh authorization/projection;
 invitation generations are also locked during acceptance. This deliberately
@@ -190,3 +218,66 @@ No endpoint names or GraphQL schema are invented by this module contract.
 Keep “Work with us” as the shared section; use one catalog keyed by relationship
 kind. The UI renders server actions, pause origin, waiting side, update date and
 optional flags. It does not restore a browser-cached previous state.
+
+## Callable inputs and synthetic fixture
+
+Container service IDs are `agency_staff.commands`, `agency_staff.invitations`,
+`agency_staff.reads`, `agency_staff.outbox` and `agency_staff.identity`.
+Replace the identity service through the host's dependency-injection integration.
+All methods below return arrays with the outcomes above:
+
+```php
+startDiscovery(array $input, string $key): array;
+// All other RelationshipCommands methods use this parameter order:
+respond(string $id, array $input, string $key, int $version): array;
+// InvitationCommands:
+issue(string $id, string $key, int $version): array;
+resend(string $id, string $key, int $version): array;
+revoke(string $id, string $key, int $version): array;
+accept(string $token, string $key): array;
+inspect(string $token): array;
+```
+
+`startDiscovery` uses the acting coordinator as the initial owner. Its input:
+
+```json
+{
+  "display_name": "Example Person",
+  "contact": {"kind": "email", "value": "person@example.test"},
+  "owner_contact": {"kind": "url", "value": "https://example.test/help"},
+  "next_action": {
+    "summary": "Choose whether to talk.",
+    "why_it_helps": "Learn what happens next.",
+    "side": "participant",
+    "expected_by": 2000000000,
+    "optional": true
+  }
+}
+```
+
+All dates must be future instants at command time. Contact routes and messages
+are bounded plain data: hosts escape text and validate route schemes before
+turning them into links. They are not HTML or redirect destinations.
+
+`respond` accepts `choice` (`yes`, `not_now`, `message`, `ready`, or
+`decline_proposal`) and optional `note`. Participant pause/resume inputs may be
+empty; agency pause/resume require `side: agency`. Agency pause additionally
+requires `summary`, `why_it_helps` and `expected_by`. Withdrawal accepts an
+optional note. Revoke/suspend take an empty payload. Close requires `category`,
+`message` and typed `contact`. Move-forward proposal requires `target_purpose`
+and `message`; participant acceptance uses `consent: true` and current version.
+
+Issue/resend returns `invitation.token`, `expires` and `delivery_state: captured`
+only on initial success. A retry recovers the minimal receipt, never the bearer
+token. If the token response is lost, the coordinator explicitly resends with a
+new intent key and current version. No token appears in logs, evidence or stored
+receipts. Inspection returns `open`, `closed`, `already_used`, or `workspace`;
+only the currently entitled bound principal receives a workspace identifier.
+
+Workspace reads use `outcome: available` with `workspace` or `contexts`; summary
+reads use `summary`. A committed command receipt contains `id`,
+`relationship_id`, `effective_at`, `evidence`, and, for a terminal transition,
+nullable `readable_until`. Initial command responses include `version`.
+Authorized participant mutations additionally return the fresh `workspace`.
+Coordinator adapters re-read their queue after mutation. Receipt replay does
+not promise the original workspace or a bearer token.

@@ -18,6 +18,7 @@ Use synthetic people, identities, contacts, policies and signing keys only.
 | Database | Two real PostgreSQL 16 connections prove mutex/claim blocking, rollback, savepoints and no duplicate delivery; repeat on MySQL supported-core lanes. |
 | Policy | Missing name/required periods refuse; zero and malformed periods refuse; calendar month/year clamping, fraction precision and summary expiry are explicit. |
 | Privacy | Stored/chained metadata contains no contact, note, token, guessed ID, credential or protected data; no raw evidence projection. |
+| Review regressions | Replay after elapsed deadlines or changed policy; prepared proposal/action parity; past-summary discovery; identity-outage indistinguishability; paused ownerless recovery with a separate restricted permission. |
 | Portability | A second synthetic tenant changes only config; package creates no CRM/worker records and sends no notifications. |
 
 Kernel/service tests verify domain contracts, not browser accessibility or host

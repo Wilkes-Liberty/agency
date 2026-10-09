@@ -39,6 +39,13 @@ agency.settings:
             Regex:
               pattern: '/^(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
               message: 'The retention period must be an ISO 8601 duration with whole-number components, except fractional seconds.'
+        summary_window:
+          type: string
+          label: 'Closing-summary viewing period'
+          constraints:
+            Regex:
+              pattern: '/^(?:P\d+W|P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?)\z/'
+              message: 'The viewing period must be a positive ISO 8601 duration.'
         retained_information_statement:
           type: text
           label: 'Retained information statement'

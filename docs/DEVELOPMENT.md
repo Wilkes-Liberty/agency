@@ -50,6 +50,8 @@ locks or savepoints on both engines before claiming it holds.
 
 ```sh
 vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+  "$PWD/web/modules/contrib/agency/tests/src/Kernel"
+vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
   "$PWD/web/modules/contrib/agency/tests/src/Functional"
 ```
 
@@ -68,7 +70,9 @@ vendor/bin/drush status
 Confirm both Agency modules are enabled. The status report should identify the missing
 agency display name. Supply a synthetic name through your host's reviewed configuration
 and confirm the requirement clears. No participant, role, invitation or workforce
-relationship should be created by enabling the shells.
+relationship should be created by enabling the modules. Run database updates
+when upgrading an already enabled foundation: `agency_staff_update_10001`
+installs the new internal entities and outbox tables without tenant defaults.
 
 ## Supported-core verification
 
@@ -78,6 +82,10 @@ MySQL 8.0; one more leg repeats Drupal 11.3 on PostgreSQL 16 because lock, savep
 and transaction behavior differs by engine. Each job asserts the resolved version and
 candidate symlink and requires executed, non-skipped functional tests. A separate job
 runs PHPStan against a Drupal 11.4 analysis host.
+Every database lane also executes the domain suite and explicitly checks that
+the independent-writer, delivery-marker and summary-savepoint cases ran without
+skips. The CLI-only workers accept kernel-test-prefixed connection options via
+standard input and use synthetic identities and signing material.
 
 The Drupal.org pipeline uses the standard contrib templates with previous-major and
 previous-minor lanes enabled. A configuration file is not a successful pipeline:

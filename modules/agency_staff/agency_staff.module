@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * @file
+ * Schedules delivery of durable Discovery evidence, never notifications.
+ */
+
+/**
+ * Implements hook_cron().
+ */
+function agency_staff_cron(): void {
+  \Drupal::service('agency_staff.outbox')->drain();
+}
