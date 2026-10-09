@@ -1,0 +1,60 @@
+<?php
+
+/**
+ * @file
+ * Shared hooks for the Agency base module.
+ */
+
+use Drupal\Core\Extension\Requirement\RequirementSeverity;
+
+/**
+ * Returns the configured agency display name or refuses the operation.
+ *
+ * Invitation and participant-workspace entry points must call this function
+ * before they render or mutate state. Keeping the guard in the base module
+ * gives every capability the same fail-closed configuration boundary.
+ *
+ * @return string
+ *   The trimmed agency display name.
+ *
+ * @throws \LogicException
+ *   When the agency display name is absent or blank.
+ */
+function agency_require_display_name(): string {
+  $display_name = trim((string) \Drupal::config('agency.settings')->get('display_name'));
+  if ($display_name === '') {
+    throw new \LogicException('Set the agency name before inviting anyone or rendering a participant workspace.');
+  }
+
+  return $display_name;
+}
+
+/**
+ * Builds the runtime requirement for missing tenant configuration.
+ *
+ * @return array
+ *   The requirement keyed for Drupal's status report, or an empty array when
+ *   the agency display name is ready.
+ */
+function agency_display_name_requirements(): array {
+  try {
+    agency_require_display_name();
+    return [];
+  }
+  catch (\LogicException) {
+    // The status report surfaces the same guard used by runtime consumers.
+  }
+
+  $error_severity = class_exists(RequirementSeverity::class)
+    ? RequirementSeverity::Error
+    : REQUIREMENT_ERROR;
+
+  return [
+    'agency_display_name' => [
+      'title' => t('Agency configuration'),
+      'value' => t('Agency name is not configured'),
+      'severity' => $error_severity,
+      'description' => t('Set the agency name before inviting anyone or rendering a participant workspace.'),
+    ],
+  ];
+}

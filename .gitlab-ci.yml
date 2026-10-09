@@ -1,0 +1,26 @@
+################
+# Drupal GitLabCI template for contrib modules.
+#
+# https://www.drupal.org/docs/develop/git/using-gitlab-to-contribute-to-drupal
+################
+
+include:
+  - project: $_GITLAB_TEMPLATES_REPO
+    ref: $_GITLAB_TEMPLATES_REF
+    file:
+      - '/includes/include.drupalci.main.yml'
+      - '/includes/include.drupalci.variables.yml'
+      - '/includes/include.drupalci.workflows.yml'
+
+variables:
+  _GITLAB_TEMPLATES_REPO: project/gitlab_templates
+  _GITLAB_TEMPLATES_REF: main
+  # The package supports the live Drupal 10 and Drupal 11 floors. Surface and
+  # automatically run both lanes so the declared compatibility is exercised.
+  OPT_IN_TEST_PREVIOUS_MAJOR: '1'
+  OPT_IN_TEST_PREVIOUS_MINOR: '1'
+  _AUTORUN_PREVIOUS_MAJOR: 'all'
+  _AUTORUN_PREVIOUS_MINOR: 'all'
+  CORE_PREVIOUS_PHP_MIN: '8.2'
+  # Keep the upcoming minor visible as an explicit forward-compatibility check.
+  OPT_IN_TEST_NEXT_MINOR: '1'
