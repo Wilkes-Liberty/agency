@@ -50,8 +50,8 @@ CI artifacts. This workflow needs no GitHub Actions publication secret.
 From an isolated worktree, fetch both remote histories without pruning:
 
 ```sh
-git fetch github
-git fetch drupalcode
+git fetch --no-prune --no-prune-tags github
+git fetch --no-prune --no-prune-tags drupalcode
 git remote get-url --push drupalcode
 git rev-parse github/1.x drupalcode/1.x
 git log --reverse --format=fuller drupalcode/1.x..github/1.x
@@ -74,12 +74,13 @@ and stop for renewed review if either the approved candidate or expected
 destination has changed.
 
 ```sh
-git push --dry-run drupalcode APPROVED_FULL_COMMIT_SHA:refs/heads/1.x
-git push drupalcode APPROVED_FULL_COMMIT_SHA:refs/heads/1.x
+git push --dry-run --no-follow-tags drupalcode APPROVED_FULL_COMMIT_SHA:refs/heads/1.x
+git push --no-follow-tags drupalcode APPROVED_FULL_COMMIT_SHA:refs/heads/1.x
 git ls-remote drupalcode refs/heads/1.x
 ```
 
-The returned remote SHA must equal the approved SHA. A dry-run checks transport
+The explicit flags override inherited fetch-pruning and automatic tag-following
+settings. The returned remote SHA must equal the approved SHA. A dry-run checks transport
 and the proposed ref update; it does not prove every server-side receive hook
 will accept the real push. A rejected push is a stop condition, not permission
 to force it. No automated return path exists to create synchronization loops.
@@ -87,7 +88,8 @@ to force it. No automated return path exists to create synchronization loops.
 ### Tags and development packages
 
 For a separately approved release, push only its explicit tag ref to each
-remote, such as `refs/tags/1.0.0:refs/tags/1.0.0`. Compare the tag object and peeled
+remote with `--no-follow-tags`, such as `refs/tags/1.0.0:refs/tags/1.0.0`.
+Compare the tag object and peeled
 commit on both remotes. Never overwrite an existing tag. A source push, a tag,
 a Drupal.org release node and a downloadable Composer package are distinct steps.
 
