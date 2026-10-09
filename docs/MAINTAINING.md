@@ -21,7 +21,13 @@ name, and linked worktrees share repository configuration.
 When `origin` already names DrupalCode in a shared checkout, retain it until
 contributors coordinate a rename. Add `github` for the GitHub URL and use explicit
 remote names in every fetch and push. Do not change another worktree's branch or
-upstream. The examples below use `github` and `drupalcode`.
+upstream.
+
+The examples below require `github` and `drupalcode` in every checkout. Even when
+`origin` already points to GitHub, add the explicit alias with
+`git remote add github git@github.com:Wilkes-Liberty/agency.git` if it is absent.
+If an alias already exists, verify its URL instead of replacing it. The alias
+does not change `origin` or any existing branch upstream.
 
 ## Synchronization workflow
 
@@ -54,7 +60,7 @@ git fetch --no-prune --no-prune-tags github
 git fetch --no-prune --no-prune-tags drupalcode
 git remote get-url --push drupalcode
 git rev-parse github/1.x drupalcode/1.x
-git log --reverse --format=fuller drupalcode/1.x..github/1.x
+git log --reverse --format=fuller --patch --diff-merges=separate drupalcode/1.x..github/1.x
 git diff --stat drupalcode/1.x github/1.x
 git diff drupalcode/1.x github/1.x
 git merge-base --is-ancestor drupalcode/1.x github/1.x
@@ -68,15 +74,28 @@ review results. Record the full candidate SHA and expected destination SHA for
 approval. A moving branch name alone is not a publication candidate.
 
 After approval, use the approved full commit SHA as the source of a single-ref
-push. In the following template, replace `APPROVED_FULL_COMMIT_SHA` with that
-reviewed SHA. Confirm it is still reachable from GitHub `1.x`, refetch DrupalCode,
-and stop for renewed review if either the approved candidate or expected
-destination has changed.
+push. Replace both placeholders in the following template with the recorded
+full SHAs. Its subshell stops on a failed command: the source must still be
+reachable from GitHub `1.x`, and DrupalCode must still match the approved
+destination. A different candidate or destination requires renewed review.
 
 ```sh
-git push --dry-run --no-follow-tags drupalcode APPROVED_FULL_COMMIT_SHA:refs/heads/1.x
-git push --no-follow-tags drupalcode APPROVED_FULL_COMMIT_SHA:refs/heads/1.x
-git ls-remote drupalcode refs/heads/1.x
+(
+  set -eu
+  approved_commit=APPROVED_FULL_COMMIT_SHA
+  expected_destination=EXPECTED_FULL_DESTINATION_SHA
+  git fetch --no-prune --no-prune-tags github
+  git fetch --no-prune --no-prune-tags drupalcode
+  test "$(git remote get-url --push drupalcode)" = 'git@git.drupal.org:project/agency.git'
+  test "$(git rev-parse "${approved_commit}^{commit}")" = "$approved_commit"
+  git merge-base --is-ancestor "$approved_commit" github/1.x
+  test "$(git rev-parse drupalcode/1.x)" = "$expected_destination"
+  git merge-base --is-ancestor "$expected_destination" "$approved_commit"
+  git push --dry-run --no-follow-tags drupalcode "$approved_commit:refs/heads/1.x"
+  git push --no-follow-tags drupalcode "$approved_commit:refs/heads/1.x"
+  actual_destination=$(git ls-remote drupalcode refs/heads/1.x | cut -f1)
+  test "$actual_destination" = "$approved_commit"
+)
 ```
 
 The explicit flags override inherited fetch-pruning and automatic tag-following
