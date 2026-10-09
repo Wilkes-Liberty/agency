@@ -33,6 +33,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Corrected
 
+- Discovery consent leaves a dated agency handoff with participant Stop and
+  coordinator next-action/close support. Replies preserve existing agency
+  promises; read models expose current policy facts, reply choices, owner-only
+  action modes and appropriately scoped participant notes.
+- Invitation inspection supplies a tenant support route and an active inviter
+  display name without exposing an owner's contact details.
+
 - Composer's description identifies the package as a foundation.
 
 - Duration validation describes its supported format and rejects a trailing newline.

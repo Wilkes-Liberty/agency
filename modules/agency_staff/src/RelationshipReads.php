@@ -62,6 +62,8 @@ final class RelationshipReads {
   public function summary(string $relationshipId): array {
     return $this->store->transaction(function () use ($relationshipId): array {
       $this->access->principal();
+      $this->policy->name();
+      $this->policy->retentionFacts();
       $relationship = $this->access->relationship($relationshipId);
       return ['outcome' => 'available', 'summary' => $this->summaryProjection($relationship)];
     });
@@ -75,6 +77,8 @@ final class RelationshipReads {
   public function summaries(): array {
     return $this->store->transaction(function (): array {
       $this->access->principal();
+      $this->policy->name();
+      $this->policy->retentionFacts();
       $contexts = [];
       foreach ($this->access->participantRelationships() as $relationship) {
         try {
@@ -111,7 +115,8 @@ final class RelationshipReads {
       'contact_route',
     ]));
     $result['readable_until'] = (int) $grant->scalar('readable_until');
-    return $result;
+    $result['agency_name'] = $this->policy->name();
+    return array_replace($result, $this->policy->retentionFacts());
   }
 
   /**
@@ -133,9 +138,21 @@ final class RelationshipReads {
         $data = $relationship->details();
         $row = $this->projection($relationship);
         $row['permitted_actions'] = $this->coordinatorActions($relationship, $ownerless);
+        $row['permitted_choices'] = [];
+        $editable = in_array($relationship->scalar('state'), [
+          'exploring', 'prepared', 'moved_forward',
+        ], TRUE);
+        $row['set_next_action_modes'] = !$ownerless && $editable
+          ? ['owner_only', 'next_action'] : ['owner_only'];
+        $row['set_next_action_sides'] = !$ownerless && $editable
+          ? ($relationship->scalar('state') === 'moved_forward' ? ['agency'] : ['agency', 'participant']) : [];
         $person = $this->store->find('agency_person', ['uuid' => $relationship->scalar('person_uuid')]);
         $row['display_name'] = $person?->scalar('display_name');
         $row['response'] = $data['response'] ?? NULL;
+        if ((int) $relationship->scalar('owner_uid') === (int) $owner->id() && !$ownerless) {
+          $row['pause_note'] = $data['pause_note'] ?? NULL;
+          $row['withdrawal_note'] = $data['withdrawal_note'] ?? NULL;
+        }
         $row['audit_pending'] = $this->outbox->pending($relationship->uuid());
         $row['closing_delivery'] = $data['closing_delivery'] ?? NULL;
         $row['notification'] = $data['notification'] ?? NULL;
@@ -206,6 +223,7 @@ final class RelationshipReads {
       'invited' => ['setNextAction', 'revokeInvitation'],
       'exploring', 'prepared' => ['setNextAction', 'pauseRelationship', 'close', 'moveForward', 'revokeInvitation'],
       'paused' => ['setNextAction', 'close', 'revokeInvitation'],
+      'moved_forward' => ['setNextAction', 'close', 'revokeInvitation'],
       default => ['setNextAction', 'revokeInvitation'],
     };
     if ($state === 'paused' && ($relationship->details()['pause_origin'] ?? '') === 'agency') {
@@ -241,6 +259,7 @@ final class RelationshipReads {
     $actions = match ($state) {
       'exploring', 'prepared' => ['respond', 'pauseRelationship', 'withdrawRelationship'],
       'paused' => $pause === 'participant' ? ['resumeRelationship', 'withdrawRelationship'] : ['withdrawRelationship'],
+      'moved_forward' => ['withdrawRelationship'],
       default => [],
     };
     if (in_array($state, ['exploring', 'prepared'], TRUE) && !empty($data['proposal'])) {
@@ -255,6 +274,8 @@ final class RelationshipReads {
       'agency_name' => $this->policy->name(),
       'owner' => $data['owner'],
       'owner_changed_at' => $data['owner_changed_at'] ?? NULL,
+      'owner_unavailable' => $this->access->ownerUnavailable($relationship),
+      'support_contact' => $this->policy->supportContact(),
       'next_action' => $action,
       'agency_late' => $action && $action['side'] === 'agency' && $action['expected_by'] < $this->time->getCurrentTime(),
       'updated_at' => (int) $relationship->scalar('changed'),
@@ -263,7 +284,9 @@ final class RelationshipReads {
       'proposal' => $data['proposal'] ?? NULL,
       'agreed_next_step' => $data['agreed_next_step'] ?? NULL,
       'permitted_actions' => $actions,
-    ];
+      'permitted_choices' => in_array('respond', $actions, TRUE)
+        ? array_merge(['yes', 'not_now', 'message', 'ready'], empty($data['proposal']) ? [] : ['decline_proposal']) : [],
+    ] + $this->policy->retentionFacts();
   }
 
 }

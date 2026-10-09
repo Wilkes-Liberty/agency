@@ -614,7 +614,7 @@ final class DiscoveryDomainTest extends KernelTestBase {
     ], 'consent-two', $decline['version'])['outcome']);
     $consent = $commands->moveForward($id, ['consent' => TRUE], 'consent-two', $proposal['version']);
     $this->assertSame('moved_forward', $consent['workspace']['state']);
-    $this->assertSame([], $consent['workspace']['permitted_actions']);
+    $this->assertSame(['withdrawRelationship'], $consent['workspace']['permitted_actions']);
     $this->assertCount(2, User::loadMultiple());
   }
 
@@ -674,6 +674,7 @@ final class DiscoveryDomainTest extends KernelTestBase {
       'contact_route',
       'message',
       'readable_until',
+      'agency_name',
     ], array_keys($summary));
     $denied = ['outcome' => 'refused', 'reason' => 'not_found'];
     $this->identity->principal = new Principal('https://identity.example.test', 'person-one', FALSE);
@@ -937,6 +938,189 @@ final class DiscoveryDomainTest extends KernelTestBase {
       'key_provider_settings' => ['key_value' => 'synthetic-discovery-test-key'],
     ])->save();
     $this->config('audit_chain.settings')->set('hash_key', 'discovery_test')->save();
+  }
+
+  /**
+   * Consent must leave an actionable handoff, including close and stale Stop.
+   */
+  public function testExperienceMovedForwardHandoff(): void {
+    $commands = $this->container->get('agency_staff.commands');
+    $reads = $this->container->get('agency_staff.reads');
+    foreach (['close', 'withdrawRelationship'] as $exit) {
+      [$id, $version] = $this->accepted($exit);
+      $proposed = $commands->moveForward($id, ['target_purpose' => 'Discuss a next step', 'message' => 'Continue?'], 'handoff-proposal', $version);
+      $consent = $commands->moveForward($id, ['consent' => TRUE], 'handoff-consent', $proposed['version']);
+      $this->assertSame('agency', $consent['workspace']['waiting_on']);
+      $this->assertSame('agency_response', $consent['workspace']['next_action']['code']);
+      $this->assertGreaterThan(time(), $consent['workspace']['next_action']['expected_by']);
+      $this->assertSame(['withdrawRelationship'], $consent['workspace']['permitted_actions']);
+      $this->assertSame([], $consent['workspace']['permitted_choices']);
+      $action = $this->input()['next_action'];
+      $rows = array_column($reads->queue()['contexts'], NULL, 'id');
+      $this->assertSame(['agency'], $rows[$id]['set_next_action_sides']);
+      $refused = $commands->setNextAction($id, $action, 'unanswerable-action', $consent['version']);
+      $this->assertSame(['outcome' => 'refused', 'reason' => 'invalid'], $refused);
+      $this->assertSame($consent['workspace']['next_action'], $reads->forActor($id)['workspace']['next_action']);
+      $this->assertSame($consent['version'], $reads->forActor($id)['workspace']['version']);
+      $action['side'] = 'agency';
+      $updated = $commands->setNextAction($id, $action, 'handoff-update', $consent['version']);
+      $this->assertSame('committed', $updated['outcome']);
+      $this->assertSame('moved_forward', $reads->forActor($id)['workspace']['state']);
+      $result = $exit === 'close'
+        ? $commands->close($id, [
+          'category' => 'not_now',
+          'message' => 'Next conversation arranged.',
+          'contact' => $this->input()['owner_contact'],
+        ], 'handoff-close', $updated['version'])
+        : $commands->withdrawRelationship($id, [], 'handoff-stop', 0);
+      $this->assertSame('committed', $result['outcome']);
+      $this->assertSame('not_found', $reads->forActor($id)['reason']);
+    }
+  }
+
+  /**
+   * Replying cannot postpone a promise or make an overdue agency item current.
+   */
+  public function testExperiencePromiseAndChoices(): void {
+    $now = time();
+    $clock = $this->createMock(TimeInterface::class);
+    $clock->method('getCurrentTime')->willReturnCallback(static function () use (&$now): int {
+      return $now;
+    });
+    $clock->method('getRequestTime')->willReturn($now);
+    $this->container->set('datetime.time', $clock);
+    [$id, $version] = $this->accepted();
+    $commands = $this->container->get('agency_staff.commands');
+    $reads = $this->container->get('agency_staff.reads');
+    $this->assertNotContains('decline_proposal', $reads->forActor($id)['workspace']['permitted_choices']);
+    $proposal = $commands->moveForward($id, ['target_purpose' => 'Talk', 'message' => 'Continue?'], 'choices-propose', $version);
+    $this->assertContains('decline_proposal', $reads->forActor($id)['workspace']['permitted_choices']);
+    $action = $this->input()['next_action'];
+    $action['side'] = 'agency';
+    $action['expected_by'] = $now + 10;
+    $promised = $commands->setNextAction($id, $action, 'promise-action', $proposal['version']);
+    $this->assertSame('committed', $promised['outcome']);
+    $before = $reads->forActor($id)['workspace']['next_action'];
+    $now += 20;
+    $reply = $commands->respond($id, ['choice' => 'message', 'note' => 'Additional context.'], 'extra-message', $promised['version']);
+    $this->assertSame($before, $reply['workspace']['next_action']);
+    $this->assertTrue($reply['workspace']['agency_late']);
+  }
+
+  /**
+   * Optional notes reach the assigned owner without escaping that audience.
+   */
+  public function testExperienceNotesAndActionModes(): void {
+    [$id, $version] = $this->accepted();
+    $commands = $this->container->get('agency_staff.commands');
+    $reads = $this->container->get('agency_staff.reads');
+    $paused = $commands->pauseRelationship($id, ['note' => 'Personal pause context.'], 'note-pause', $version);
+    $this->assertArrayNotHasKey('pause_note', $paused['workspace']);
+    $row = $reads->queue()['contexts'][0];
+    $this->assertSame('Personal pause context.', $row['pause_note']);
+    $this->assertSame(['owner_only'], $row['set_next_action_modes']);
+    $stopped = $commands->withdrawRelationship($id, ['note' => 'Personal departure context.'], 'note-stop', 0);
+    $row = $reads->queue()['contexts'][0];
+    $this->assertSame('Personal departure context.', $row['withdrawal_note']);
+    $this->assertSame(['owner_only'], $row['set_next_action_modes']);
+    $this->assertArrayNotHasKey('withdrawal_note', $reads->summary($id)['summary']);
+    $this->signingKey();
+    $this->container->get('agency_staff.outbox')->drain();
+    $this->assertSame('not_found', $reads->forActor($id)['reason']);
+    $this->assertSame('committed', $stopped['outcome']);
+    $this->coordinator->block()->save();
+    Role::create([
+      'id' => 'note_recovery',
+      'label' => 'Recovery',
+      'permissions' => ['coordinate agency discovery', 'recover agency discovery ownership'],
+    ])->save();
+    $recovery = User::create(['name' => 'note-recovery', 'status' => 1, 'roles' => ['note_recovery']]);
+    $recovery->save();
+    $this->container->get('current_user')->setAccount($recovery);
+    $row = $reads->queue()['contexts'][0];
+    $this->assertArrayNotHasKey('pause_note', $row);
+    $this->assertArrayNotHasKey('withdrawal_note', $row);
+  }
+
+  /**
+   * Tenant facts are available before Stop and missing names hide summaries.
+   */
+  public function testExperienceTenantFactsAndCloseRefusals(): void {
+    $this->config('agency.settings')->set('display_name', 'Another example agency')
+      ->set('policy.retained_information_statement', 'Messages and dates.')
+      ->set('policy.retention_after_close', 'P6M')
+      ->set('policy.summary_window', 'P14D')->save();
+    [$id, $version] = $this->accepted();
+    $commands = $this->container->get('agency_staff.commands');
+    $reads = $this->container->get('agency_staff.reads');
+    $workspace = $reads->forActor($id)['workspace'];
+    $this->assertSame('Another example agency', $workspace['agency_name']);
+    $this->assertSame('Messages and dates.', $workspace['retained_information']);
+    $this->assertSame('P6M', $workspace['retention_period']);
+    $this->assertFalse($workspace['owner_unavailable']);
+    $valid = ['category' => 'not_now', 'message' => 'Thank you.', 'contact' => $this->input()['owner_contact']];
+    $database = $this->container->get('database');
+    $before = (int) $database->select('agency_staff_outbox', 'o')->countQuery()->execute()->fetchField();
+    foreach (['category', 'message', 'contact'] as $field) {
+      $input = $valid;
+      $input[$field] = $field === 'contact' ? [] : '';
+      $this->assertSame('refused', $commands->close($id, $input, 'invalid-close-' . $field, $version)['outcome']);
+      $this->assertSame($version, $reads->forActor($id)['workspace']['version']);
+    }
+    $this->assertSame($before, (int) $database->select('agency_staff_outbox', 'o')->condition('relationship_uuid', $id)->countQuery()->execute()->fetchField());
+    $this->coordinator->block()->save();
+    $this->assertTrue($reads->forActor($id)['workspace']['owner_unavailable']);
+    $this->assertNotEmpty($reads->forActor($id)['workspace']['support_contact']);
+    $this->coordinator->activate()->save();
+    $closed = $commands->close($id, $valid, 'valid-close', $version);
+    $this->assertSame('committed', $closed['outcome']);
+    $summary = $reads->summary($id)['summary'];
+    $this->assertSame('Another example agency', $summary['agency_name']);
+    $this->assertSame('P6M', $summary['retention_period']);
+    $this->config('agency.settings')->set('display_name', '')->save();
+    foreach ([$reads->summary($id), $reads->summary('missing'), $reads->summaries()] as $result) {
+      $this->assertSame(['outcome' => 'refused', 'reason' => 'policy_unavailable'], $result);
+    }
+  }
+
+  /**
+   * Token inspection limits inviter details and rechecks workspace access.
+   */
+  public function testExperienceInvitationInspection(): void {
+    $commands = $this->container->get('agency_staff.commands');
+    $invitations = $this->container->get('agency_staff.invitations');
+    $start = $commands->startDiscovery($this->input(), 'inspect-start');
+    $id = $start['receipt']['relationship_id'];
+    $issued = $invitations->issue($id, 'inspect-issue', $start['version']);
+    $token = $issued['invitation']['token'];
+    $open = $invitations->inspect($token);
+    $this->assertSame('open', $open['status']);
+    $this->assertSame('https://example.test/help', $open['support_contact']);
+    $this->assertSame($this->coordinator->getDisplayName(), $open['owner_name']);
+    $this->assertArrayNotHasKey('owner_contact', $open);
+    $accepted = $invitations->accept($token, 'inspect-accept');
+    $this->assertSame(['status' => 'workspace', 'relationship_id' => $id, 'support_contact' => $open['support_contact']], $invitations->inspect($token));
+    $this->identity->principal = new Principal('https://identity.example.test', 'someone-else');
+    $this->assertSame(['status' => 'already_used', 'support_contact' => $open['support_contact']], $invitations->inspect($token));
+    $commands->revokeInvitation($id, [], 'inspect-revoke', $accepted['version']);
+    $this->assertSame($invitations->inspect('missing'), $invitations->inspect($token));
+    $this->assertSame('closed', $invitations->inspect($token)['status']);
+  }
+
+  /**
+   * Preparation cannot create invitations whose public policy cannot render.
+   */
+  public function testExperienceInvalidPolicyPreparation(): void {
+    $settings = $this->config('agency.settings')->getRawData();
+    $commands = $this->container->get('agency_staff.commands');
+    foreach (['retained_information_statement', 'fallback_contact_route'] as $key) {
+      foreach ([str_repeat('x', 2001), "Invalid\0text"] as $offset => $value) {
+        $this->config('agency.settings')->setData($settings)->set('policy.' . $key, $value)->save();
+        $result = $commands->startDiscovery($this->input(), 'invalid-policy-' . $key . $offset);
+        $this->assertSame(['outcome' => 'refused', 'reason' => 'policy_unavailable'], $result);
+      }
+    }
+    $this->assertSame([], $this->container->get('agency_staff.store')->all('agency_discovery'));
   }
 
   /**

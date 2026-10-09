@@ -38,6 +38,35 @@ final class Policy {
   }
 
   /**
+   * Supplies current, validated facts needed before a participant chooses Stop.
+   */
+  public function retentionFacts(): array {
+    $this->deadline('retention_after_close');
+    return [
+      'retained_information' => $this->policyText('retained_information_statement'),
+      'retention_period' => $this->value('retention_after_close'),
+    ];
+  }
+
+  /**
+   * Returns the tenant's public support route, independent of any invitation.
+   */
+  public function supportContact(): string {
+    return $this->policyText('fallback_contact_route');
+  }
+
+  /**
+   * Refuses missing or malformed participant-facing policy text.
+   */
+  private function policyText(string $key): string {
+    $value = $this->value($key);
+    if (!is_string($value) || trim($value) === '' || mb_strlen($value) > 2000 || str_contains($value, "\0")) {
+      throw new Refusal('policy_unavailable');
+    }
+    return trim($value);
+  }
+
+  /**
    * Computes a policy deadline using UTC calendar arithmetic.
    */
   public function deadline(string $key, ?int $from = NULL): int {
@@ -82,14 +111,11 @@ final class Policy {
    */
   public function invitationReady(): void {
     $this->name();
-    foreach (['invitation_validity', 'acknowledgement_period', 'follow_up_period', 'retention_after_close'] as $key) {
+    foreach (['invitation_validity', 'acknowledgement_period', 'follow_up_period'] as $key) {
       $this->deadline($key);
     }
-    foreach (['retained_information_statement', 'fallback_contact_route'] as $key) {
-      if (!is_string($this->value($key)) || trim($this->value($key)) === '') {
-        throw new Refusal('policy_unavailable');
-      }
-    }
+    $this->retentionFacts();
+    $this->supportContact();
   }
 
 }

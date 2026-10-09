@@ -20,6 +20,9 @@ Use synthetic people, identities, contacts, policies and signing keys only.
 | Upgrade | An enabled foundation with existing configuration/user data gains all five entity schemas, three integration tables and one mutex seed; repeating the update preserves existing Discovery data. |
 | Privacy | Stored/chained metadata contains no contact, note, token, guessed ID, credential or protected data; no raw evidence projection. |
 | Review regressions | Replay after elapsed deadlines or changed policy; prepared proposal/action parity; past-summary discovery; identity-outage indistinguishability; paused ownerless recovery with a separate restricted permission. |
+| Experience follow-up | Consent leaves a dated agency obligation and allows Stop/close; a participant reply cannot postpone an existing agency promise; assigned-owner notes stay out of participant/recovery projections; reply choices and owner-only action modes are explicit. |
+| Rendering facts | Workspace retention facts precede Stop; summary name fails closed when unconfigured; every invitation status has the same tenant support route, with inviter display name only on active unexpired links and no inviter contact disclosure; used-link reopening respects current binding. |
+| Acceptance coverage | Invalid close inputs change neither state nor evidence; a second synthetic tenant changes only configuration; draining a Stop intent never restores workspace access. |
 | Portability | A second synthetic tenant changes only config; package creates no CRM/worker records and sends no notifications. |
 
 Kernel/service tests verify domain contracts, not browser accessibility or host

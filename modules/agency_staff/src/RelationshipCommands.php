@@ -209,6 +209,7 @@ final class RelationshipCommands {
       $state = $relationship->scalar('state');
       if (!in_array($operation, ['suspendAccess', 'revokeInvitation'], TRUE)
         && !in_array($state, ['exploring', 'prepared', 'paused'], TRUE)
+        && !($state === 'moved_forward' && in_array($operation, ['setNextAction', 'close', 'withdrawRelationship'], TRUE))
         && !($operation === 'setNextAction' && array_keys($input) === ['owner'])) {
         throw new Refusal('not_found');
       }
@@ -220,6 +221,9 @@ final class RelationshipCommands {
         case 'setNextAction':
           $owner_only = array_keys($input) === ['owner'];
           if ($state === 'paused' && !$owner_only) {
+            throw new Refusal('invalid');
+          }
+          if ($state === 'moved_forward' && !$owner_only && ($input['side'] ?? '') !== 'agency') {
             throw new Refusal('invalid');
           }
           if (!$owner_only) {
@@ -264,7 +268,7 @@ final class RelationshipCommands {
             'recorded_at' => $this->time->getCurrentTime(),
           ];
           $relationship->set('state', $choice === 'ready' ? 'prepared' : 'exploring');
-          $this->agencyNext($relationship, $data);
+          $this->agencyNext($relationship, $data, TRUE);
           break;
 
         case 'pauseRelationship':
@@ -332,8 +336,8 @@ final class RelationshipCommands {
             }
             $data['agreed_next_step'] = $data['proposal'];
             $data['proposal'] = NULL;
-            $data['next_action'] = NULL;
             $relationship->set('state', 'moved_forward');
+            $this->agencyNext($relationship, $data);
           }
           else {
             $data['proposal'] = [
@@ -459,8 +463,11 @@ final class RelationshipCommands {
   /**
    * Makes agency responsibility explicit after a participant response/resume.
    */
-  private function agencyNext(InternalRecord $relationship, array &$data): void {
+  private function agencyNext(InternalRecord $relationship, array &$data, bool $preservePromise = FALSE): void {
     $relationship->set('waiting_on', 'agency');
+    if ($preservePromise && ($data['next_action']['side'] ?? NULL) === 'agency') {
+      return;
+    }
     $data['next_action'] = [
       'code' => 'agency_response',
       'summary' => NULL,

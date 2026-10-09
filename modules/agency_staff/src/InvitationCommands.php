@@ -53,27 +53,31 @@ final class InvitationCommands {
    */
   public function inspect(string $token): array {
     return $this->store->transaction(function () use ($token): array {
+      $support = $this->policy->supportContact();
       $generation = $this->store->find('agency_invitation', ['token_hash' => hash('sha256', $token)]);
       if (!$generation) {
-        return ['status' => 'closed'];
+        return ['status' => 'closed', 'support_contact' => $support];
       }
       if ($generation->scalar('status') === 'consumed') {
         $relationship = $this->access->relationship($generation->scalar('relationship_uuid'));
         try {
           $this->access->participant($relationship);
-          return ['status' => 'workspace', 'relationship_id' => $relationship->uuid()];
+          return ['status' => 'workspace', 'relationship_id' => $relationship->uuid(), 'support_contact' => $support];
         }
         catch (Refusal) {
-          return ['status' => 'already_used'];
+          return ['status' => 'already_used', 'support_contact' => $support];
         }
       }
       if ($generation->scalar('status') !== 'active' || (int) $generation->scalar('expires') <= $this->time->getCurrentTime()) {
-        return ['status' => 'closed'];
+        return ['status' => 'closed', 'support_contact' => $support];
       }
+      $relationship = $this->access->relationship($generation->scalar('relationship_uuid'));
       return [
         'status' => 'open',
         'agency_name' => $this->policy->name(),
         'expires' => (int) $generation->scalar('expires'),
+        'owner_name' => $relationship->details()['owner']['name'],
+        'support_contact' => $support,
       ];
     });
   }

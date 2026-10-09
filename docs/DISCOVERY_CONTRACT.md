@@ -2,7 +2,7 @@
 
 Canonical feature: [Drupal.org issue #3629756](https://www.drupal.org/project/agency/issues/3629756).
 
-Status: provisional implementation contract, revision 1. This is the initial
+Status: provisional implementation contract, revision 2. This is the initial
 invitation-only Discovery relationship. Host adapters and participant interfaces
 can build against these service boundaries and synthetic examples. Release
 requires the domain, security and experience checks in
@@ -59,6 +59,8 @@ Workspace fields:
 | `agency_name` | Configured organization display name; missing name refuses the workspace. |
 | `owner` | Display name and typed contact route. Never a Drupal user identifier. |
 | `owner_changed_at` | Timestamp of a reassignment notice, or null. |
+| `owner_unavailable`, `support_contact` | Server-derived owner availability and the validated tenant fallback route. An unavailable owner does not require waiting for an overdue date before showing help. |
+| `retained_information`, `retention_period` | Current validated tenant policy, available before Stop. These are not copied into the relationship. |
 | `next_action` | At most one: `code`, `summary`, `why_it_helps`, `side`, absolute `expected_by`, and `optional`. Coordinator text has null code. A server-generated `agency_response` code has null text and is localized by the host catalog. |
 | `agency_late` | Server-derived boolean; never derived for participant-owned actions. |
 | `updated_at`, `version` | Server time and monotonically increasing relationship version. |
@@ -66,6 +68,7 @@ Workspace fields:
 | `proposal` | Curated target purpose/message awaiting explicit participant consent, or null. |
 | `agreed_next_step` | Accepted target purpose/message, or null; never a new access grant. |
 | `permitted_actions` | Server-calculated command identifiers; unknown identifiers are ignored by clients. |
+| `permitted_choices` | Allowed `respond` choices, empty when respond is unavailable; `decline_proposal` appears only while a proposal exists. |
 
 Missing, unrelated, revoked, suspended, deactivated and rebound contexts return
 the same `not_found` refusal without any relationship fields. List reads omit
@@ -82,6 +85,19 @@ Recovery permits only an owner-only `setNextAction` payload; it preserves state,
 pause origin and current obligations. Ordinary mutations require assignment.
 An active eligible owner's contexts cannot be taken over through this permission.
 Queue rows carry `owner_unavailable`, `last_agency_action_at` and captured notices.
+They also carry `set_next_action_modes`: `owner_only` permits only an `owner`
+payload, while `next_action` permits action editing. The latter is available
+only to the assigned owner in exploring, prepared or moved_forward. Clients
+must use these modes, not infer input eligibility from the command identifier.
+`set_next_action_sides` lists permitted sides: moved_forward permits only agency
+actions, since this slice has no participant reply transition after consent.
+Non-editable rows carry an empty side list. Consent never creates an unanswerable
+participant obligation.
+This preserves the existing `setNextAction` command rather than adding an alias.
+Participant `pause_note` and `withdrawal_note` are returned only in the freshly
+authorized assigned owner's queue. A recovery holder sees neither until they
+become the assigned owner. Neither note appears in a participant workspace,
+terminal summary or evidence metadata. Forms must explain this audience.
 
 Application/recruiting is a later relationship kind. Submitted, review,
 interview and decision labels are not Discovery enum values. Future application
@@ -135,10 +151,10 @@ a stale workspace. Lost authority still refuses the entire replay.
 | `issue` / `resend` | Coordinator captures an invitation, with policy-derived expiry and a cryptographically random bearer credential stored only as a hash. Resend supersedes all earlier active generations. Capture is not sending. |
 | `accept` | POST plus token, current authenticated exact intended issuer/subject and key. Lock, verify expiry/generation/pending grant, consume, activate and record in one transaction. Used token cannot bind again; an already bound subject may separately open its existing workspace. |
 | `setNextAction` | Assigned coordinator sets summary, purpose, owning side, date and `optional`. Optional `owner` contains a proposed existing `uid` and typed `contact`; the server validates eligibility and explicit permission before reassignment and records `owner_changed_at`. Owning side determines `waiting_on`. No required participant task in Discovery. |
-| `respond` | Participant choice and optional bounded plain-text note. `not_now` records a reply without pausing. `decline_proposal` clears only the proposal and leaves the conversation exploring, waiting on the agency. |
+| `respond` | Participant choice and optional bounded plain-text note. `not_now` records a reply without pausing. `ready` means prepared for the next Discovery step, not consent to a proposal or classification. `decline_proposal` clears only the proposal and leaves the conversation exploring, waiting on the agency. An existing agency-owned next action, including its deadline, survives a reply unchanged. |
 | `pauseRelationship` | Participant pause clears participant obligations and retains workspace access. Agency pause requires an agency-owned update date. |
 | `resumeRelationship` | Only the pausing side can resume. Server resumes to exploring, waiting on agency, with policy-derived acknowledgement date. |
-| `moveForward` | Coordinator proposes target purpose and bounded message; state stays exploring. Participant explicitly accepts the current proposal/version before moved_forward. No role, classification, new relationship or external access is created. |
+| `moveForward` | Coordinator proposes target purpose and bounded message; state stays exploring. Participant explicitly accepts the current proposal/version before moved_forward. Consent sets waiting_on to agency with an acknowledgement date. Assigned coordinators may set the next action or close; the participant may still Stop with a stale version. No role, classification, new relationship or external access is created. |
 | `withdrawRelationship` | Participant Stop applies to the latest authorized active state despite a stale expected version. Denial plus immutable intent commit together. |
 | `revokeInvitation` / `revoke` | Assigned coordinator revokes generations and entitlement, including summary access, despite stale expected version. |
 | `suspendAccess` | Assigned, explicitly authorized coordinator removes pending/workspace/summary authority immediately. Also works after withdrawal or close. |
@@ -156,7 +172,10 @@ is different: neither commits, and there is no successful Stop receipt.
 
 Summary fields are only terminal state, effective date, bounded participant
 message for closed, retained-information statement and retention period,
-contact route, and `readable_until`. No actions, next action, audit status or
+agency name, contact route, and `readable_until`. Agency name and retention facts
+come from current validated tenant policy on every read. Missing policy refuses
+with `policy_unavailable`; policy changes do not extend the stored absolute
+`readable_until`. No actions, next action, audit status or
 internal identifiers are projected. Closing a visibility window does not
 delete retained records. Expiry, revocation, suspension, account deactivation
 and subject rebinding immediately deny summary reads. Help is a contact route,
@@ -187,6 +206,11 @@ rolls back the append too. No crypto, signing or chain-mutex code is copied.
 Metadata is allowlisted to opaque event/context identifiers, operation, state,
 waiting side, timestamps and actor hash. Contact points, free-text notes,
 credentials and file data are forbidden in stored and chained metadata.
+The initial drainer stops on the first failed row, and ordinary positive writes
+wait for cron delivery. Before live use the host needs attempt/age/failure
+visibility and an alert on the oldest undelivered row; a pending boolean alone
+does not establish healthy delivery. Higher-volume locking and causation links
+are separate follow-up work.
 
 Refused protected calls record a separate minimized observation after rollback:
 only a generated event ID, fixed reason, subject hash and timestamp. Guessed
@@ -277,6 +301,13 @@ token. If the token response is lost, the coordinator explicitly resends with a
 new intent key and current version. No token appears in logs, evidence or stored
 receipts. Inspection returns `open`, `closed`, `already_used`, or `workspace`;
 only the currently entitled bound principal receives a workspace identifier.
+Every inspection status includes the same validated tenant `support_contact`.
+An active, unexpired invitation additionally includes `owner_name`, but never
+the owner's contact route. A used link returns `workspace` plus its identifier
+only after fresh bound-subject workspace authorization; otherwise used, closed,
+superseded, revoked and invalid responses expose no owner or relationship ID.
+The host uses private/no-store caching, a strict referrer policy, bounded token
+input and rate limiting. UI invitation help uses the tenant support route.
 
 Workspace reads use `outcome: available` with `workspace` or `contexts`; summary
 reads use `summary`. A committed command receipt contains `id`,
