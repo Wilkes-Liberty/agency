@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\agency\Kernel;
 
+use Drupal\audit_chain\AuditChainLoggerInterface;
 use Drupal\agency_staff\EvidenceOutbox;
 use Drupal\agency_staff\Storage\TransactionBoundary;
 use Drupal\agency_staff\ObservationRecorder;
@@ -733,6 +734,34 @@ final class DiscoveryDomainTest extends KernelTestBase {
     ], array_keys($health));
     $this->expectException(\InvalidArgumentException::class);
     $outbox->health(0);
+  }
+
+  /**
+   * A slow failing append records failure time, not its earlier start time.
+   */
+  public function testEvidenceHealthSlowFailure(): void {
+    $database = $this->container->get('database');
+    $now = 2000000000;
+    $time = $this->createMock(TimeInterface::class);
+    $time->method('getCurrentTime')->willReturnCallback(static function () use (&$now): int {
+      return $now;
+    });
+    $logger = $this->createMock(AuditChainLoggerInterface::class);
+    $logger->method('logKeyed')->willReturnCallback(static function () use (&$now): void {
+      $now += 120;
+      throw new \RuntimeException('Synthetic provider-private failure text.');
+    });
+    $outbox = new EvidenceOutbox($database, $logger, $this->container->get('uuid'), $time);
+    $transaction = $database->startTransaction();
+    $outbox->recordRequired('respond', '11111111-1111-4111-8111-111111111111', str_repeat('a', 64), 'exploring', 'agency');
+    TransactionBoundary::commit($transaction);
+    $this->assertSame(0, $outbox->drain());
+    $health = $outbox->health(60);
+    $this->assertSame(2000000000, $health['last_attempt_at']);
+    $this->assertSame(2000000120, $health['last_error_at']);
+    $this->assertSame(120, $health['oldest_pending_age_seconds']);
+    $this->assertSame('evidence_delivery_failed', $health['last_error']);
+    $this->assertSame(1, $health['attempts']);
   }
 
   /**

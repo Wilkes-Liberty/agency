@@ -146,7 +146,7 @@ final class EvidenceOutbox {
           $append?->rollBack();
           unset($append);
           $this->database->update('agency_staff_outbox')->fields([
-            'last_error_at' => $now,
+            'last_error_at' => $this->time->getCurrentTime(),
           ])->condition('id', $row['id'])->execute();
           TransactionBoundary::commit($transaction);
           break;

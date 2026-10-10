@@ -39,6 +39,7 @@ These cases are specified before extending the outbox health interface:
 
 - A logger failure or delivery-marker failure rolls back the append; one durable
   attempt and a fixed failure category remain, without exception text or payload.
+- A slow failed append records its failure time separately from attempt start.
 - A successful retry delivers once, retains historical failure timing, and clears
   current degradation when no failed pending rows remain.
 - A transaction rollback removes its uncommitted intent from pending counts and
