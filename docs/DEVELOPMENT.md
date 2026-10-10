@@ -73,6 +73,11 @@ and confirm the requirement clears. No participant, role, invitation or workforc
 relationship should be created by enabling the modules. Run database updates
 when upgrading an already enabled foundation: `agency_staff_update_10001`
 installs the new internal entities and outbox tables without tenant defaults.
+`agency_staff_update_10002` adds delivery-attempt counts and safe timestamps to
+existing outbox rows. Run database updates before invoking the new health API.
+The update preserves intents and delivery markers; it does not infer earlier
+attempts. Rolling code back leaves these additive columns unused and preserves
+evidence. Do not drop or rewrite outbox rows as a rollback procedure.
 
 ## Supported-core verification
 

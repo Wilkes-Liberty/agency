@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\agency\Kernel;
 
+use Drupal\audit_chain\AuditChainLoggerInterface;
+use Drupal\agency_staff\EvidenceOutbox;
 use Drupal\agency_staff\Storage\TransactionBoundary;
 use Drupal\agency_staff\ObservationRecorder;
 use Psr\Log\LoggerInterface;
@@ -695,6 +697,98 @@ final class DiscoveryDomainTest extends KernelTestBase {
   }
 
   /**
+   * Health counts committed pending intents without disclosing their contents.
+   */
+  public function testEvidenceHealthAgeAndRollback(): void {
+    $database = $this->container->get('database');
+    $now = 2000000000;
+    $time = $this->createMock(TimeInterface::class);
+    $time->method('getCurrentTime')->willReturn($now);
+    $outbox = new EvidenceOutbox(
+      $database, $this->container->get('audit_chain.logger'),
+      $this->container->get('uuid'), $time,
+    );
+    $empty = $outbox->health(60);
+    $transaction = $database->startTransaction();
+    $outbox->recordRequired('respond', '11111111-1111-4111-8111-111111111111', str_repeat('a', 64), 'exploring', 'agency');
+    $transaction->rollBack();
+    unset($transaction);
+    $this->assertSame($empty, $outbox->health(60));
+    $transaction = $database->startTransaction();
+    $outbox->recordRequired('respond', '11111111-1111-4111-8111-111111111111', str_repeat('a', 64), 'exploring', 'agency');
+    TransactionBoundary::commit($transaction);
+    $database->update('agency_staff_outbox')->fields(['recorded' => $now - 60])->execute();
+    $health = $outbox->health(60);
+    $this->assertSame(1, $health['pending_count']);
+    $this->assertSame($now - 60, $health['oldest_pending_at']);
+    $this->assertSame(60, $health['oldest_pending_age_seconds']);
+    $this->assertTrue($health['oldest_undelivered_alert']);
+    $this->assertTrue($health['degraded']);
+    $this->assertFalse($outbox->health(61)['oldest_undelivered_alert']);
+    $this->assertSame(0, $health['attempts']);
+    $this->assertNull($health['last_error']);
+    $this->assertSame([
+      'pending_count', 'attempts', 'pending_attempts', 'last_attempt_at',
+      'last_error', 'last_error_at', 'oldest_pending_at',
+      'oldest_pending_age_seconds', 'oldest_undelivered_alert', 'degraded',
+    ], array_keys($health));
+    $this->expectException(\InvalidArgumentException::class);
+    $outbox->health(0);
+  }
+
+  /**
+   * A slow failing append records failure time, not its earlier start time.
+   */
+  public function testEvidenceHealthSlowFailure(): void {
+    $database = $this->container->get('database');
+    $now = 2000000000;
+    $time = $this->createMock(TimeInterface::class);
+    $time->method('getCurrentTime')->willReturnCallback(static function () use (&$now): int {
+      return $now;
+    });
+    $logger = $this->createMock(AuditChainLoggerInterface::class);
+    $logger->method('logKeyed')->willReturnCallback(static function () use (&$now): void {
+      $now += 120;
+      throw new \RuntimeException('Synthetic provider-private failure text.');
+    });
+    $outbox = new EvidenceOutbox($database, $logger, $this->container->get('uuid'), $time);
+    $transaction = $database->startTransaction();
+    $outbox->recordRequired('respond', '11111111-1111-4111-8111-111111111111', str_repeat('a', 64), 'exploring', 'agency');
+    TransactionBoundary::commit($transaction);
+    $this->assertSame(0, $outbox->drain());
+    $health = $outbox->health(60);
+    $this->assertSame(2000000000, $health['last_attempt_at']);
+    $this->assertSame(2000000120, $health['last_error_at']);
+    $this->assertSame(120, $health['oldest_pending_age_seconds']);
+    $this->assertSame('evidence_delivery_failed', $health['last_error']);
+    $this->assertSame(1, $health['attempts']);
+  }
+
+  /**
+   * An unreadable queue cannot be misreported as empty or healthy.
+   */
+  public function testEvidenceHealthUnavailable(): void {
+    $database = $this->container->get('database');
+    $database->schema()->dropTable('agency_staff_outbox');
+    $this->expectException(\Exception::class);
+    $this->container->get('agency_staff.outbox')->health(60);
+  }
+
+  /**
+   * Health never includes uncommitted domain intents in its aggregate.
+   */
+  public function testEvidenceHealthTransactionBoundary(): void {
+    $transaction = $this->container->get('database')->startTransaction();
+    try {
+      $this->expectException(\LogicException::class);
+      $this->container->get('agency_staff.outbox')->health(60);
+    }
+    finally {
+      $transaction->rollBack();
+    }
+  }
+
+  /**
    * Local intent survives missing keys, then drains once via the public logger.
    */
   public function testEvidenceDeliveryAndPrivacy(): void {
@@ -703,9 +797,26 @@ final class DiscoveryDomainTest extends KernelTestBase {
     $outbox = $this->container->get('agency_staff.outbox');
     $this->assertSame(0, $outbox->drain());
     $this->assertTrue($outbox->pending($id));
+    $health = $outbox->health(3600);
+    $this->assertSame(3, $health['pending_count']);
+    $this->assertSame(1, $health['attempts']);
+    $this->assertSame(1, $health['pending_attempts']);
+    $this->assertSame('evidence_delivery_failed', $health['last_error']);
+    $this->assertNotNull($health['last_error_at']);
+    $this->assertNotNull($health['last_attempt_at']);
+    $this->assertTrue($health['degraded']);
     $this->signingKey();
     $this->assertSame(3, $outbox->drain());
     $this->assertFalse($outbox->pending($id));
+    $health = $outbox->health(3600);
+    $this->assertSame(0, $health['pending_count']);
+    $this->assertSame(4, $health['attempts']);
+    $this->assertSame(0, $health['pending_attempts']);
+    $this->assertFalse($health['degraded']);
+    $this->assertFalse($health['oldest_undelivered_alert']);
+    $this->assertNull($health['oldest_pending_at']);
+    $this->assertNull($health['oldest_pending_age_seconds']);
+    $this->assertSame('evidence_delivery_failed', $health['last_error']);
     $this->assertSame(0, $outbox->drain());
     $database = $this->container->get('database');
     $rows = $database->select('audit_chain_log', 'l')->fields('l')->execute()->fetchAll();
@@ -741,6 +852,10 @@ final class DiscoveryDomainTest extends KernelTestBase {
       $this->assertSame(0, $this->container->get('agency_staff.outbox')->drain());
       $this->assertSame(0, (int) $this->container->get('database')->select('audit_chain_log', 'l')->countQuery()->execute()->fetchField());
       $this->assertTrue($this->container->get('agency_staff.outbox')->pending($id));
+      $health = $this->container->get('agency_staff.outbox')->health(3600);
+      $this->assertSame(1, $health['attempts']);
+      $this->assertSame('evidence_delivery_failed', $health['last_error']);
+      $this->assertTrue($health['degraded']);
     }
     finally {
       $this->removeFailureConstraint('agency_staff_outbox');
@@ -891,6 +1006,11 @@ final class DiscoveryDomainTest extends KernelTestBase {
       $this->assertSame(1, (int) $database->select('audit_chain_log', 'l')->countQuery()->execute()->fetchField());
       $this->assertSame(1, (int) $database->select('agency_staff_outbox', 'o')->isNotNull('delivered')->countQuery()->execute()->fetchField());
       $this->assertSame(0, $this->container->get('agency_staff.outbox')->drain());
+      $health = $this->container->get('agency_staff.outbox')->health(3600);
+      $this->assertSame($rollback ? 2 : 1, $health['attempts']);
+      $this->assertSame(0, $health['pending_count']);
+      $this->assertFalse($health['degraded']);
+      $this->assertSame($rollback ? 'evidence_delivery_failed' : NULL, $health['last_error']);
       $this->assertTrue($this->container->get('audit_chain.logger')->verify()['ok']);
     }
     else {

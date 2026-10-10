@@ -128,10 +128,29 @@ final class EvidenceOutbox {
           TransactionBoundary::commit($transaction);
           continue;
         }
-        $this->logger->logKeyed('agency_staff', $row['operation'], json_decode($row['metadata'], TRUE, 16, JSON_THROW_ON_ERROR));
+        // Keep attempt state outside the append savepoint, under the row lock.
+        // Failed appends must roll back on PostgreSQL before recording failure.
+        $now = $this->time->getCurrentTime();
         $this->database->update('agency_staff_outbox')->fields([
-          'delivered' => $this->time->getCurrentTime(),
-        ])->condition('id', $row['id'])->execute();
+          'last_attempt_at' => $now,
+        ])->expression('attempts', 'attempts + 1')->condition('id', $row['id'])->execute();
+        $append = $this->database->startTransaction();
+        try {
+          $this->logger->logKeyed('agency_staff', $row['operation'], json_decode($row['metadata'], TRUE, 16, JSON_THROW_ON_ERROR));
+          $this->database->update('agency_staff_outbox')->fields([
+            'delivered' => $this->time->getCurrentTime(),
+          ])->condition('id', $row['id'])->execute();
+          TransactionBoundary::commit($append);
+        }
+        catch (\Throwable) {
+          $append?->rollBack();
+          unset($append);
+          $this->database->update('agency_staff_outbox')->fields([
+            'last_error_at' => $this->time->getCurrentTime(),
+          ])->condition('id', $row['id'])->execute();
+          TransactionBoundary::commit($transaction);
+          break;
+        }
         TransactionBoundary::commit($transaction);
         $delivered++;
       }
@@ -146,6 +165,49 @@ final class EvidenceOutbox {
       }
     }
     return $delivered;
+  }
+
+  /**
+   * Returns minimized delivery health for trusted operational callers only.
+   *
+   * The host authorizes monitoring; this service exposes no public route. The
+   * threshold is a caller-supplied positive number of seconds. Database errors
+   * propagate: unavailable telemetry must never be reported as a healthy queue.
+   * Attempts count durable transactions since this feature was installed, not
+   * unobservable process interruptions or pre-upgrade activity.
+   */
+  public function health(int $oldestUndeliveredAlertAfter): array {
+    if ($oldestUndeliveredAlertAfter <= 0) {
+      throw new \InvalidArgumentException('An explicit positive alert threshold is required.');
+    }
+    if ($this->database->inTransaction()) {
+      throw new \LogicException('Read delivery health outside a domain transaction.');
+    }
+    // One statement gives a consistent aggregate, without loading intent data.
+    $query = $this->database->select('agency_staff_outbox', 'o');
+    $query->addExpression('SUM(CASE WHEN delivered IS NULL THEN 1 ELSE 0 END)', 'pending_count');
+    $query->addExpression('SUM(attempts)', 'attempts');
+    $query->addExpression('SUM(CASE WHEN delivered IS NULL THEN attempts ELSE 0 END)', 'pending_attempts');
+    $query->addExpression('MAX(last_attempt_at)', 'last_attempt_at');
+    $query->addExpression('MAX(last_error_at)', 'last_error_at');
+    $query->addExpression('MIN(CASE WHEN delivered IS NULL THEN recorded ELSE NULL END)', 'oldest_pending_at');
+    $query->addExpression('SUM(CASE WHEN delivered IS NULL AND last_error_at IS NOT NULL THEN 1 ELSE 0 END)', 'failed_pending');
+    $row = $query->execute()->fetchAssoc();
+    $oldest = $row['oldest_pending_at'] === NULL ? NULL : (int) $row['oldest_pending_at'];
+    $age = $oldest === NULL ? NULL : max(0, $this->time->getCurrentTime() - $oldest);
+    $alert = $age !== NULL && $age >= $oldestUndeliveredAlertAfter;
+    return [
+      'pending_count' => (int) $row['pending_count'],
+      'attempts' => (int) $row['attempts'],
+      'pending_attempts' => (int) $row['pending_attempts'],
+      'last_attempt_at' => $row['last_attempt_at'] === NULL ? NULL : (int) $row['last_attempt_at'],
+      'last_error' => $row['last_error_at'] === NULL ? NULL : 'evidence_delivery_failed',
+      'last_error_at' => $row['last_error_at'] === NULL ? NULL : (int) $row['last_error_at'],
+      'oldest_pending_at' => $oldest,
+      'oldest_pending_age_seconds' => $age,
+      'oldest_undelivered_alert' => $alert,
+      'degraded' => $alert || (int) $row['failed_pending'] > 0,
+    ];
   }
 
   /**

@@ -209,9 +209,35 @@ Metadata is allowlisted to opaque event/context identifiers, operation, state,
 waiting side, timestamps and actor hash. Contact points, free-text notes,
 credentials and file data are forbidden in stored and chained metadata.
 The initial drainer stops on the first failed row, and ordinary positive writes
-wait for cron delivery. Before live use the host needs attempt/age/failure
-visibility and an alert on the oldest undelivered row; a pending boolean alone
-does not establish healthy delivery. Higher-volume locking and causation links
+wait for cron delivery. `EvidenceOutbox::health(int $oldestUndeliveredAlertAfter): array` provides
+aggregate operational health through `agency_staff.outbox`. The required argument
+is a positive alert age in seconds supplied by the host; Agency supplies no policy
+threshold. The host must authorize monitoring and route alerts before live use.
+Do not put this whole-installation aggregate in participant or coordinator
+relationship projections. It exposes no raw rows, metadata, identifiers or errors.
+
+| Field | Meaning |
+| --- | --- |
+| `pending_count` | Number of undelivered intents. |
+| `attempts`, `pending_attempts` | Durable delivery attempts across retained rows, and the subset for currently pending rows. |
+| `last_attempt_at` | Latest durable attempt timestamp, or null. |
+| `last_error`, `last_error_at` | Fixed `evidence_delivery_failed` code and timestamp of the latest recorded failure, or null. Historical failures remain after recovery. |
+| `oldest_pending_at`, `oldest_pending_age_seconds` | Oldest undelivered intent timestamp and nonnegative age, or null for an empty queue. Retry never resets this age. |
+| `oldest_undelivered_alert` | A pending intent has reached the caller's threshold. |
+| `degraded` | That age alert is active or a currently pending row has a recorded delivery failure. |
+
+One aggregate database statement reads the health snapshot. Read failures propagate;
+an unavailable health read must not be displayed as an empty or healthy queue.
+Read health outside domain transactions. The method makes no delivery attempt.
+A pending boolean alone does not establish healthy delivery.
+
+Attempts and the fixed failure timestamp are written under the existing row lock.
+An inner savepoint couples append and delivery marker; on failure both roll back
+before the outer transaction commits the attempt and failure timestamp. A root
+transaction failure or process interruption may leave no durable attempt record;
+counts describe recorded attempts, never a complete claim about unobserved work.
+Attempts start at zero on upgrade because earlier attempts were not measured.
+There is no raw exception capture or new logging/notification provider. Higher-volume locking and causation links
 are separate follow-up work.
 
 Refused protected calls record a separate minimized observation after rollback:
