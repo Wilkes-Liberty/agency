@@ -21,7 +21,7 @@ function agency_staff_schema(): array {
       'primary key' => ['id'],
     ],
     'agency_staff_outbox' => [
-      'description' => 'Immutable evidence intents with mutable delivery marker.',
+      'description' => 'Immutable evidence intents with delivery and attempt state.',
       'fields' => [
         'id' => ['type' => 'varchar', 'length' => 36, 'not null' => TRUE],
         'relationship_uuid' => ['type' => 'varchar', 'length' => 128, 'not null' => TRUE],
@@ -30,6 +30,9 @@ function agency_staff_schema(): array {
         'denial' => ['type' => 'int', 'size' => 'tiny', 'not null' => TRUE],
         'recorded' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
         'delivered' => ['type' => 'int', 'size' => 'big', 'not null' => FALSE],
+        'attempts' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE, 'default' => 0],
+        'last_attempt_at' => ['type' => 'int', 'size' => 'big', 'not null' => FALSE],
+        'last_error_at' => ['type' => 'int', 'size' => 'big', 'not null' => FALSE],
       ],
       'primary key' => ['id'],
       'indexes' => ['queued' => ['delivered', 'recorded'], 'relationship' => ['relationship_uuid']],
@@ -70,6 +73,19 @@ function agency_staff_update_10001(): void {
   foreach (DomainStore::TYPES as $type) {
     if (!$updates->getEntityType($type)) {
       $updates->installEntityType(\Drupal::entityTypeManager()->getDefinition($type));
+    }
+  }
+}
+
+/**
+ * Adds safe delivery health without inventing historical attempt counts.
+ */
+function agency_staff_update_10002(): void {
+  $schema = \Drupal::database()->schema();
+  $fields = agency_staff_schema()['agency_staff_outbox']['fields'];
+  foreach (['attempts', 'last_attempt_at', 'last_error_at'] as $name) {
+    if (!$schema->fieldExists('agency_staff_outbox', $name)) {
+      $schema->addField('agency_staff_outbox', $name, $fields[$name]);
     }
   }
 }

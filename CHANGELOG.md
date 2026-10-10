@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Minimized evidence delivery health with durable attempts, safe failure timing,
+  oldest-undelivered age and a caller-configured alert threshold. An additive
+  storage update preserves existing evidence and delivery state.
+
 - Invitation-only Discovery domain services, five internal content entities,
   revisioned state, scoped workspace and expiring summary reads, and explicit
   host identity/eligibility integration.

@@ -32,3 +32,22 @@ flow still works, and the participant UI must pass keyboard/mobile, copy,
 translation and full two-actor experience checks before release. CI must execute
 the domain tests, not just discover them. A passing engine lane without the
 two-connection cases is insufficient concurrency evidence.
+
+## Evidence delivery health failure cases
+
+These cases are specified before extending the outbox health interface:
+
+- A logger failure or delivery-marker failure rolls back the append; one durable
+  attempt and a fixed failure category remain, without exception text or payload.
+- A successful retry delivers once, retains historical failure timing, and clears
+  current degradation when no failed pending rows remain.
+- A transaction rollback removes its uncommitted intent from pending counts and
+  age. A health read must not treat an unreadable database as an empty queue.
+- Pending age comes from the oldest undelivered intent, independent of retry time.
+  The alert boundary uses a caller-supplied positive number of seconds.
+- Two independent drainers serialize on the row: one successful append, one
+  attempt for success; a rolled-back append followed by recovery has two attempts.
+- Upgrading existing rows preserves their data and delivery state. Attempt counts
+  begin at zero because pre-upgrade delivery attempts were not recorded.
+- Health aggregates contain no relationship, subject, event, operation, metadata
+  or raw error details. They are privileged operator data, not participant data.
