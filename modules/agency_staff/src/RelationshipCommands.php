@@ -34,17 +34,7 @@ final class RelationshipCommands {
     return $this->store->transaction(function () use ($input, $key): array {
       $owner = $this->access->coordinator();
       $actor = hash('sha256', 'coordinator:' . $owner->id());
-      [$intent, $replay] = $this->intent($actor, 'startDiscovery', '', $key, $input);
-      if ($replay) {
-        $existing = $this->access->relationship($replay['relationship_id']);
-        $this->access->coordinator($existing);
-        return ['outcome' => 'committed', 'receipt' => $replay];
-      }
-      $this->policy->invitationReady();
       $contact = self::contact($input['contact'] ?? []);
-      $owner_contact = self::contact($input['owner_contact'] ?? []);
-      $display_name = self::text($input['display_name'] ?? '', 255);
-      $action = $this->action($input['next_action'] ?? []);
       if (!$this->identity->mayContact($contact)) {
         throw new Refusal('contact_refused');
       }
@@ -52,10 +42,27 @@ final class RelationshipCommands {
       if (!$principal || !$principal->active) {
         throw new Refusal('identity_unavailable');
       }
+      // The trusted provider's selection is semantic input even when the host
+      // carries it outside the command payload. It must not change the key.
+      $semantic_input = ['input' => $input, 'principal' => [$principal->issuer, $principal->subject]];
+      [$intent, $replay] = $this->intent($actor, 'startDiscovery', '', $key, $semantic_input);
       $binding = $this->store->find('agency_principal', ['principal_key' => $principal->key()]);
-      if ($binding && $binding->scalar('status') !== 'active') {
+      if ($binding && ($binding->scalar('status') !== 'active'
+        || $binding->scalar('issuer') !== $principal->issuer || $binding->scalar('subject') !== $principal->subject)) {
         throw new Refusal('not_found');
       }
+      if ($replay) {
+        $existing = $this->access->relationship($replay['relationship_id']);
+        $this->access->coordinator($existing);
+        if (!$binding || $existing->scalar('principal_uuid') !== $binding->uuid()) {
+          throw new Refusal('not_found');
+        }
+        return ['outcome' => 'committed', 'receipt' => $replay];
+      }
+      $this->policy->invitationReady();
+      $owner_contact = self::contact($input['owner_contact'] ?? []);
+      $display_name = self::text($input['display_name'] ?? '', 255);
+      $action = $this->action($input['next_action'] ?? []);
       if (!$binding) {
         $person = $this->store->create('agency_person', [
           'display_name' => $display_name,
@@ -95,7 +102,7 @@ final class RelationshipCommands {
         'status' => 'pending',
         'version' => 1,
       ]);
-      return $this->finish($relationship, 'startDiscovery', $actor, $intent, $input);
+      return $this->finish($relationship, 'startDiscovery', $actor, $intent, $semantic_input);
     });
   }
 

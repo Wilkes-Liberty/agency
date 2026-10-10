@@ -142,6 +142,18 @@ suspension also prevents replay. No replay recreates or extends a grant.
 Existing receipts are located after authorization and before validation for a
 new intent: an elapsed action deadline or subsequent policy change does not
 invalidate a receipt. New intents still require current policy and contact checks.
+Preparation retries also revalidate authoritative contact permission, the active
+intended principal and its exact stored binding before replay. `startDiscovery`
+includes the trusted provider's exact issuer/subject in its semantic payload
+fingerprint, even when the host selects that identity outside the command input.
+After current coordinator, contact and identity checks, changing either with the
+same actor, operation and key is refused as `invalid` regardless of the substituted
+principal's stored binding state; it never becomes a second preparation. Hosts
+must preserve the original key. Stored binding checks still precede any receipt.
+Preparation receipts written before this fingerprint correction fail closed as
+`invalid`; their unbound fingerprints cannot prove the original identity intent.
+Preserve any observed receipt and reconcile the existing relationship rather than
+submitting a new key to work around that refusal. No stored receipt is rewritten.
 If presentation policy is missing during an authorized replay, return the
 committed minimal receipt, omit `workspace`, and set `workspace_unavailable` to
 `policy_unavailable`. The client can confirm the original intent without drawing

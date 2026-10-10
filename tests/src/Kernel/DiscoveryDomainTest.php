@@ -154,6 +154,110 @@ final class DiscoveryDomainTest extends KernelTestBase {
   }
 
   /**
+   * Legacy fingerprints fail closed without rewriting receipts or records.
+   */
+  public function testLegacyPreparationReceiptFailsClosedWithoutMutation(): void {
+    $commands = $this->container->get('agency_staff.commands');
+    $input = $this->input();
+    $started = $commands->startDiscovery($input, 'legacy-preparation');
+    $this->assertSame('committed', $started['outcome']);
+    $database = $this->container->get('database');
+    $method = new \ReflectionMethod($commands, 'fingerprint');
+    $old_hash = $method->invoke(NULL, $input);
+    $database->update('agency_staff_intent')->fields(['payload_hash' => $old_hash])->execute();
+    $before = $database->select('agency_staff_intent', 'i')->fields('i')->execute()->fetchAssoc();
+    $outbox_count = $database->select('agency_staff_outbox')->countQuery()->execute()->fetchField();
+    $result = $commands->startDiscovery($input, 'legacy-preparation');
+    $this->assertSame(['outcome' => 'refused', 'reason' => 'invalid'], $result);
+    $this->assertSame($before, $database->select('agency_staff_intent', 'i')->fields('i')->execute()->fetchAssoc());
+    $this->assertSame(1, (int) $database->select('agency_staff_intent')->countQuery()->execute()->fetchField());
+    $this->assertSame($outbox_count, $database->select('agency_staff_outbox')->countQuery()->execute()->fetchField());
+    $store = $this->container->get('agency_staff.store');
+    foreach (['agency_discovery', 'agency_person', 'agency_principal', 'agency_entitlement'] as $type) {
+      $this->assertCount(1, $store->all($type));
+    }
+    $this->assertSame($started['receipt'], json_decode($before['receipt'], TRUE));
+  }
+
+  /**
+   * Preparation retries cannot substitute a subject behind unchanged input.
+   */
+  public function testPreparationReplayRevalidatesPrincipal(): void {
+    $commands = $this->container->get('agency_staff.commands');
+    $input = $this->input();
+    $started = $commands->startDiscovery($input, 'bound-preparation');
+    $this->assertSame('committed', $started['outcome']);
+    $this->assertSame($started['receipt'], $commands->startDiscovery($input, 'bound-preparation')['receipt']);
+    foreach ([
+      new Principal('https://identity.example.test', 'person-two'),
+      new Principal('https://other.example.test', 'person-one'),
+    ] as $principal) {
+      $this->identity->principal = $principal;
+      $this->assertSame(['outcome' => 'refused', 'reason' => 'invalid'], $commands->startDiscovery($input, 'bound-preparation'));
+    }
+    foreach ([NULL, new Principal('https://identity.example.test', 'person-one', FALSE)] as $principal) {
+      $this->identity->principal = $principal;
+      $this->assertSame(['outcome' => 'refused', 'reason' => 'identity_unavailable'], $commands->startDiscovery($input, 'bound-preparation'));
+    }
+    $this->identity->principal = new Principal('https://identity.example.test', 'person-one');
+    $this->identity->contactAllowed = FALSE;
+    $this->assertSame(['outcome' => 'refused', 'reason' => 'contact_refused'], $commands->startDiscovery($input, 'bound-preparation'));
+    $this->identity->contactAllowed = TRUE;
+    $this->assertSame($started['receipt'], $commands->startDiscovery($input, 'bound-preparation')['receipt']);
+    $store = $this->container->get('agency_staff.store');
+    $this->assertCount(1, $store->all('agency_discovery'));
+    $this->assertCount(1, $store->all('agency_person'));
+    $this->assertCount(1, $store->all('agency_principal'));
+  }
+
+  /**
+   * Substituted identities do not reveal their stored binding's state.
+   */
+  public function testPreparationMismatchDoesNotExposeBinding(): void {
+    $commands = $this->container->get('agency_staff.commands');
+    $input = $this->input();
+    $this->assertSame('committed', $commands->startDiscovery($input, 'first-preparation')['outcome']);
+    $this->identity->principal = new Principal('https://identity.example.test', 'person-two');
+    $this->assertSame('committed', $commands->startDiscovery($input, 'second-preparation')['outcome']);
+    $store = $this->container->get('agency_staff.store');
+    $binding = $store->find('agency_principal', ['principal_key' => $this->identity->principal->key()]);
+    foreach ([
+      ['status', 'suspended', 'active'],
+      ['subject', 'rebound-person', 'person-two'],
+    ] as [$field, $changed, $original]) {
+      $binding->set($field, $changed)->save();
+      $this->assertSame(['outcome' => 'refused', 'reason' => 'invalid'], $commands->startDiscovery($input, 'first-preparation'));
+      $binding->set($field, $original)->save();
+    }
+    $this->assertCount(2, $store->all('agency_discovery'));
+  }
+
+  /**
+   * Suspended or rebound stored bindings invalidate preparation retries.
+   */
+  public function testPreparationReplayRejectsChangedBinding(): void {
+    $commands = $this->container->get('agency_staff.commands');
+    $input = $this->input();
+    $started = $commands->startDiscovery($input, 'binding-preparation');
+    $this->assertSame('committed', $started['outcome']);
+    $store = $this->container->get('agency_staff.store');
+    $binding = $store->find('agency_principal', ['principal_key' => $this->identity->principal->key()]);
+    foreach ([
+      ['status', 'suspended', 'active'],
+      ['issuer', 'https://other.example.test', 'https://identity.example.test'],
+      ['subject', 'rebound-person', 'person-one'],
+    ] as [$field, $changed, $original]) {
+      $binding->set($field, $changed)->save();
+      $this->assertSame(['outcome' => 'refused', 'reason' => 'not_found'], $commands->startDiscovery($input, 'binding-preparation'));
+      $binding->set($field, $original)->save();
+    }
+    $this->assertSame(['outcome' => 'committed', 'receipt' => $started['receipt']], $commands->startDiscovery($input, 'binding-preparation'));
+    $binding->delete();
+    $this->assertSame(['outcome' => 'refused', 'reason' => 'not_found'], $commands->startDiscovery($input, 'binding-preparation'));
+    $this->assertCount(1, $store->all('agency_discovery'));
+  }
+
+  /**
    * A missing local outbox cannot leave partial records or claim success.
    */
   public function testRequiredEvidenceRollsBack(): void {
