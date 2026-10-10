@@ -146,8 +146,10 @@ Preparation retries also revalidate authoritative contact permission, the active
 intended principal and its exact stored binding before replay. `startDiscovery`
 includes the trusted provider's exact issuer/subject in its semantic payload
 fingerprint, even when the host selects that identity outside the command input.
-Changing either with the same actor, operation and key is refused as `invalid`;
-it never becomes a second preparation. Hosts must preserve the original key.
+After current coordinator, contact and identity checks, changing either with the
+same actor, operation and key is refused as `invalid` regardless of the substituted
+principal's stored binding state; it never becomes a second preparation. Hosts
+must preserve the original key. Stored binding checks still precede any receipt.
 Preparation receipts written before this fingerprint correction fail closed as
 `invalid`; their unbound fingerprints cannot prove the original identity intent.
 Preserve any observed receipt and reconcile the existing relationship rather than

@@ -42,15 +42,15 @@ final class RelationshipCommands {
       if (!$principal || !$principal->active) {
         throw new Refusal('identity_unavailable');
       }
+      // The trusted provider's selection is semantic input even when the host
+      // carries it outside the command payload. It must not change the key.
+      $semantic_input = ['input' => $input, 'principal' => [$principal->issuer, $principal->subject]];
+      [$intent, $replay] = $this->intent($actor, 'startDiscovery', '', $key, $semantic_input);
       $binding = $this->store->find('agency_principal', ['principal_key' => $principal->key()]);
       if ($binding && ($binding->scalar('status') !== 'active'
         || $binding->scalar('issuer') !== $principal->issuer || $binding->scalar('subject') !== $principal->subject)) {
         throw new Refusal('not_found');
       }
-      // The trusted provider's selection is semantic input even when the host
-      // carries it outside the command payload. It must not change the key.
-      $semantic_input = ['input' => $input, 'principal' => [$principal->issuer, $principal->subject]];
-      [$intent, $replay] = $this->intent($actor, 'startDiscovery', '', $key, $semantic_input);
       if ($replay) {
         $existing = $this->access->relationship($replay['relationship_id']);
         $this->access->coordinator($existing);
