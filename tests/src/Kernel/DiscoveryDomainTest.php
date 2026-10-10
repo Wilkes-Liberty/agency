@@ -154,6 +154,62 @@ final class DiscoveryDomainTest extends KernelTestBase {
   }
 
   /**
+   * Preparation retries cannot substitute a subject behind unchanged input.
+   */
+  public function testPreparationReplayRevalidatesPrincipal(): void {
+    $commands = $this->container->get('agency_staff.commands');
+    $input = $this->input();
+    $started = $commands->startDiscovery($input, 'bound-preparation');
+    $this->assertSame('committed', $started['outcome']);
+    $this->assertSame($started['receipt'], $commands->startDiscovery($input, 'bound-preparation')['receipt']);
+    foreach ([
+      new Principal('https://identity.example.test', 'person-two'),
+      new Principal('https://other.example.test', 'person-one'),
+    ] as $principal) {
+      $this->identity->principal = $principal;
+      $this->assertSame(['outcome' => 'refused', 'reason' => 'invalid'], $commands->startDiscovery($input, 'bound-preparation'));
+    }
+    foreach ([NULL, new Principal('https://identity.example.test', 'person-one', FALSE)] as $principal) {
+      $this->identity->principal = $principal;
+      $this->assertSame(['outcome' => 'refused', 'reason' => 'identity_unavailable'], $commands->startDiscovery($input, 'bound-preparation'));
+    }
+    $this->identity->principal = new Principal('https://identity.example.test', 'person-one');
+    $this->identity->contactAllowed = FALSE;
+    $this->assertSame(['outcome' => 'refused', 'reason' => 'contact_refused'], $commands->startDiscovery($input, 'bound-preparation'));
+    $this->identity->contactAllowed = TRUE;
+    $this->assertSame($started['receipt'], $commands->startDiscovery($input, 'bound-preparation')['receipt']);
+    $store = $this->container->get('agency_staff.store');
+    $this->assertCount(1, $store->all('agency_discovery'));
+    $this->assertCount(1, $store->all('agency_person'));
+    $this->assertCount(1, $store->all('agency_principal'));
+  }
+
+  /**
+   * Suspended or rebound stored bindings invalidate preparation retries.
+   */
+  public function testPreparationReplayRejectsChangedBinding(): void {
+    $commands = $this->container->get('agency_staff.commands');
+    $input = $this->input();
+    $started = $commands->startDiscovery($input, 'binding-preparation');
+    $this->assertSame('committed', $started['outcome']);
+    $store = $this->container->get('agency_staff.store');
+    $binding = $store->find('agency_principal', ['principal_key' => $this->identity->principal->key()]);
+    foreach ([
+      ['status', 'suspended', 'active'],
+      ['issuer', 'https://other.example.test', 'https://identity.example.test'],
+      ['subject', 'rebound-person', 'person-one'],
+    ] as [$field, $changed, $original]) {
+      $binding->set($field, $changed)->save();
+      $this->assertSame(['outcome' => 'refused', 'reason' => 'not_found'], $commands->startDiscovery($input, 'binding-preparation'));
+      $binding->set($field, $original)->save();
+    }
+    $this->assertSame(['outcome' => 'committed', 'receipt' => $started['receipt']], $commands->startDiscovery($input, 'binding-preparation'));
+    $binding->delete();
+    $this->assertSame(['outcome' => 'refused', 'reason' => 'not_found'], $commands->startDiscovery($input, 'binding-preparation'));
+    $this->assertCount(1, $store->all('agency_discovery'));
+  }
+
+  /**
    * A missing local outbox cannot leave partial records or claim success.
    */
   public function testRequiredEvidenceRollsBack(): void {

@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Bind invitation preparation retries to the freshly verified exact intended
+  principal without changing the idempotency key. Recheck contact permission and
+  stored identity binding before replay; refuse substituted, unavailable or
+  rebound identities. Earlier unbound preparation receipts fail closed and
+  require reconciliation without creating a replacement intent.
+
 ### Added
 
 - Minimized evidence delivery health with durable attempts, safe failure timing,
