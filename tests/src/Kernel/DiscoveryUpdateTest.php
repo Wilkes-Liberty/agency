@@ -96,16 +96,30 @@ final class DiscoveryUpdateTest extends KernelTestBase {
       'recorded' => 100,
       'delivered' => NULL,
     ];
-    $database->insert('agency_staff_outbox')->fields($row)->execute();
-    agency_staff_update_10002();
-    agency_staff_update_10002();
-    $result = $database->select('agency_staff_outbox', 'o')->fields('o')->execute()->fetchAssoc();
-    foreach ($row as $field => $value) {
-      $this->assertEquals($value, $result[$field]);
+    $delivered = array_replace($row, [
+      'id' => '33333333-3333-4333-8333-333333333333',
+      'delivered' => 200,
+    ]);
+    foreach ([$row, $delivered] as $existing) {
+      $database->insert('agency_staff_outbox')->fields($existing)->execute();
     }
-    $this->assertSame(0, (int) $result['attempts']);
-    $this->assertNull($result['last_attempt_at']);
-    $this->assertNull($result['last_error_at']);
+    agency_staff_update_10002();
+    agency_staff_update_10002();
+    $this->assertSame(2, (int) $database->select('agency_staff_outbox', 'o')->countQuery()->execute()->fetchField());
+    foreach ([$row, $delivered] as $existing) {
+      $result = $database->select('agency_staff_outbox', 'o')->fields('o')->condition('id', $existing['id'])->execute()->fetchAssoc();
+      foreach ($existing as $field => $value) {
+        if ($value === NULL) {
+          $this->assertNull($result[$field]);
+        }
+        else {
+          $this->assertSame((string) $value, (string) $result[$field]);
+        }
+      }
+      $this->assertSame(0, (int) $result['attempts']);
+      $this->assertNull($result['last_attempt_at']);
+      $this->assertNull($result['last_error_at']);
+    }
   }
 
 }
