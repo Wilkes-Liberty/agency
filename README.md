@@ -50,8 +50,9 @@ agency and must be configured before any real invitation is prepared.
 Period values use a supported ISO 8601 subset: whole-number components, with
 optional fractional seconds. Use `P7D`, `PT12H`, `PT1H30M` or `PT0.5S`; express
 fractional days or hours using smaller whole units. Week values stand alone
-(`P2W`), without other components. The retained-information statement and fallback
-contact route are tenant-authored text.
+(`P2W`), without other components. The retained-information statement is
+tenant-authored text. The fallback contact route is an explicit `{kind, value}`
+mapping; replace a legacy plain-text value without inferring the channel.
 Discovery rejects zero durations. Calendar years/months clamp to the last day
 of the target month in UTC before adding the remaining days/time. Summary
 expiry is independent of record retention.
