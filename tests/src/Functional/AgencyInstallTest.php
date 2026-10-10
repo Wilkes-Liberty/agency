@@ -87,7 +87,7 @@ final class AgencyInstallTest extends BrowserTestBase {
         'follow_up_period' => 'P5D',
         'retention_after_close' => 'P1Y',
         'retained_information_statement' => 'Contact details and conversation history.',
-        'fallback_contact_route' => 'Use the agency contact page.',
+        'fallback_contact_route' => ['kind' => 'url', 'value' => 'https://example.test/help'],
         'close_reasons' => [
           [
             'id' => 'tenant_reason',
@@ -102,6 +102,24 @@ final class AgencyInstallTest extends BrowserTestBase {
       ->createFromNameAndData('agency.settings', $settings)
       ->validate();
     $this->assertCount(0, $violations, (string) $violations);
+
+    foreach ([
+      ['kind' => 'url'],
+      ['kind' => '', 'value' => 'https://example.test/help'],
+      ['kind' => 'url', 'value' => ''],
+      ['kind' => 'Invalid kind', 'value' => 'https://example.test/help'],
+      ['kind' => str_repeat('a', 33), 'value' => 'https://example.test/help'],
+      ['kind' => 'url', 'value' => str_repeat('x', 256)],
+      ['kind' => 'url', 'value' => "invalid\0value"],
+      ['kind' => 'url', 'value' => '   '],
+    ] as $route) {
+      $invalid = $settings;
+      $invalid['policy']['fallback_contact_route'] = $route;
+      $violations = $this->container->get('config.typed')
+        ->createFromNameAndData('agency.settings', $invalid)
+        ->validate();
+      $this->assertNotCount(0, $violations);
+    }
 
     // Every saved period must reject all-zero components, including fractions.
     foreach ([

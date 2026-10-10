@@ -23,6 +23,7 @@ Use synthetic people, identities, contacts, policies and signing keys only.
 | Experience follow-up | Consent leaves a dated agency obligation and allows Stop/close; a participant reply cannot postpone an existing agency promise; assigned-owner notes stay out of participant/recovery projections; reply choices and owner-only action modes are explicit. |
 | Rendering facts | Workspace retention facts precede Stop; summary name fails closed when unconfigured; every invitation status has the same tenant support route, with inviter display name only on active unexpired links and no inviter contact disclosure; used-link reopening respects current binding. |
 | Acceptance coverage | Invalid close inputs change neither state nor evidence; a second synthetic tenant changes only configuration; draining a Stop intent never restores workspace access. |
+| Contact and note follow-up | Fallback support is an explicit typed route on workspace and invitation reads; text-only, missing, malformed or oversized policy refuses with policy_unavailable without preparing invitations. Such policy failure cannot prevent Stop or restore access. A resumed relationship no longer projects the earlier pause note. |
 | Portability | A second synthetic tenant changes only config; package creates no CRM/worker records and sends no notifications. |
 
 Kernel/service tests verify domain contracts, not browser accessibility or host

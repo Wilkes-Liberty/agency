@@ -2,7 +2,7 @@
 
 Canonical feature: [Drupal.org issue #3629756](https://www.drupal.org/project/agency/issues/3629756).
 
-Status: provisional implementation contract, revision 2. This is the initial
+Status: provisional implementation contract, revision 3. This is the initial
 invitation-only Discovery relationship. Host adapters and participant interfaces
 can build against these service boundaries and synthetic examples. Release
 requires the domain, security and experience checks in
@@ -59,7 +59,7 @@ Workspace fields:
 | `agency_name` | Configured organization display name; missing name refuses the workspace. |
 | `owner` | Display name and typed contact route. Never a Drupal user identifier. |
 | `owner_changed_at` | Timestamp of a reassignment notice, or null. |
-| `owner_unavailable`, `support_contact` | Server-derived owner availability and the validated tenant fallback route. An unavailable owner does not require waiting for an overdue date before showing help. |
+| `owner_unavailable`, `support_contact` | Server-derived owner availability and the validated tenant fallback route as `{kind, value}`, using the same channel-kind and value validation as owner contacts. An unavailable owner does not require waiting for an overdue date before showing help. |
 | `retained_information`, `retention_period` | Current validated tenant policy, available before Stop. These are not copied into the relationship. |
 | `next_action` | At most one: `code`, `summary`, `why_it_helps`, `side`, absolute `expected_by`, and `optional`. Coordinator text has null code. A server-generated `agency_response` code has null text and is localized by the host catalog. |
 | `agency_late` | Server-derived boolean; never derived for participant-owned actions. |
@@ -98,6 +98,8 @@ Participant `pause_note` and `withdrawal_note` are returned only in the freshly
 authorized assigned owner's queue. A recovery holder sees neither until they
 become the assigned owner. Neither note appears in a participant workspace,
 terminal summary or evidence metadata. Forms must explain this audience.
+`pause_note` is null outside paused state, including after resume. The audience
+is the authorized owner at read time, including a subsequently assigned owner.
 
 Application/recruiting is a later relationship kind. Submitted, review,
 interview and decision labels are not Discovery enum values. Future application
@@ -302,6 +304,10 @@ new intent key and current version. No token appears in logs, evidence or stored
 receipts. Inspection returns `open`, `closed`, `already_used`, or `workspace`;
 only the currently entitled bound principal receives a workspace identifier.
 Every inspection status includes the same validated tenant `support_contact`.
+It is an explicit `{kind, value}` pair, never text requiring channel inference.
+Configuration `policy.fallback_contact_route` uses that same mapping. Existing
+text-only values must be replaced explicitly; there is no automatic channel
+inference. Missing or invalid values refuse with `policy_unavailable`.
 An active, unexpired invitation additionally includes `owner_name`, but never
 the owner's contact route. A used link returns `workspace` plus its identifier
 only after fresh bound-subject workspace authorization; otherwise used, closed,

@@ -82,7 +82,7 @@ final class DiscoveryDomainTest extends KernelTestBase {
         'retention_after_close' => 'P1Y',
         'summary_window' => 'P30D',
         'retained_information_statement' => 'Conversation details.',
-        'fallback_contact_route' => 'https://example.test/help',
+        'fallback_contact_route' => ['kind' => 'url', 'value' => 'https://example.test/help'],
         'close_reasons' => [['id' => 'not_now', 'label' => 'Not now', 'message' => 'No current next step.']],
       ],
     ])->save();
@@ -1019,6 +1019,9 @@ final class DiscoveryDomainTest extends KernelTestBase {
     $row = $reads->queue()['contexts'][0];
     $this->assertSame('Personal pause context.', $row['pause_note']);
     $this->assertSame(['owner_only'], $row['set_next_action_modes']);
+    $resumed = $commands->resumeRelationship($id, [], 'note-resume', $paused['version']);
+    $this->assertSame('committed', $resumed['outcome']);
+    $this->assertNull($reads->queue()['contexts'][0]['pause_note']);
     $stopped = $commands->withdrawRelationship($id, ['note' => 'Personal departure context.'], 'note-stop', 0);
     $row = $reads->queue()['contexts'][0];
     $this->assertSame('Personal departure context.', $row['withdrawal_note']);
@@ -1095,7 +1098,7 @@ final class DiscoveryDomainTest extends KernelTestBase {
     $token = $issued['invitation']['token'];
     $open = $invitations->inspect($token);
     $this->assertSame('open', $open['status']);
-    $this->assertSame('https://example.test/help', $open['support_contact']);
+    $this->assertSame(['kind' => 'url', 'value' => 'https://example.test/help'], $open['support_contact']);
     $this->assertSame($this->coordinator->getDisplayName(), $open['owner_name']);
     $this->assertArrayNotHasKey('owner_contact', $open);
     $accepted = $invitations->accept($token, 'inspect-accept');
@@ -1115,12 +1118,53 @@ final class DiscoveryDomainTest extends KernelTestBase {
     $commands = $this->container->get('agency_staff.commands');
     foreach (['retained_information_statement', 'fallback_contact_route'] as $key) {
       foreach ([str_repeat('x', 2001), "Invalid\0text"] as $offset => $value) {
+        if ($key === 'fallback_contact_route') {
+          $value = ['kind' => 'url', 'value' => $value];
+        }
         $this->config('agency.settings')->setData($settings)->set('policy.' . $key, $value)->save();
         $result = $commands->startDiscovery($this->input(), 'invalid-policy-' . $key . $offset);
         $this->assertSame(['outcome' => 'refused', 'reason' => 'policy_unavailable'], $result);
       }
     }
     $this->assertSame([], $this->container->get('agency_staff.store')->all('agency_discovery'));
+  }
+
+  /**
+   * Typed fallback routes must not be inferred or allow policy to block Stop.
+   */
+  public function testTypedSupportContactPolicy(): void {
+    [$id] = $this->accepted();
+    $commands = $this->container->get('agency_staff.commands');
+    $reads = $this->container->get('agency_staff.reads');
+    $invitations = $this->container->get('agency_staff.invitations');
+    $route = ['kind' => 'email', 'value' => 'help@example.test'];
+    $this->config('agency.settings')->set('policy.fallback_contact_route', $route)->save();
+    $this->assertSame($route, $reads->forActor($id)['workspace']['support_contact']);
+    $this->assertSame($route, $invitations->inspect('missing')['support_contact']);
+    $settings = $this->config('agency.settings')->getRawData();
+    foreach ([
+      'https://example.test/help',
+      NULL,
+      [],
+      ['kind' => 'url'],
+      ['kind' => '', 'value' => 'https://example.test/help'],
+      ['kind' => 'url', 'value' => ''],
+      ['kind' => 'Invalid kind', 'value' => 'https://example.test/help'],
+      ['kind' => str_repeat('a', 33), 'value' => 'https://example.test/help'],
+      ['kind' => 'url', 'value' => str_repeat('x', 256)],
+      ['kind' => 'url', 'value' => "invalid\0value"],
+      ['kind' => 'url', 'value' => '   '],
+    ] as $index => $invalid) {
+      // Model legacy/corrupt stored policy without bypassing runtime guards.
+      $settings['policy']['fallback_contact_route'] = $invalid;
+      $this->container->get('config.storage')->write('agency.settings', $settings);
+      $this->container->get('config.factory')->reset('agency.settings');
+      $this->assertSame(['outcome' => 'refused', 'reason' => 'policy_unavailable'], $commands->startDiscovery($this->input(), 'typed-support-' . $index));
+      $this->assertSame(['outcome' => 'refused', 'reason' => 'policy_unavailable'], $reads->forActor($id));
+    }
+    $stopped = $commands->withdrawRelationship($id, [], 'typed-support-stop', 0);
+    $this->assertSame('committed', $stopped['outcome']);
+    $this->assertSame('not_found', $reads->forActor($id)['reason']);
   }
 
   /**

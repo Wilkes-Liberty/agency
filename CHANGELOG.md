@@ -38,6 +38,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Corrected
 
+- Fallback support routes use the same typed contact shape as owner contacts.
+  Coordinator reads stop projecting a pause note after the relationship resumes.
+
 - Discovery consent leaves a dated agency handoff with participant Stop and
   coordinator next-action/close support. Replies preserve existing agency
   promises; read models expose current policy facts, reply choices, owner-only
