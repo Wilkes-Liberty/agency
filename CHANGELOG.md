@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0-alpha1]
+
+Initial prerelease candidate. Publication is pending maintainer approval. The
+package supplies Discovery domain services; a separately qualified host provides
+authentication, private transport, screens and any approved message delivery.
+
 ### Fixed
 
 - Bind invitation preparation retries to the freshly verified exact intended
@@ -36,8 +42,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - GitHub supported-core functional checks, package/coding standards and shared
   attribution verification.
 - PHPStan analysis on the GitHub development primary.
-- A PostgreSQL 16 functional lane beside the MySQL 8.0 lanes, ready to exercise
-  domain transaction behavior on both engines when those tests land.
+- A PostgreSQL 16 functional lane beside the MySQL 8.0 lanes, including
+  independent-connection domain transaction and evidence-drain checks.
 - Tenant policy fields for the retained-information statement and fallback
   contact route.
 - Field Guard as the shared explicit-permission dependency for Agency Staff.
