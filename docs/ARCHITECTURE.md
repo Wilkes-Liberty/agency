@@ -79,8 +79,13 @@ the underlying business relationship or create a second source of truth.
 
 ## Evidence and protected documents
 
-Use Audit Chain's public collector contract for meaningful business transitions.
-Define correlation, persistence failure and reconciliation behavior before making writes.
+Agency owns the durable evidence outbox. Positive business transitions and their
+required outbox inserts share a database transaction through `recordRequired()`.
+Withdrawal, invitation revocation and access suspension commit denial and immutable
+local intent together before delivery. A failed drain never reopens access.
+The drainer uses Audit Chain's public `logKeyed()` contract; its request-scoped
+collector is not a durable retry queue. A recorded receipt confirms local
+persistence, not delivery to the chain.
 Do not put private documents, message bodies or personal financial data in audit metadata.
 
 File Gate can protect document delivery; signature, personnel-verification and clearance
