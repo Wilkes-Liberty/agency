@@ -1403,6 +1403,151 @@ final class DiscoveryDomainTest extends KernelTestBase {
   }
 
   /**
+   * Retention inventory is separate from ordinary coordinator authority.
+   */
+  public function testRetentionPreviewAuthorizationAndNoWrites(): void {
+    [$id] = $this->accepted();
+    $this->container->get('agency_staff.commands')->withdrawRelationship($id, [], 'retention-stop', 0);
+    $preview = $this->container->get('agency_staff.retention');
+    $before = $this->retentionStorageDigest();
+    $denied = ['outcome' => 'refused', 'reason' => 'not_found'];
+    $this->assertSame($denied, $preview->preview());
+    $role = Role::load('discovery_coordinator');
+    $role->grantPermission('maintain agency discovery retention')->save();
+    $report = $preview->preview();
+    $this->assertSame('preview', $report['outcome']);
+    $this->assertCount(1, $report['records']);
+    $this->assertSame($id, $report['records'][0]['relationship_id']);
+    $this->assertStringNotContainsString('example.test', json_encode($report));
+    $this->assertStringNotContainsString('Example Person', json_encode($report));
+    $this->assertSame($before, $this->retentionStorageDigest());
+    $this->identity->eligible = FALSE;
+    $this->assertSame($denied, $preview->preview());
+    $this->identity->eligible = TRUE;
+    $fresh = User::load($this->coordinator->id());
+    $fresh->block()->save();
+    $this->assertSame($denied, $preview->preview());
+    $fresh->activate()->save();
+    $role->revokePermission('maintain agency discovery retention')->save();
+    $this->assertSame($denied, $preview->preview());
+    $this->assertSame($before, $this->retentionStorageDigest());
+  }
+
+  /**
+   * Current policy and recorded closure determine the exact due boundary.
+   */
+  public function testRetentionPreviewDeadlineAndPolicyChange(): void {
+    $now = time();
+    $clock = $this->createMock(TimeInterface::class);
+    $clock->method('getCurrentTime')->willReturnCallback(static fn() => $now);
+    $this->container->set('datetime.time', $clock);
+    Role::load('discovery_coordinator')->grantPermission('maintain agency discovery retention')->save();
+    [$id] = $this->accepted();
+    $this->container->get('agency_staff.commands')->withdrawRelationship($id, [], 'deadline-stop', 0);
+    $store = $this->container->get('agency_staff.store');
+    $record = $store->find('agency_discovery', ['uuid' => $id]);
+    $data = $record->details();
+    $data['terminal_at'] = $now - 86400;
+    $record->setDetails($data)->save();
+    $this->config('agency.settings')->set('policy.retention_after_close', 'P2D')->save();
+    $preview = $this->container->get('agency_staff.retention');
+    $row = $preview->preview()['records'][0];
+    $this->assertSame('waiting', $row['eligibility']);
+    $this->assertSame($now + 86400, $row['deadline']);
+    $this->config('agency.settings')->set('policy.retention_after_close', 'P1D')->save();
+    $row = $preview->preview()['records'][0];
+    $this->assertSame('due', $row['eligibility']);
+    $this->assertSame($now, $row['deadline']);
+    $data['terminal_at']++;
+    $record->setDetails($data)->save();
+    $this->assertSame('waiting', $preview->preview()['records'][0]['eligibility']);
+    $this->assertNotNull($store->find('agency_discovery', ['uuid' => $id]), 'A due preview never deletes.');
+  }
+
+  /**
+   * Unknown terminal history is held; unavailable policy refuses the report.
+   */
+  public function testRetentionPreviewMissingHistoryAndPolicy(): void {
+    Role::load('discovery_coordinator')->grantPermission('maintain agency discovery retention')->save();
+    [$id] = $this->accepted();
+    $this->container->get('agency_staff.commands')->withdrawRelationship($id, [], 'history-stop', 0);
+    $record = $this->container->get('agency_staff.store')->find('agency_discovery', ['uuid' => $id]);
+    $data = $record->details();
+    $preview = $this->container->get('agency_staff.retention');
+    foreach ([NULL, '100', 0, -1, time() + 86400] as $invalid) {
+      $data['terminal_at'] = $invalid;
+      $record->setDetails($data)->save();
+      $row = $preview->preview()['records'][0];
+      $this->assertSame('review_required', $row['eligibility']);
+      $this->assertNull($row['deadline']);
+    }
+    unset($data['terminal_at']);
+    $record->setDetails($data)->save();
+    $this->assertSame('review_required', $preview->preview()['records'][0]['eligibility']);
+    foreach ([NULL, '', 'PT0S', 'P1.5D'] as $invalid) {
+      $this->config('agency.settings')->set('policy.retention_after_close', $invalid)->save();
+      $before = $this->retentionStorageDigest();
+      $this->assertSame(['outcome' => 'refused', 'reason' => 'policy_unavailable'], $preview->preview());
+      $this->assertSame($before, $this->retentionStorageDigest());
+    }
+  }
+
+  /**
+   * Bounded pages scan only terminal records and never duplicate a cursor.
+   */
+  public function testRetentionPreviewBoundedPages(): void {
+    Role::load('discovery_coordinator')->grantPermission('maintain agency discovery retention')->save();
+    [$first] = $this->accepted('page-one');
+    $commands = $this->container->get('agency_staff.commands');
+    $commands->withdrawRelationship($first, [], 'page-stop-one', 0);
+    [$active] = $this->accepted('page-active');
+    [$last] = $this->accepted('page-last');
+    $commands->withdrawRelationship($last, [], 'page-stop-last', 0);
+    $preview = $this->container->get('agency_staff.retention');
+    $before = $this->retentionStorageDigest();
+    $page = $preview->preview(0, 1);
+    $this->assertSame([$first], array_column($page['records'], 'relationship_id'));
+    $this->assertIsInt($page['next_after_id']);
+    $next = $preview->preview($page['next_after_id'], 1);
+    $this->assertSame([$last], array_column($next['records'], 'relationship_id'));
+    $this->assertNull($next['next_after_id']);
+    $this->assertNotContains($active, array_column($preview->preview()['records'], 'relationship_id'));
+    foreach ([[0, 0], [0, 101], [-1, 20]] as [$cursor, $limit]) {
+      $this->assertSame(['outcome' => 'refused', 'reason' => 'invalid'], $preview->preview($cursor, $limit));
+    }
+    $this->assertSame($before, $this->retentionStorageDigest());
+    $transaction = $this->container->get('database')->startTransaction();
+    try {
+      $preview->preview();
+      $this->fail('Preview must refuse a caller-owned transaction.');
+    }
+    catch (\LogicException) {
+      $this->assertTrue($this->container->get('database')->inTransaction());
+    }
+    finally {
+      $transaction->rollBack();
+    }
+  }
+
+  /**
+   * Compares domain storage without including synthetic record text in output.
+   */
+  private function retentionStorageDigest(): string {
+    $rows = [];
+    $tables = array_merge(DomainStore::TYPES, [
+      'agency_discovery_revision', 'agency_staff_mutex',
+      'agency_staff_outbox', 'agency_staff_intent',
+    ]);
+    foreach ($tables as $table) {
+      $values = $this->container->get('database')->select($table)->fields($table)->execute()->fetchAll(\PDO::FETCH_ASSOC);
+      $encoded = array_map(static fn(array $row): string => json_encode($row, JSON_THROW_ON_ERROR), $values);
+      sort($encoded);
+      $rows[$table] = $encoded;
+    }
+    return hash('sha256', json_encode($rows, JSON_THROW_ON_ERROR));
+  }
+
+  /**
    * Creates and accepts a synthetic relationship through the real commands.
    */
   private function accepted(string $suffix = ''): array {
