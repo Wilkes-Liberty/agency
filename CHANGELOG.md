@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Restricted, read-only retention preview for closed and withdrawn Discovery
+  records. Pages use the current policy and recorded terminal time; missing
+  history is held for review. This preview does not remove records or schedule
+  retention enforcement. See [issue 3630743](https://www.drupal.org/project/agency/issues/3630743).
+
 ## [1.0.0-alpha1]
 
 Initial prerelease candidate. Publication is pending maintainer approval. The

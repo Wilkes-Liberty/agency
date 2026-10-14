@@ -57,6 +57,10 @@ Discovery rejects zero durations. Calendar years/months clamp to the last day
 of the target month in UTC before adding the remaining days/time. Summary
 expiry is independent of record retention.
 
+The restricted [retention preview](docs/DISCOVERY_RETENTION.md) reports when
+closed and withdrawn records become due under current policy. Automatic removal
+and host scheduling are not implemented; a preview is not evidence of deletion.
+
 ## Storage and dependencies
 
 Agency stores business data through Drupal's Entity API in the host Drupal

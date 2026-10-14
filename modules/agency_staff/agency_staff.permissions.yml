@@ -10,3 +10,7 @@ recover agency discovery ownership:
   title: 'Recover Discovery ownership when the assigned coordinator is unavailable'
   description: 'View and reassign ownerless Discovery contexts; requires coordinator eligibility and explicit coordination permission.'
   restrict access: true
+maintain agency discovery retention:
+  title: 'Inspect Discovery retention eligibility'
+  description: 'Read bounded retention inventory; requires an explicit grant and host coordinator eligibility. Does not remove records.'
+  restrict access: true

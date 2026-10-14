@@ -195,6 +195,11 @@ delete retained records. Expiry, revocation, suspension, account deactivation
 and subject rebinding immediately deny summary reads. Help is a contact route,
 not a terminal domain mutation. Authorized operator suspension remains possible.
 
+The separate [retention maintenance preview](DISCOVERY_RETENTION.md) uses the
+current retention policy and recorded terminal time. It requires an explicit
+maintenance permission and returns bounded timing facts only. It does not
+remove records or alter summary access.
+
 After an uncertain withdrawal, a separately authorized summary showing
 `withdrawn` confirms that state, without asserting evidence-delivery status.
 If it is unavailable/not-found, the result stays unconfirmed. A failed Stop
