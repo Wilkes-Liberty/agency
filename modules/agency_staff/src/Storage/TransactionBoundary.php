@@ -12,6 +12,16 @@ use Drupal\Core\Database\Transaction;
 final class TransactionBoundary {
 
   /**
+   * Releases the root reference and delivers core transaction callbacks.
+   *
+   * @throws \Throwable
+   *   Destruction runs core callbacks, which may throw despite the assignment.
+   */
+  public static function release(?Transaction &$transaction): void {
+    $transaction = NULL;
+  }
+
+  /**
    * Completes the transaction in the caller's try/catch, including Drupal 10.
    *
    * The caller owns the only reference. Drupal 10 commits when that reference

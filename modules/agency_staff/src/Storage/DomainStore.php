@@ -57,7 +57,7 @@ final class DomainStore {
       $transaction?->rollBack();
       // Deliver this root's failed callbacks before an observation starts a
       // new root and changes the connection-wide transaction outcome.
-      $transaction = NULL;
+      TransactionBoundary::release($transaction);
       $this->observations?->report($exception->reason);
       return ['outcome' => 'refused', 'reason' => $exception->reason];
     }
@@ -72,7 +72,7 @@ final class DomainStore {
       }
       if (!$this->database->inTransaction()) {
         try {
-          $transaction = NULL;
+          TransactionBoundary::release($transaction);
         }
         catch (\Throwable) {
           $committing = TRUE;
