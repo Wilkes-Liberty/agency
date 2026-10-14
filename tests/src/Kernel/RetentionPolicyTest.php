@@ -201,7 +201,10 @@ final class RetentionPolicyTest extends KernelTestBase {
           // This table's statement cannot finish while our row lock is held.
           $waiting = $database->query("SELECT INFO FROM INFORMATION_SCHEMA.PROCESSLIST WHERE ID = :id AND COMMAND = 'Query'", [':id' => $connection_id])->fetchField();
         }
-        if (is_string($waiting) && str_contains($waiting, $database->getPrefix() . $table)) {
+        if (is_string($waiting) && str_contains($waiting, $database->getPrefix() . $table)
+          && ($database->driver() === 'pgsql'
+            || preg_match('/^\s*UPDATE\b/i', $waiting) === 1
+            || preg_match('/\bFOR\s+UPDATE\b/i', $waiting) === 1)) {
           break;
         }
         if (!$worker->isRunning() || microtime(TRUE) >= $deadline) {
