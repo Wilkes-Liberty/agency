@@ -55,6 +55,9 @@ final class DomainStore {
     }
     catch (Refusal $exception) {
       $transaction?->rollBack();
+      // Deliver this root's failed callbacks before an observation starts a
+      // new root and changes the connection-wide transaction outcome.
+      $transaction = NULL;
       $this->observations?->report($exception->reason);
       return ['outcome' => 'refused', 'reason' => $exception->reason];
     }
@@ -67,7 +70,20 @@ final class DomainStore {
       catch (\Throwable) {
         $committing = TRUE;
       }
-      $this->observations?->report('recording_unavailable');
+      if (!$this->database->inTransaction()) {
+        try {
+          $transaction = NULL;
+        }
+        catch (\Throwable) {
+          $committing = TRUE;
+        }
+        $this->observations?->report('recording_unavailable');
+      }
+      else {
+        // An unresolved transaction is not an observation boundary. Never
+        // start another transaction to report that uncertain outcome.
+        $committing = TRUE;
+      }
       return $committing
         ? ['outcome' => 'uncertain']
         : ['outcome' => 'refused', 'reason' => 'recording_unavailable'];

@@ -93,10 +93,50 @@ $builder = new class('discoveryWorker') extends TestCase {
     };
     $entities = $this->createMock(EntityTypeManagerInterface::class);
     $entities->method('getStorage')->willReturn($this->createMock(EntityStorageInterface::class));
-    if (in_array($input['mode'], ['domain', 'domain_policy'], TRUE)) {
+    if (in_array($input['mode'], ['domain', 'domain_policy', 'retention_reference', 'retention_policy'], TRUE)) {
       $store = new DomainStore($database, $entities);
       $announce();
       $result = $store->transaction(static function () use ($checkpoint, $input, $database): array {
+        if (in_array($input['mode'], ['retention_reference', 'retention_policy'], TRUE)) {
+          if ($input['mode'] === 'retention_reference') {
+            foreach (['agency_discovery', 'agency_discovery_revision'] as $table) {
+              $database->update($table)->fields([
+                'person_uuid' => $input['person'],
+                'principal_uuid' => $input['principal'],
+              ])->condition('id', $input['other_id'])->execute();
+            }
+          }
+          else {
+            $storage = new DatabaseStorage($database, 'config');
+            $policy = $storage->read('agency.settings');
+            $policy['policy']['retention_after_close'] = 'P2D';
+            $storage->write('agency.settings', $policy);
+          }
+          file_put_contents($input['ready'], 'ready');
+          $deadline = microtime(TRUE) + 15;
+          do {
+            if ($database->driver() === 'pgsql') {
+              $database->query('SELECT pg_stat_clear_snapshot()');
+              $waiting = $database->query("SELECT query FROM pg_stat_activity WHERE pid = :id AND wait_event_type = 'Lock'", [':id' => $input['parent_id']])->fetchField();
+            }
+            else {
+              $waiting = $database->query("SELECT INFO FROM INFORMATION_SCHEMA.PROCESSLIST WHERE ID = :id AND COMMAND = 'Query'", [':id' => $input['parent_id']])->fetchField();
+            }
+            if (is_string($waiting) && str_contains($waiting, $database->getPrefix() . 'agency_staff_mutex')
+              && preg_match('/\bFOR\s+UPDATE\b/i', $waiting) === 1) {
+              break;
+            }
+            if (microtime(TRUE) >= $deadline) {
+              throw new RuntimeException('Removal did not reach the held domain mutex.');
+            }
+            usleep(20000);
+          } while (TRUE);
+          file_put_contents($input['observed'], 'blocked');
+          if ($input['rollback']) {
+            throw new RuntimeException('Synthetic reference rollback.');
+          }
+          return ['outcome' => 'committed'];
+        }
         $checkpoint();
         if ($input['mode'] === 'domain_policy') {
           $stored = (new DatabaseStorage($database, 'config'))->read('agency.settings');

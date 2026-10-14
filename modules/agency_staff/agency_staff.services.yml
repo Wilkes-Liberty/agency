@@ -34,3 +34,6 @@ services:
   agency_staff.retention_policy:
     class: Drupal\agency_staff\LockedRetentionPolicy
     arguments: ['@database', '@config.factory', '@config.storage.active', '@agency_staff.policy', false]
+  agency_staff.retention_removal:
+    class: Drupal\agency_staff\RetentionRemoval
+    arguments: ['@agency_staff.store', '@agency_staff.access', '@agency_staff.retention_policy', '@entity_type.manager', '@agency_staff.commands', '@agency_staff.outbox', '@datetime.time', '@settings']

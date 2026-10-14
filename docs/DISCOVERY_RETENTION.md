@@ -25,7 +25,7 @@ Pages are advisory reads, not a locked inventory or deletion authorization.
 An older active relationship can close after its ID has been passed and be
 missed by that traversal. Policy and records can also change between pages.
 Reconcile changes or start a fresh scan; reaching the last page never proves a
-complete inventory. Future removal must
+complete inventory. Removal must
 recheck the selected records, effective policy and authority under the writer
 lock. A due row is still present until an independently verified removal.
 
@@ -49,19 +49,26 @@ These controls are specified before implementation:
   idempotency records unchanged. The operation cannot run inside another
   caller's transaction.
 
-## Removal still required
+## Removal service
 
-The preview does not delete records or establish that retention is enforced.
-The next change must reauthorize and recheck a reviewed batch under the domain
-writer lock. Removal must include every relationship revision, invitation and
-entitlement. Shared people and identity bindings must remain while referenced;
-minimal denial, replay and evidence records must remain effective.
+`agency_staff.retention_removal->prepare($relationship_uuid)` prepares one
+bounded removal. `remove($relationship_uuid, $plan_sha256, $idempotency_key)`
+executes that exact plan after rechecking current authority and records.
+Both methods require a fresh eligible coordinator with the separate restricted
+`remove expired agency discovery` permission. Installation grants no permission.
+There is no route, Drush command, MCP tool or scheduler.
 
-Verify policy drift, concurrent writers, evidence failure, rollback, interrupted
-commit and retry with independent PostgreSQL 16 connections. Run the supported
-Drupal/PHP matrix. The host must separately qualify scheduling, encrypted-message
-custody, attachments and backup expiry. Do not claim those stores were erased
-because the domain row disappeared.
+Preparation returns `prepared` with a keyed plan digest, relationship UUID,
+deadline, revision/child counts and person/principal actions. It returns no
+personal data. Execution returns `committed` with its minimal receipt,
+`refused` with a reason, or `uncertain` when commit cannot be confirmed.
+The host must retain its idempotency key and reconcile an uncertain result by
+retrying the exact request with fresh authority. Never infer deletion from a
+missing response. A different key cannot recover the original receipt.
+
+This service removes package-owned records only. The host must separately
+qualify scheduling, encrypted-message custody, attachments and backup expiry.
+Do not claim those stores were erased because the domain row disappeared.
 
 ## Policy prerequisite
 
@@ -79,9 +86,9 @@ InnoDB snapshot before its predecessor commits. The deletion path must read
 its inventory inside that boundary. Independent-writer controls cover commit
 and rollback on the supported database matrix.
 
-## Removal design and failure cases
+## Removal boundaries and failure cases
 
-The next slice prepares one bounded removal at a time. A separate restricted
+The service prepares one bounded removal at a time. A separate restricted
 permission authorizes preparation and execution; the preview permission alone
 does not authorize deletion. The host must provide an eligible maintenance
 operator and keep these services off public routes and MCP.
@@ -91,8 +98,8 @@ deadline and removal/preservation counts. It reads current effective policy,
 the terminal record, every revision and its invitations and entitlements.
 It also checks all references to the associated person and principal. Bound
 work to one relationship, 1,000 revisions and 100 records of each child type;
-larger or malformed inventories require review. No participant content leaves
-the service. Preparation is read-only and gives no execution authority.
+larger or malformed inventories require review. The digest uses the site hash salt as an HMAC key; an absent or short key
+refuses preparation. No participant content leaves the service. Preparation is read-only and gives no execution authority.
 
 Reference scans are bounded too: at most 100 references per entity type and
 1,000 retained revision references. Include non-default revisions of other
@@ -122,7 +129,9 @@ or child record references it. Delete its thin person resolver only when no
 remaining relationship or binding references that person. Preserve shared
 records. An unshared inactive principal must retain its opaque principal key
 and denied status, while removing its direct identity/contact fields, so
-purging personal details cannot make a blocked principal eligible again.
+purging personal details cannot make a blocked principal eligible again. An
+active binding with malformed identity claims or a mismatched principal key
+requires review; its existing denial must not disappear through deletion.
 
 Record the required removal intent and minimal idempotent receipt in the same
 transaction. Retain older intents and evidence. An exact authorized retry may
@@ -130,6 +139,11 @@ return its committed receipt without recreating records. A different key never
 manufactures a second removal. An uncertain commit remains uncertain until a
 fresh transaction observes the receipt; rollback or a missing response is not
 proof of deletion.
+
+The domain boundary releases an ended failed transaction before recording a
+separate observation. Otherwise that observation's successful transaction can
+overwrite the outcome seen by the failed root's callbacks. A transaction still
+active after cleanup is uncertain and cannot start an observation transaction.
 
 Failure controls, specified before removal implementation:
 
@@ -154,3 +168,29 @@ This design covers package-owned data only. It creates no scheduler and does
 not delete host delivery ciphertext, attachments, identity-provider accounts,
 audit archives or backups. Their separate removal/recovery procedures must
 precede any operator claim that the complete retention policy is enforced.
+
+## Explicit PostgreSQL host fault qualification
+
+The normal supported-version matrix covers statement failure, atomic rollback,
+concurrent references/policy and retry after a lost application response. That
+last control discards the response after a real commit; it does not simulate a
+lost PDO COMMIT acknowledgement.
+
+`tests/src/Qualification/RetentionCommitFaultTest.php` is a separate, explicitly
+invoked host test for a real deferred PostgreSQL COMMIT rejection. It requires
+Drupal core's ended-transaction cleanup fix from
+[core issue 3584465](https://www.drupal.org/project/drupal/issues/3584465).
+It is outside the ordinary Kernel suite and is not silently skipped. Run only
+against an isolated synthetic PostgreSQL 16 test database in the qualified host:
+
+```sh
+vendor/bin/phpunit -c web/core/phpunit.xml.dist \
+  --filter testDeferredCommitRejection \
+  web/modules/contrib/agency/tests/src/Qualification/RetentionCommitFaultTest.php
+```
+
+Record the exact core, patch and Agency commits with the result. Independent
+readback must show unchanged business rows and no removal receipt/event, the
+failed root callback must receive false, and a subsequent transaction and
+process shutdown must complete normally. Passing this host test does not
+qualify unpatched core versions or prove backup/ciphertext erasure.

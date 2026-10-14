@@ -14,3 +14,7 @@ maintain agency discovery retention:
   title: 'Inspect Discovery retention eligibility'
   description: 'Read bounded retention inventory; requires an explicit grant and host coordinator eligibility. Does not remove records.'
   restrict access: true
+remove expired agency discovery:
+  title: 'Remove expired Discovery records'
+  description: 'Prepare and execute reviewed retention removal; requires explicit permission and host coordinator eligibility. Preserves shared records and denial evidence.'
+  restrict access: true
