@@ -8,6 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Internal retention policy guard for the default SQL configuration backend.
+  It locks and verifies current policy, refuses stale cached data, and disables
+  only retention maintenance when the storage wiring is unsupported. It does
+  not delete records. See [issue 3630743](https://www.drupal.org/project/agency/issues/3630743).
+
 - Restricted, read-only retention preview for closed and withdrawn Discovery
   records. Pages use the current policy and recorded terminal time; missing
   history is held for review. This preview does not remove records or schedule

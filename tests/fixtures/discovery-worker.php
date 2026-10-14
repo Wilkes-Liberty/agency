@@ -14,6 +14,7 @@ use Drupal\audit_chain\AuditChainLoggerInterface;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Component\Uuid\Php;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Config\DatabaseStorage;
 use Drupal\Core\Config\ImmutableConfig;
 use Drupal\Core\Database\Database;
 use Drupal\Core\Entity\EntityStorageInterface;
@@ -61,6 +62,17 @@ $builder = new class('discoveryWorker') extends TestCase {
    */
   public function runWorker(array $input): void {
     $database = Database::getConnection('default', 'worker');
+    if ($input['mode'] === 'policy') {
+      $storage = new DatabaseStorage($database, 'config');
+      $policy = $storage->read('agency.settings');
+      $policy['policy']['retention_after_close'] = 'P3D';
+      file_put_contents($input['started'], 'started');
+      print json_encode(['written' => $storage->write('agency.settings', $policy)], JSON_THROW_ON_ERROR);
+      return;
+    }
+    if ($input['mode'] === 'domain_policy' && $database->driver() === 'mysql') {
+      $database->query('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+    }
     $checkpoint = static function () use ($input): void {
       if (!isset($input['ready'])) {
         return;
@@ -76,11 +88,15 @@ $builder = new class('discoveryWorker') extends TestCase {
     };
     $entities = $this->createMock(EntityTypeManagerInterface::class);
     $entities->method('getStorage')->willReturn($this->createMock(EntityStorageInterface::class));
-    if ($input['mode'] === 'domain') {
+    if (in_array($input['mode'], ['domain', 'domain_policy'], TRUE)) {
       $store = new DomainStore($database, $entities);
       file_put_contents($input['started'], 'started');
-      $result = $store->transaction(static function () use ($checkpoint, $input): array {
+      $result = $store->transaction(static function () use ($checkpoint, $input, $database): array {
         $checkpoint();
+        if ($input['mode'] === 'domain_policy') {
+          $stored = (new DatabaseStorage($database, 'config'))->read('agency.settings');
+          return ['outcome' => 'observed', 'period' => $stored['policy']['retention_after_close']];
+        }
         if ($input['rollback'] ?? FALSE) {
           throw new RuntimeException('Synthetic domain failure.');
         }

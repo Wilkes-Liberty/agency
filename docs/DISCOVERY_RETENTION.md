@@ -62,3 +62,94 @@ commit and retry with independent PostgreSQL 16 connections. Run the supported
 Drupal/PHP matrix. The host must separately qualify scheduling, encrypted-message
 custody, attachments and backup expiry. Do not claim those stores were erased
 because the domain row disappeared.
+
+## Policy prerequisite
+
+The internal `agency_staff.retention_policy` service captures stored and
+effective policy within a caller-owned transaction. Execution callers request
+the row lock; advisory preparation may read without it. The service compares
+the authoritative SQL row with the factory's unoverridden data before using
+effective overrides. It refuses missing policy, stale cached data and an
+unsupported storage graph. It grants no permission and exposes no route.
+
+This guard does not implement removal. The deletion path must also obtain a
+fresh domain inventory after acquiring its writer lock. A plain read before
+that lock can establish an old snapshot under repeatable-read isolation; a
+later policy-row lock alone cannot make shared-reference reads current.
+Independent-writer verification is required for each supported database.
+
+## Removal design and failure cases
+
+The next slice prepares one bounded removal at a time. A separate restricted
+permission authorizes preparation and execution; the preview permission alone
+does not authorize deletion. The host must provide an eligible maintenance
+operator and keep these services off public routes and MCP.
+
+Preparation returns an opaque digest, the selected relationship UUID, its
+deadline and removal/preservation counts. It reads current effective policy,
+the terminal record, every revision and its invitations and entitlements.
+It also checks all references to the associated person and principal. Bound
+work to one relationship, 1,000 revisions and 100 records of each child type;
+larger or malformed inventories require review. No participant content leaves
+the service. Preparation is read-only and gives no execution authority.
+
+Reference scans are bounded too: at most 100 references per entity type and
+1,000 retained revision references. Include non-default revisions of other
+relationships, orphan invitations/entitlements and other principal-to-person
+bindings. Overflow or incomplete reads require review, never an assumption
+that a record is unshared.
+
+Execution takes the exact relationship, prepared digest and idempotency key.
+It reauthorizes under the existing domain writer lock, reloads effective policy
+and records, and compares the prepared digest. A changed deadline, revision,
+reference or binding refuses the operation. The current time must reach the
+deadline; future or missing terminal times are never inferred.
+
+For the default Drupal database configuration backend, hold its authoritative
+`agency.settings` row lock and compare uncached stored data with the config
+factory's underlying stored data before using effective overrides. A factory
+reset alone does not evict cached storage. Bind stored and effective policy
+into the plan. A late container compiler check must verify the exact default
+database/storage/factory chain, table, collection and connection; alternate
+wiring leaves removal unavailable without breaking the site. Runtime override
+sources require host deployment containment throughout execution. This does
+not claim to contain arbitrary privileged PHP or out-of-contract raw SQL.
+
+Use the Entity API to remove the relationship, all its revisions, invitations
+and entitlements. Delete an active principal only when no other relationship
+or child record references it. Delete its thin person resolver only when no
+remaining relationship or binding references that person. Preserve shared
+records. An unshared inactive principal must retain its opaque principal key
+and denied status, while removing its direct identity/contact fields, so
+purging personal details cannot make a blocked principal eligible again.
+
+Record the required removal intent and minimal idempotent receipt in the same
+transaction. Retain older intents and evidence. An exact authorized retry may
+return its committed receipt without recreating records. A different key never
+manufactures a second removal. An uncertain commit remains uncertain until a
+fresh transaction observes the receipt; rollback or a missing response is not
+proof of deletion.
+
+Failure controls, specified before removal implementation:
+
+- Deny ordinary/preview-only permission, stale role, blocked account and host
+  eligibility loss before reading an inventory or replay receipt.
+- Refuse active, moved-forward, not-yet-due, unknown-history, malformed-policy,
+  over-budget and changed-plan requests without deleting any record.
+- Prove exact deadline behavior and policy changes in both directions. A
+  changed current policy requires a new preparation, including an equivalent
+  period expressed differently.
+- Verify complete revision/child removal, shared-record preservation, unshared
+  personal-data removal and preservation of an inactive principal's denial.
+- Force failure after delete and during required evidence/receipt persistence;
+  independent connections must see either the whole committed result or none.
+- Race another domain writer, a policy change and a new shared reference.
+  Revalidation must refuse stale authority and stale inventories.
+- Verify same-key replay after removal and lost acknowledgement, altered-key
+  refusal, no restoration through old invitation/command retries, and continued
+  delivery/verifiability of retained evidence.
+
+This design covers package-owned data only. It creates no scheduler and does
+not delete host delivery ciphertext, attachments, identity-provider accounts,
+audit archives or backups. Their separate removal/recovery procedures must
+precede any operator claim that the complete retention policy is enforced.
