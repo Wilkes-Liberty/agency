@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Acquire the Discovery writer lock before the first ordinary read. A writer
+  waiting under MySQL repeatable-read isolation must see its predecessor's
+  committed changes when checking records and shared references.
+
 ### Added
 
 - Internal retention policy guard for the default SQL configuration backend.

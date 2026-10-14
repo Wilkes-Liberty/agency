@@ -68,7 +68,7 @@ final class RetentionPolicyTest extends KernelTestBase {
       catch (Refusal $exception) {
         $this->assertSame('policy_unavailable', $exception->reason);
       }
-      $this->container->get('cache.config')->invalidateAll();
+      $this->container->get('cache.config')->deleteAll();
       $fresh = $fence->capture(TRUE);
       $this->assertSame('P1D', $fresh['facts']['retention_period']);
       $this->assertNotSame($first['stored_sha256'], $fresh['stored_sha256']);
@@ -186,7 +186,29 @@ final class RetentionPolicyTest extends KernelTestBase {
         }
         usleep(20000);
       }
-      usleep(300000);
+      $connection_id = (int) file_get_contents($marker);
+      $this->assertGreaterThan(0, $connection_id);
+      $table = $domain ? 'agency_staff_mutex' : 'config';
+      // Observe the actual blocked statement before releasing the first
+      // writer. A sleeping or descheduled child is not concurrency evidence.
+      do {
+        if ($database->driver() === 'pgsql') {
+          $database->query('SELECT pg_stat_clear_snapshot()');
+          $waiting = $database->query("SELECT query FROM pg_stat_activity WHERE pid = :id AND wait_event_type = 'Lock'", [':id' => $connection_id])->fetchField();
+        }
+        else {
+          // A role may inspect its own connections without PROCESS grants.
+          // This table's statement cannot finish while our row lock is held.
+          $waiting = $database->query("SELECT INFO FROM INFORMATION_SCHEMA.PROCESSLIST WHERE ID = :id AND COMMAND = 'Query'", [':id' => $connection_id])->fetchField();
+        }
+        if (is_string($waiting) && str_contains($waiting, $database->getPrefix() . $table)) {
+          break;
+        }
+        if (!$worker->isRunning() || microtime(TRUE) >= $deadline) {
+          $this->fail('The second connection did not reach its database fence: ' . $worker->getErrorOutput() . $worker->getOutput());
+        }
+        usleep(20000);
+      } while (TRUE);
       $this->assertTrue($worker->isRunning(), 'The next writer must wait for the current lock owner.');
       if (!$domain) {
         $this->assertSame('P2D', $fence->capture(TRUE)['facts']['retention_period']);
@@ -207,7 +229,7 @@ final class RetentionPolicyTest extends KernelTestBase {
       else {
         $this->assertTrue($output['written']);
       }
-      $this->container->get('cache.config')->invalidateAll();
+      $this->container->get('cache.config')->deleteAll();
       $transaction = $database->startTransaction();
       $this->assertSame($domain && $rollback ? 'P2D' : 'P3D', $fence->capture(TRUE)['facts']['retention_period']);
     }

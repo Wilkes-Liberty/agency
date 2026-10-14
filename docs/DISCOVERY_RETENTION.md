@@ -71,12 +71,13 @@ the row lock; advisory preparation may read without it. The service compares
 the authoritative SQL row with the factory's unoverridden data before using
 effective overrides. It refuses missing policy, stale cached data and an
 unsupported storage graph. It grants no permission and exposes no route.
+Only the tested MySQL and PostgreSQL drivers are eligible for this guard.
 
-This guard does not implement removal. The deletion path must also obtain a
-fresh domain inventory after acquiring its writer lock. A plain read before
-that lock can establish an old snapshot under repeatable-read isolation; a
-later policy-row lock alone cannot make shared-reference reads current.
-Independent-writer verification is required for each supported database.
+This guard does not implement removal. The domain store acquires its writer
+lock before any ordinary read, so a waiting writer cannot establish an old
+InnoDB snapshot before its predecessor commits. The deletion path must read
+its inventory inside that boundary. Independent-writer controls cover commit
+and rollback on the supported database matrix.
 
 ## Removal design and failure cases
 

@@ -62,11 +62,12 @@ $builder = new class('discoveryWorker') extends TestCase {
    */
   public function runWorker(array $input): void {
     $database = Database::getConnection('default', 'worker');
+    $connection_id = $database->query($database->driver() === 'pgsql' ? 'SELECT pg_backend_pid()' : 'SELECT CONNECTION_ID()')->fetchField();
     if ($input['mode'] === 'policy') {
       $storage = new DatabaseStorage($database, 'config');
       $policy = $storage->read('agency.settings');
       $policy['policy']['retention_after_close'] = 'P3D';
-      file_put_contents($input['started'], 'started');
+      file_put_contents($input['started'], (string) $connection_id);
       print json_encode(['written' => $storage->write('agency.settings', $policy)], JSON_THROW_ON_ERROR);
       return;
     }
@@ -90,7 +91,7 @@ $builder = new class('discoveryWorker') extends TestCase {
     $entities->method('getStorage')->willReturn($this->createMock(EntityStorageInterface::class));
     if (in_array($input['mode'], ['domain', 'domain_policy'], TRUE)) {
       $store = new DomainStore($database, $entities);
-      file_put_contents($input['started'], 'started');
+      file_put_contents($input['started'], (string) $connection_id);
       $result = $store->transaction(static function () use ($checkpoint, $input, $database): array {
         $checkpoint();
         if ($input['mode'] === 'domain_policy') {

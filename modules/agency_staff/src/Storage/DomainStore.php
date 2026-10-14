@@ -39,13 +39,14 @@ final class DomainStore {
     $transaction = $this->database->startTransaction();
     $committing = FALSE;
     try {
-      if (!$this->database->query('SELECT id FROM {agency_staff_mutex} WHERE id = 1')->fetchField()) {
+      // Take the fence before any ordinary read can establish a repeatable-
+      // read snapshot. A waiting writer must see its predecessor's commit.
+      $lock = $this->database->select('agency_staff_mutex', 'm')->fields('m', ['id'])->condition('id', 1);
+      $lock->forUpdate();
+      if (!$lock->execute()->fetchField()) {
         throw new \RuntimeException('Missing Discovery mutex.');
       }
       $this->database->update('agency_staff_mutex')->fields(['value' => 0])->condition('id', 1)->execute();
-      $lock = $this->database->select('agency_staff_mutex', 'm')->fields('m')->condition('id', 1);
-      $lock->forUpdate();
-      $lock->execute()->fetchAssoc();
       $this->clear();
       $result = $work();
       $committing = TRUE;

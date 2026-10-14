@@ -226,7 +226,7 @@ jobs:
           php -r '
             $xml = simplexml_load_file("domain-junit.xml");
             if ($xml === false) { exit(1); }
-            $required = ["testConcurrentDrainersCommit", "testConcurrentDrainersRollback", "testConcurrentDomainCommit", "testConcurrentDomainRollback", "testDeliveryMarkerFailure", "testSummarySavepointFailure", "testEvidenceHealthAgeAndRollback", "testEvidenceHealthUpgrade", "testEvidenceHealthUnavailable", "testEvidenceHealthTransactionBoundary", "testEvidenceHealthSlowFailure", "testPolicyWriterWaitsForCommit", "testPolicyWriterWaitsForRollback"];
+            $required = ["testConcurrentDrainersCommit", "testConcurrentDrainersRollback", "testConcurrentDomainCommit", "testConcurrentDomainRollback", "testDeliveryMarkerFailure", "testSummarySavepointFailure", "testEvidenceHealthAgeAndRollback", "testEvidenceHealthUpgrade", "testEvidenceHealthUnavailable", "testEvidenceHealthTransactionBoundary", "testEvidenceHealthSlowFailure", "testPolicyWriterWaitsForCommit", "testPolicyWriterWaitsForRollback", "testDomainInventoryAfterWaitingWriter", "testDomainInventoryAfterRolledBackWriter"];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
               if (isset($case->skipped)) { exit(1); }
