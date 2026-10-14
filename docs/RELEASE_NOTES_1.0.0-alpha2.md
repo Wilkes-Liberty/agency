@@ -31,7 +31,7 @@ needs `maintain agency discovery retention` for preview and the separate
 The services expose no route, Drush command, MCP tool or scheduler. The host
 must provide an approved invocation, current operator authority, a usable site
 hash salt and a supported default SQL configuration backend. Missing, stale or
-unsupported policy/storage wiring leaves retention maintenance unavailable.
+unsupported policy/storage wiring leaves preparation and removal unavailable.
 
 Preview pages are advisory; reaching the final page is not proof of a complete
 inventory. Changing policy, history, references or identity bindings invalidates
@@ -44,8 +44,9 @@ bounds, failure behavior and the explicit PostgreSQL host fault test.
 
 ## Compatibility and acceptance limits
 
-The supported matrix remains Drupal `^10.6 || ^11.3` on PHP 8.2+, with MySQL 8
-and PostgreSQL 16. No dependency version or support floor changes in this release.
+The supported matrix remains Drupal 10.6/PHP 8.2, Drupal 11.3/PHP 8.3 and
+Drupal 11.4/PHP 8.4, with MySQL 8 and PostgreSQL 16. No dependency version or
+support floor changes in this release.
 Supported-version CI covers ordinary rollback, concurrent writers, preservation,
 authorization and retry after an application response is lost.
 
