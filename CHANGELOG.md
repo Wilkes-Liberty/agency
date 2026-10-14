@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0-alpha2]
+
+Prepared prerelease; publication requires maintainer approval. See the
+[draft release notes](docs/RELEASE_NOTES_1.0.0-alpha2.md).
+
 ### Fixed
 
 - Finish failed Discovery transaction callbacks before recording an observation
