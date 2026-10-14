@@ -203,7 +203,7 @@ final class RetentionPolicyTest extends KernelTestBase {
         }
         if (is_string($waiting) && str_contains($waiting, $database->getPrefix() . $table)
           && ($database->driver() === 'pgsql'
-            || preg_match('/^\s*UPDATE\b/i', $waiting) === 1
+            || preg_match('/^\s*(?:UPDATE|INSERT)\b/i', $waiting) === 1
             || preg_match('/\bFOR\s+UPDATE\b/i', $waiting) === 1)) {
           break;
         }
