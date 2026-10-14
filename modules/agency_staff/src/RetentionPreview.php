@@ -28,6 +28,8 @@ final class RetentionPreview {
 
   /**
    * Returns an advisory page, not deletion authority or a removal receipt.
+   *
+   * @phpstan-impure
    */
   public function preview(int $afterId = 0, int $limit = 20): array {
     if ($this->store->database->inTransaction()) {

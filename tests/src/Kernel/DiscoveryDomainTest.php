@@ -1539,8 +1539,11 @@ final class DiscoveryDomainTest extends KernelTestBase {
       'agency_staff_outbox', 'agency_staff_intent',
     ]);
     foreach ($tables as $table) {
-      $values = $this->container->get('database')->select($table)->fields($table)->execute()->fetchAll(\PDO::FETCH_ASSOC);
-      $encoded = array_map(static fn(array $row): string => json_encode($row, JSON_THROW_ON_ERROR), $values);
+      $statement = $this->container->get('database')->select($table)->fields($table)->execute();
+      $encoded = [];
+      while ($row = $statement->fetchAssoc()) {
+        $encoded[] = json_encode($row, JSON_THROW_ON_ERROR);
+      }
       sort($encoded);
       $rows[$table] = $encoded;
     }
