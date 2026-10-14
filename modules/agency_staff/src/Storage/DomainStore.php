@@ -57,7 +57,7 @@ final class DomainStore {
       $transaction?->rollBack();
       // Deliver this root's failed callbacks before an observation starts a
       // new root and changes the connection-wide transaction outcome.
-      TransactionBoundary::release($transaction);
+      $transaction = NULL;
       $this->observations?->report($exception->reason);
       return ['outcome' => 'refused', 'reason' => $exception->reason];
     }
@@ -71,9 +71,12 @@ final class DomainStore {
         $committing = TRUE;
       }
       if (!$this->database->inTransaction()) {
+        // Releasing the last reference invokes core's destructor callbacks.
+        // Static analysis does not model exceptions from object destruction.
         try {
-          TransactionBoundary::release($transaction);
+          $transaction = NULL;
         }
+        // @phpstan-ignore catch.neverThrown (Core destructor callbacks.)
         catch (\Throwable) {
           $committing = TRUE;
         }
