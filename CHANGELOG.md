@@ -6,7 +6,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0-alpha2] - 2026-10-14
+
+Prepared prerelease; publication requires maintainer approval. See the
+[draft release notes](docs/RELEASE_NOTES_1.0.0-alpha2.md).
+
+### Fixed
+
+- Finish failed Discovery transaction callbacks before recording an observation
+  in a new transaction. A successful observation must not make failed business
+  work appear committed to its callbacks.
+
+- Acquire the Discovery writer lock before the first ordinary read. A writer
+  waiting under MySQL repeatable-read isolation must see its predecessor's
+  committed changes when checking records and shared references.
+
 ### Added
+
+- Explicitly authorized removal of one expired Discovery context, including
+  its revisions, invitations and entitlements. Execution rechecks a bounded
+  prepared plan, preserves shared records and denied bindings, and records
+  removal evidence and its retry receipt in the same transaction. This internal
+  service does not schedule deletion or remove host-owned stores. See
+  [issue 3630743](https://www.drupal.org/project/agency/issues/3630743).
+
+- Internal retention policy guard for the default SQL configuration backend.
+  It locks and verifies current policy, refuses stale cached data, and disables
+  only retention maintenance when the storage wiring is unsupported. It does
+  not delete records. See [issue 3630743](https://www.drupal.org/project/agency/issues/3630743).
 
 - Restricted, read-only retention preview for closed and withdrawn Discovery
   records. Pages use the current policy and recorded terminal time; missing

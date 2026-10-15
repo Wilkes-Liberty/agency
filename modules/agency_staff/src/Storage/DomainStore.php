@@ -39,13 +39,14 @@ final class DomainStore {
     $transaction = $this->database->startTransaction();
     $committing = FALSE;
     try {
-      if (!$this->database->query('SELECT id FROM {agency_staff_mutex} WHERE id = 1')->fetchField()) {
+      // Take the fence before any ordinary read can establish a repeatable-
+      // read snapshot. A waiting writer must see its predecessor's commit.
+      $lock = $this->database->select('agency_staff_mutex', 'm')->fields('m', ['id'])->condition('id', 1);
+      $lock->forUpdate();
+      if (!$lock->execute()->fetchField()) {
         throw new \RuntimeException('Missing Discovery mutex.');
       }
       $this->database->update('agency_staff_mutex')->fields(['value' => 0])->condition('id', 1)->execute();
-      $lock = $this->database->select('agency_staff_mutex', 'm')->fields('m')->condition('id', 1);
-      $lock->forUpdate();
-      $lock->execute()->fetchAssoc();
       $this->clear();
       $result = $work();
       $committing = TRUE;
@@ -54,6 +55,9 @@ final class DomainStore {
     }
     catch (Refusal $exception) {
       $transaction?->rollBack();
+      // Deliver this root's failed callbacks before an observation starts a
+      // new root and changes the connection-wide transaction outcome.
+      $transaction = NULL;
       $this->observations?->report($exception->reason);
       return ['outcome' => 'refused', 'reason' => $exception->reason];
     }
@@ -66,7 +70,23 @@ final class DomainStore {
       catch (\Throwable) {
         $committing = TRUE;
       }
-      $this->observations?->report('recording_unavailable');
+      if (!$this->database->inTransaction()) {
+        // Releasing the last reference invokes core's destructor callbacks.
+        // Static analysis does not model exceptions from object destruction.
+        try {
+          $transaction = NULL;
+        }
+        // @phpstan-ignore catch.neverThrown (Core destructor callbacks.)
+        catch (\Throwable) {
+          $committing = TRUE;
+        }
+        $this->observations?->report('recording_unavailable');
+      }
+      else {
+        // An unresolved transaction is not an observation boundary. Never
+        // start another transaction to report that uncertain outcome.
+        $committing = TRUE;
+      }
       return $committing
         ? ['outcome' => 'uncertain']
         : ['outcome' => 'refused', 'reason' => 'recording_unavailable'];

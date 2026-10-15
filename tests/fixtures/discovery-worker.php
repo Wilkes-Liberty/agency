@@ -14,6 +14,7 @@ use Drupal\audit_chain\AuditChainLoggerInterface;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Component\Uuid\Php;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Config\DatabaseStorage;
 use Drupal\Core\Config\ImmutableConfig;
 use Drupal\Core\Database\Database;
 use Drupal\Core\Entity\EntityStorageInterface;
@@ -61,6 +62,22 @@ $builder = new class('discoveryWorker') extends TestCase {
    */
   public function runWorker(array $input): void {
     $database = Database::getConnection('default', 'worker');
+    $connection_id = $database->query($database->driver() === 'pgsql' ? 'SELECT pg_backend_pid()' : 'SELECT CONNECTION_ID()')->fetchField();
+    $announce = static function () use ($input, $connection_id): void {
+      file_put_contents($input['started'] . '.new', (string) $connection_id);
+      rename($input['started'] . '.new', $input['started']);
+    };
+    if ($input['mode'] === 'policy') {
+      $storage = new DatabaseStorage($database, 'config');
+      $policy = $storage->read('agency.settings');
+      $policy['policy']['retention_after_close'] = 'P3D';
+      $announce();
+      print json_encode(['written' => $storage->write('agency.settings', $policy)], JSON_THROW_ON_ERROR);
+      return;
+    }
+    if ($input['mode'] === 'domain_policy' && $database->driver() === 'mysql') {
+      $database->query('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+    }
     $checkpoint = static function () use ($input): void {
       if (!isset($input['ready'])) {
         return;
@@ -76,11 +93,55 @@ $builder = new class('discoveryWorker') extends TestCase {
     };
     $entities = $this->createMock(EntityTypeManagerInterface::class);
     $entities->method('getStorage')->willReturn($this->createMock(EntityStorageInterface::class));
-    if ($input['mode'] === 'domain') {
+    if (in_array($input['mode'], ['domain', 'domain_policy', 'retention_reference', 'retention_policy'], TRUE)) {
       $store = new DomainStore($database, $entities);
-      file_put_contents($input['started'], 'started');
-      $result = $store->transaction(static function () use ($checkpoint, $input): array {
+      $announce();
+      $result = $store->transaction(static function () use ($checkpoint, $input, $database): array {
+        if (in_array($input['mode'], ['retention_reference', 'retention_policy'], TRUE)) {
+          if ($input['mode'] === 'retention_reference') {
+            foreach (['agency_discovery', 'agency_discovery_revision'] as $table) {
+              $database->update($table)->fields([
+                'person_uuid' => $input['person'],
+                'principal_uuid' => $input['principal'],
+              ])->condition('id', $input['other_id'])->execute();
+            }
+          }
+          else {
+            $storage = new DatabaseStorage($database, 'config');
+            $policy = $storage->read('agency.settings');
+            $policy['policy']['retention_after_close'] = 'P2D';
+            $storage->write('agency.settings', $policy);
+          }
+          file_put_contents($input['ready'], 'ready');
+          $deadline = microtime(TRUE) + 15;
+          do {
+            if ($database->driver() === 'pgsql') {
+              $database->query('SELECT pg_stat_clear_snapshot()');
+              $waiting = $database->query("SELECT query FROM pg_stat_activity WHERE pid = :id AND wait_event_type = 'Lock'", [':id' => $input['parent_id']])->fetchField();
+            }
+            else {
+              $waiting = $database->query("SELECT INFO FROM INFORMATION_SCHEMA.PROCESSLIST WHERE ID = :id AND COMMAND = 'Query'", [':id' => $input['parent_id']])->fetchField();
+            }
+            if (is_string($waiting) && str_contains($waiting, $database->getPrefix() . 'agency_staff_mutex')
+              && preg_match('/\bFOR\s+UPDATE\b/i', $waiting) === 1) {
+              break;
+            }
+            if (microtime(TRUE) >= $deadline) {
+              throw new RuntimeException('Removal did not reach the held domain mutex.');
+            }
+            usleep(20000);
+          } while (TRUE);
+          file_put_contents($input['observed'], 'blocked');
+          if ($input['rollback']) {
+            throw new RuntimeException('Synthetic reference rollback.');
+          }
+          return ['outcome' => 'committed'];
+        }
         $checkpoint();
+        if ($input['mode'] === 'domain_policy') {
+          $stored = (new DatabaseStorage($database, 'config'))->read('agency.settings');
+          return ['outcome' => 'observed', 'period' => $stored['policy']['retention_after_close']];
+        }
         if ($input['rollback'] ?? FALSE) {
           throw new RuntimeException('Synthetic domain failure.');
         }
@@ -120,7 +181,7 @@ $builder = new class('discoveryWorker') extends TestCase {
       }
     });
     $outbox = new EvidenceOutbox($database, $logger, new Php(), $time);
-    file_put_contents($input['started'], 'started');
+    $announce();
     print json_encode(['delivered' => $outbox->drain()], JSON_THROW_ON_ERROR);
   }
 

@@ -43,6 +43,7 @@ final class EvidenceOutbox {
       'suspendAccess',
       'close',
       'moveForward',
+      'removeExpiredDiscovery',
     ], TRUE)
       || !in_array($state, ['invited', 'exploring', 'prepared', 'paused', 'withdrawn', 'closed', 'moved_forward'], TRUE)
       || !in_array($waitingOn, ['agency', 'participant'], TRUE)
