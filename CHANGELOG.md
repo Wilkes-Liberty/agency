@@ -10,6 +10,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - AGENTS.md: PR and issue text is written for the reviewing operator; agent rules are not restated there.
 
+- README and the Discovery contract describe the authorized retention removal
+  service, retention-start semantics for withdrawn and closed records, and host
+  responsibilities for scheduling, message custody and backup restoration.
+
+### Added
+
+- Interrupted-batch and withdrawn-terminal retention controls. An earlier
+  committed removal stays removed when a later item rolls back; the same
+  current policy and recorded terminal time apply after Stop. GitHub CI now
+  requires these concurrent retention cases to execute.
+
 ## [1.0.0-alpha2] - 2026-10-14
 
 Prepared prerelease; publication requires maintainer approval. See the

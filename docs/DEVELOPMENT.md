@@ -90,9 +90,10 @@ because lock, savepoint and transaction behavior differs by engine. Each job ass
 the resolved version and candidate symlink and requires executed, non-skipped
 functional tests. A separate job runs PHPStan against a Drupal 11.4 analysis host.
 Every database lane also executes the domain suite and explicitly checks that
-the independent-writer, delivery-marker and summary-savepoint cases ran without
-skips. The CLI-only workers accept kernel-test-prefixed connection options via
-standard input and use synthetic identities and signing material.
+the independent-writer, delivery-marker, summary-savepoint and retention
+removal cases ran without skips. The CLI-only workers accept kernel-test-prefixed
+connection options via standard input and use synthetic identities and signing
+material.
 
 The Drupal.org pipeline uses the standard contrib templates with previous-major and
 previous-minor lanes enabled. A configuration file is not a successful pipeline:
