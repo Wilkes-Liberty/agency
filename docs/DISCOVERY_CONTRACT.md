@@ -195,10 +195,12 @@ delete retained records. Expiry, revocation, suspension, account deactivation
 and subject rebinding immediately deny summary reads. Help is a contact route,
 not a terminal domain mutation. Authorized operator suspension remains possible.
 
-The separate [retention maintenance preview](DISCOVERY_RETENTION.md) uses the
-current retention policy and recorded terminal time. It requires an explicit
-maintenance permission and returns bounded timing facts only. It does not
-remove records or alter summary access.
+The separate [retention maintenance services](DISCOVERY_RETENTION.md) use the
+current retention policy and recorded terminal time. Preview requires an
+explicit maintenance permission and returns bounded timing facts only. Removal
+requires a second restricted permission, a reviewed plan and an exact retry
+key. Neither service alters summary access by itself; closing a visibility
+window still does not delete retained records.
 
 After an uncertain withdrawal, a separately authorized summary showing
 `withdrawn` confirms that state, without asserting evidence-delivery status.
@@ -295,8 +297,10 @@ optional flags. It does not restore a browser-cached previous state.
 ## Callable inputs and synthetic fixture
 
 Container service IDs are `agency_staff.commands`, `agency_staff.invitations`,
-`agency_staff.reads`, `agency_staff.outbox` and `agency_staff.identity`.
+`agency_staff.reads`, `agency_staff.outbox`, `agency_staff.identity`,
+`agency_staff.retention` and `agency_staff.retention_removal`.
 Replace the identity service through the host's dependency-injection integration.
+The retention services are internal maintenance ports; they expose no route.
 All methods below return arrays with the outcomes above:
 
 ```php

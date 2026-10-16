@@ -293,6 +293,73 @@ class RetentionRemovalTest extends KernelTestBase {
   }
 
   /**
+   * A later batch item can fail after earlier removals have already committed.
+   */
+  public function testInterruptedBatchLeavesCompletedRemovals(): void {
+    $first = $this->terminal();
+    $second = $this->terminal('person-two');
+    $service = $this->container->get('agency_staff.retention_removal');
+    $prepared_first = $service->prepare($first->uuid());
+    $this->assertSame('committed', $service->remove($first->uuid(), $prepared_first['plan_sha256'], 'batch-first')['outcome']);
+    $prepared_second = $service->prepare($second->uuid());
+    $this->assertSame('prepared', $prepared_second['outcome']);
+    $this->container->get('database')->query("ALTER TABLE {agency_staff_outbox} ADD CONSTRAINT retention_batch_refusal CHECK (operation <> 'removeExpiredDiscovery' OR relationship_uuid <> '" . $second->uuid() . "')");
+    $before_second = $this->businessHash();
+    $this->assertSame('refused', $service->remove($second->uuid(), $prepared_second['plan_sha256'], 'batch-second')['outcome']);
+    $this->assertSame($before_second, $this->businessHash());
+    $this->assertSame(0, $this->countRows('agency_discovery', ['uuid' => $first->uuid()]));
+    $this->assertSame(1, $this->countRows('agency_discovery', ['uuid' => $second->uuid()]));
+    $this->assertSame(1, $this->countRows('agency_staff_intent'));
+    $this->assertSame(1, $this->countRows('agency_staff_outbox', ['operation' => 'removeExpiredDiscovery']));
+    $drop = $this->container->get('database')->driver() === 'pgsql' ? 'DROP CONSTRAINT' : 'DROP CHECK';
+    $this->container->get('database')->query('ALTER TABLE {agency_staff_outbox} ' . $drop . ' retention_batch_refusal');
+    $this->assertSame('committed', $service->remove($second->uuid(), $prepared_second['plan_sha256'], 'batch-second')['outcome']);
+    $this->assertSame(0, $this->countRows('agency_discovery'));
+    $this->assertSame(2, $this->countRows('agency_staff_intent'));
+  }
+
+  /**
+   * Withdrawal uses the same recorded terminal time under current policy.
+   */
+  public function testWithdrawnRetentionUsesCurrentPolicy(): void {
+    $commands = $this->container->get('agency_staff.commands');
+    $invitations = $this->container->get('agency_staff.invitations');
+    $input = [
+      'display_name' => 'Synthetic person',
+      'contact' => ['kind' => 'email', 'value' => 'synthetic@example.test'],
+      'owner_contact' => ['kind' => 'url', 'value' => 'https://example.test/help'],
+      'next_action' => [
+        'summary' => 'Choose whether to talk.',
+        'why_it_helps' => 'Learn the next step.',
+        'side' => 'participant',
+        'expected_by' => $this->now + 3600,
+        'optional' => TRUE,
+      ],
+    ];
+    $start = $commands->startDiscovery($input, 'withdraw-start');
+    $this->assertSame('committed', $start['outcome']);
+    $id = $start['receipt']['relationship_id'];
+    $issued = $invitations->issue($id, 'withdraw-issue', 1);
+    $this->assertSame('committed', $issued['outcome']);
+    $accepted = $invitations->accept($issued['invitation']['token'], 'withdraw-accept');
+    $this->assertSame('committed', $accepted['outcome']);
+    $stopped = $commands->withdrawRelationship($id, [], 'withdraw-stop', $accepted['version']);
+    $this->assertSame('committed', $stopped['outcome']);
+    $service = $this->container->get('agency_staff.retention_removal');
+    $this->assertSame('not_due', $service->prepare($id)['reason']);
+    $this->now += 86400;
+    $this->assertSame('prepared', $service->prepare($id)['outcome']);
+    $this->config('agency.settings')->set('policy.retention_after_close', 'P2D')->save();
+    $this->assertSame('not_due', $service->prepare($id)['reason']);
+    $this->now += 86400;
+    $prepared = $service->prepare($id);
+    $this->assertSame('prepared', $prepared['outcome']);
+    $this->assertSame('committed', $service->remove($id, $prepared['plan_sha256'], 'withdraw-remove')['outcome']);
+    $this->assertSame(0, $this->countRows('agency_discovery'));
+    $this->assertSame('invitation_closed', $invitations->accept($issued['invitation']['token'], 'withdraw-accept')['reason']);
+  }
+
+  /**
    * Real invitation and start-command retries cannot restore removed records.
    */
   public function testOldCommandAndInvitationRetriesStayClosed(): void {
@@ -515,14 +582,14 @@ class RetentionRemovalTest extends KernelTestBase {
   /**
    * Seeds synthetic records and two complete relationship revisions.
    */
-  protected function terminal(): InternalRecord {
+  protected function terminal(string $subject = 'person-one'): InternalRecord {
     $store = $this->container->get('agency_staff.store');
     $person = $store->create('agency_person', [
       'display_name' => 'Synthetic personal name',
       'contact_kind' => 'email',
       'contact_value' => 'synthetic@example.test',
     ]);
-    $identity = new Principal('https://identity.example.test', 'person-one');
+    $identity = new Principal('https://identity.example.test', $subject);
     $binding = $store->create('agency_principal', [
       'principal_key' => $identity->key(),
       'issuer' => $identity->issuer,
@@ -545,7 +612,7 @@ class RetentionRemovalTest extends KernelTestBase {
     $store->create('agency_invitation', [
       'relationship_uuid' => $record->uuid(),
       'principal_uuid' => $binding->uuid(),
-      'token_hash' => hash('sha256', 'synthetic-token-value'),
+      'token_hash' => hash('sha256', 'synthetic-token-value-' . $subject),
       'status' => 'consumed',
       'expires' => $this->now - 86400,
       'delivery_state' => 'recorded',

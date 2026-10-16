@@ -2,11 +2,16 @@
 
 Implementation record: [Agency issue 3630743](https://www.drupal.org/project/agency/issues/3630743).
 
-The current tenant policy supplies the retention period. A relationship's
-recorded terminal time supplies its start. Changing policy can move the deadline;
-the existing summary contract also reads current policy. A removal command must
-compare its reviewed preview with fresh policy and records before deleting.
-Summary expiry is a separate access decision and is never removal evidence.
+The current tenant policy supplies the retention period. There is no package
+default. A relationship's recorded `terminal_at` supplies the start for both
+terminal states: participant Stop (`withdrawn`) and coordinator close
+(`closed`). `moved_forward` is not a retention terminal state. Changing the
+current period can move every outstanding deadline without rewriting stored
+terminal times; a previously due record can become waiting, and a waiting
+record can become due. The existing summary contract also reads current policy.
+A removal command must compare its reviewed plan with fresh policy and records
+before deleting. Summary-link expiry and message-payload expiry are separate
+access or custody decisions and are never removal evidence.
 
 ## Read-only preview
 

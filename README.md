@@ -57,9 +57,15 @@ Discovery rejects zero durations. Calendar years/months clamp to the last day
 of the target month in UTC before adding the remaining days/time. Summary
 expiry is independent of record retention.
 
-The restricted [retention preview](docs/DISCOVERY_RETENTION.md) reports when
-closed and withdrawn records become due under current policy. Automatic removal
-and host scheduling are not implemented; a preview is not evidence of deletion.
+The restricted [retention services](docs/DISCOVERY_RETENTION.md) report when
+closed and withdrawn records become due, then remove one reviewed expired
+context and its revisions. Retention starts at each record's stored terminal
+time. Current policy supplies the period; a later change moves outstanding
+deadlines without rewriting that timestamp. Shared person and identity records
+remain when other relationships still need them. Automatic scheduling, message
+custody and backup restoration stay with the host. A preview is not evidence of
+deletion. Summary-link expiry and message-payload expiry are separate from
+relationship retention.
 
 ## Storage and dependencies
 
