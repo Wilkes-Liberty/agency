@@ -90,13 +90,16 @@ because lock, savepoint and transaction behavior differs by engine. Each job ass
 the resolved version and candidate symlink and requires executed, non-skipped
 functional tests. A separate job runs PHPStan against a Drupal 11.4 analysis host.
 Every database lane also executes the domain suite and explicitly checks that
-the independent-writer, delivery-marker and summary-savepoint cases ran without
-skips. The CLI-only workers accept kernel-test-prefixed connection options via
-standard input and use synthetic identities and signing material.
+the independent-writer, interrupted-drain, delivery-marker and summary-savepoint
+cases ran without skips. The CLI-only workers accept kernel-test-prefixed
+connection options via standard input and use synthetic identities and signing
+material.
 
-The Drupal.org pipeline uses the standard contrib templates with previous-major and
-previous-minor lanes enabled. A configuration file is not a successful pipeline:
-read both environments' actual results before making compatibility or release claims.
+The Drupal.org pipeline uses the standard contrib templates with previous-major,
+previous-minor and maximum-PHP lanes enabled. PHPUnit runs the `agency` group so
+MySQL lanes do not execute the explicit PostgreSQL host-qualification test. A
+configuration file is not a successful pipeline: read both environments' actual
+results before making compatibility or release claims.
 
 Do not expand a version constraint merely because the code looks compatible.
 Use the upstream lifecycle and tested dependencies to maintain the support boundary.

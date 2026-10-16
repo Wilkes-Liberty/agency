@@ -294,9 +294,39 @@ final class DiscoveryDomainTest extends KernelTestBase {
     $this->assertSame('already_used', $invitations->accept($resend['invitation']['token'], 'other-accept')['reason']);
     $this->identity->eligible = FALSE;
     $this->assertSame('not_found', $commands->suspendAccess($id, [], 'suspend-denied', 0)['reason']);
-    $this->assertSame([], $this->container->get('agency_staff.reads')->forActor('missing')['workspace'] ?? []);
+    $this->assertSame(['outcome' => 'refused', 'reason' => 'not_found'], $this->container->get('agency_staff.reads')->forActor('missing'));
     $relationship = $this->container->get('agency_staff.store')->find('agency_discovery', ['uuid' => $id]);
     $this->assertFalse($relationship->access('view', User::load(1)));
+  }
+
+  /**
+   * Missing, unrelated, rebound and deactivated contexts share one refusal.
+   */
+  public function testMissingAndUnrelatedReadsAreIdentical(): void {
+    [$id] = $this->accepted();
+    $reads = $this->container->get('agency_staff.reads');
+    $commands = $this->container->get('agency_staff.commands');
+    $denied = ['outcome' => 'refused', 'reason' => 'not_found'];
+    $missing = '00000000-0000-4000-8000-000000000000';
+    $this->identity->principal = new Principal('https://identity.example.test', 'other-person');
+    foreach ([$id, $missing] as $target) {
+      $this->assertSame($denied, $reads->forActor($target));
+      $this->assertSame($denied, $reads->summary($target));
+      $this->assertSame($denied, $commands->withdrawRelationship($target, [], 'unrelated-stop', 0));
+      $this->assertSame($denied, $commands->respond($target, ['choice' => 'yes'], 'unrelated-reply', 1));
+    }
+    $this->assertSame([], $reads->forActor()['contexts']);
+    $this->identity->principal = new Principal('https://identity.example.test', 'person-one', FALSE);
+    $this->assertSame($denied, $reads->forActor($id));
+    $this->assertSame($denied, $reads->forActor($missing));
+    $this->identity->principal = NULL;
+    $unavailable = ['outcome' => 'refused', 'reason' => 'identity_unavailable'];
+    $this->assertSame($unavailable, $reads->forActor($id));
+    $this->assertSame($unavailable, $reads->forActor($missing));
+    $this->assertSame($unavailable, $reads->summary($id));
+    $this->assertSame($unavailable, $reads->summary($missing));
+    $this->identity->principal = new Principal('https://identity.example.test', 'person-one');
+    $this->assertSame('exploring', $reads->forActor($id)['workspace']['state']);
   }
 
   /**
@@ -772,6 +802,10 @@ final class DiscoveryDomainTest extends KernelTestBase {
     $this->assertSame('committed', $closed['outcome']);
     $summary = $reads->summary($id)['summary'];
     $this->assertSame('Thank you for the conversation.', $summary['message']);
+    $until = Policy::addPeriod('P30D', $closed['receipt']['effective_at']);
+    $this->assertSame($until, $summary['readable_until']);
+    $this->config('agency.settings')->set('policy.summary_window', 'P365D')->save();
+    $this->assertSame($until, $reads->summary($id)['summary']['readable_until'], 'A later summary window cannot extend a stored deadline.');
     $this->assertSame([
       'state',
       'effective_at',
@@ -1006,6 +1040,35 @@ final class DiscoveryDomainTest extends KernelTestBase {
     $name = 'agency_failure_' . substr(hash('sha256', $database->getPrefix()), 0, 12);
     $clause = $database->driver() === 'mysql' ? ' DROP CHECK ' : ' DROP CONSTRAINT ';
     $database->query('ALTER TABLE {' . $table . '}' . $clause . $name);
+  }
+
+  /**
+   * An interrupted append rolls back delivery and keeps one pending intent.
+   */
+  public function testInterruptedDrainRetainsIntent(): void {
+    [$id] = $this->accepted();
+    $this->installChain();
+    $this->signingKey();
+    $database = $this->container->get('database');
+    $chain = $this->container->get('audit_chain.logger');
+    $logger = $this->createMock(AuditChainLoggerInterface::class);
+    $logger->method('logKeyed')->willReturnCallback(static function (string $channel, string $operation, array $metadata) use ($chain): void {
+      $chain->logKeyed($channel, $operation, $metadata);
+      throw new \RuntimeException('Synthetic interruption after append.');
+    });
+    $outbox = new EvidenceOutbox(
+      $database, $logger, $this->container->get('uuid'),
+      $this->container->get('datetime.time'),
+    );
+    $this->assertSame(0, $outbox->drain());
+    $this->assertSame(0, (int) $database->select('audit_chain_log', 'l')->countQuery()->execute()->fetchField());
+    $this->assertTrue($outbox->pending($id));
+    $health = $outbox->health(3600);
+    $this->assertSame(1, $health['attempts']);
+    $this->assertSame('evidence_delivery_failed', $health['last_error']);
+    $this->assertSame(3, $this->container->get('agency_staff.outbox')->drain());
+    $this->assertFalse($this->container->get('agency_staff.outbox')->pending($id));
+    $this->assertTrue($this->container->get('audit_chain.logger')->verify()['ok']);
   }
 
   /**
