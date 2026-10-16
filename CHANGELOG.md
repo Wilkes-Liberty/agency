@@ -21,6 +21,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   current policy and recorded terminal time apply after Stop. GitHub CI now
   requires these concurrent retention cases to execute.
 
+- Discovery verification for identical missing and unrelated refusals, stored
+  summary-window expiry, and an interrupted evidence drain that retains one
+  pending intent. Drupal.org PHPUnit runs the `agency` group so MySQL lanes do
+  not execute the explicit PostgreSQL host-qualification test. CSpell uses a
+  project dictionary, and COPYING is ignored as GPL boilerplate.
+
 ## [1.0.0-alpha2] - 2026-10-14
 
 Prepared prerelease; publication requires maintainer approval. See the

@@ -24,3 +24,9 @@ variables:
   CORE_PREVIOUS_PHP_MIN: '8.2'
   # Keep the upcoming minor visible as an explicit forward-compatibility check.
   OPT_IN_TEST_NEXT_MINOR: '1'
+  OPT_IN_TEST_MAX_PHP: '1'
+  # Ordinary domain and installed-host tests. The PostgreSQL COMMIT-fault
+  # qualification is invoked explicitly and must not fail MySQL lanes.
+  _PHPUNIT_TESTGROUPS: 'agency'
+  # GPL boilerplate uses the FSF's placeholder names.
+  _CSPELL_IGNORE_PATHS: 'COPYING'
