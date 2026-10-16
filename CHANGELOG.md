@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- AGENTS.md: PR and issue text is written for the reviewing operator; agent rules are not restated there.
+
 ## [1.0.0-alpha2] - 2026-10-14
 
 Prepared prerelease; publication requires maintainer approval. See the
