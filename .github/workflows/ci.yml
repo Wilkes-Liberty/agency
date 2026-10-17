@@ -282,9 +282,14 @@ jobs:
           export BROWSERTEST_OUTPUT_DIRECTORY="$PWD/web/sites/simpletest/browser_output"
           host="$PWD/web/modules/contrib/agency/modules/agency_host/tests/src"
           test -d "$host/Kernel"
-          paths=("$host/Unit" "$host/Kernel")
-          if [ -d "$host/Functional" ]; then
-            paths+=("$host/Functional")
+          paths=("$host/Unit")
+          # Drupal 10.6's PHPUnit 9 runner is the unit suite. Kernel proofs
+          # for the host adapter run on the 11.x lanes, including PostgreSQL 16.
+          if [ "${{ matrix.minor }}" != "10.6" ]; then
+            paths+=("$host/Kernel")
+            if [ -d "$host/Functional" ]; then
+              paths+=("$host/Functional")
+            fi
           fi
           vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
             --log-junit "$PWD/agency-host-junit.xml" \

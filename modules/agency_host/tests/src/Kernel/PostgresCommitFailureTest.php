@@ -12,6 +12,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Exercises a real failed COMMIT, its callbacks and connection reuse.
+ *
+ * @group agency_host
  */
 #[Group('agency_host')]
 #[RunTestsInSeparateProcesses]

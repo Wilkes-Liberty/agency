@@ -16,6 +16,8 @@ use PHPUnit\Framework\Attributes\Group;
  * Failure modes: self-approval, forged target/GO, expiry, drift and ambiguous JSON.
  *
  * These isolate the external attestation boundary, not database qualification.
+ *
+ * @group agency_host
  */
 #[CoversClass(CleanOriginReceipt::class)]
 #[Group('agency_host')]

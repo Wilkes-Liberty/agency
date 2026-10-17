@@ -58,10 +58,10 @@ vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
 ```
 
 The GitHub matrix installs the host identity/OAuth stack and Drush so
-`modules/agency_host` unit and kernel tests run on every Drupal/PHP lane,
-including the PostgreSQL 16 leg. Invitation smtp and postmark_webhooks cases
-skip when those modules are not on the test host. Clean-origin and other
-PostgreSQL-only proofs skip on MySQL. See
+`modules/agency_host` unit tests run on every Drupal/PHP lane. Kernel tests
+run on the 11.x lanes, including PostgreSQL 16. Invitation smtp and
+postmark_webhooks cases skip when those modules are not on the test host.
+Clean-origin, evidence-lock and other PostgreSQL-only proofs skip on MySQL. See
 [.github/workflows/ci.yml](../.github/workflows/ci.yml) for the complete
 executable setup, including version assertions and test-result checks.
 

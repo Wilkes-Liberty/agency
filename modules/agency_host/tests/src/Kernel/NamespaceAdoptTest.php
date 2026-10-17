@@ -10,6 +10,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Copies former chronicle_agency storage without dropping the source.
+ *
+ * @group agency_host
  */
 #[Group('agency_host')]
 #[RunTestsInSeparateProcesses]

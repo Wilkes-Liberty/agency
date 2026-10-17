@@ -105,6 +105,8 @@ use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
  * Exercises actual host services and Agency persistence with synthetic IdP I/O.
+ *
+ * @group agency_host
  */
 #[Group('agency_host')]
 #[RunTestsInSeparateProcesses]
@@ -172,6 +174,8 @@ final class DiscoveryHostTest extends KernelTestBase {
 
   /**
    * A raw writer keeps its transaction; bootstrap refuses before reserving.
+   *
+   * @dataProvider originLockTables
    */
   #[DataProvider('originLockTables')]
   public function testCleanOriginQualificationRefusesConcurrentWriter(string $table): void {
@@ -203,6 +207,8 @@ final class DiscoveryHostTest extends KernelTestBase {
 
   /**
    * A primary insertion failure retains independently consumed origin and guard.
+   *
+   * @dataProvider originPrimaryFaults
    */
   #[DataProvider('originPrimaryFaults')]
   public function testCleanOriginQualificationPrimaryRollback(bool $deferred): void {
@@ -318,6 +324,8 @@ final class DiscoveryHostTest extends KernelTestBase {
 
   /**
    * Independent reservation and completion fail atomically under storage faults.
+   *
+   * @dataProvider originLedgerFaults
    */
   #[DataProvider('originLedgerFaults')]
   public function testCleanOriginQualificationLedgerFault(string $table, string $operation, bool $reserved, bool $deferred): void {
@@ -402,6 +410,8 @@ final class DiscoveryHostTest extends KernelTestBase {
 
   /**
    * The first fenced snapshot includes a commit between mutex and authmap locks.
+   *
+   * @dataProvider originForeignWriteWindows
    */
   #[DataProvider('originForeignWriteWindows')]
   public function testCleanOriginQualificationForeignCommit(string $window): void {
@@ -518,6 +528,8 @@ final class DiscoveryHostTest extends KernelTestBase {
 
   /**
    * Missing approval, active entry and unreviewed schemas cannot consume origins.
+   *
+   * @dataProvider originExecutionRefusals
    */
   #[DataProvider('originExecutionRefusals')]
   public function testCleanOriginQualificationExecutionRefusal(string $fault): void {
@@ -845,12 +857,19 @@ final class DiscoveryHostTest extends KernelTestBase {
   }
 
   /**
+   * Skips PostgreSQL-only proofs on other engines.
+   */
+  private function requirePostgreSql(string $reason): void {
+    if ($this->container->get('database')->getConnectionOptions()['driver'] !== 'pgsql') {
+      $this->markTestSkipped($reason);
+    }
+  }
+
+  /**
    * Makes a synthetic pinned receipt while preserving the old coverage record.
    */
   private function cleanOriginPlanner(?string $issuer = NULL): array {
-    if ($this->container->get('database')->getConnectionOptions()['driver'] !== 'pgsql') {
-      $this->markTestSkipped('Clean-origin qualification requires PostgreSQL 16.');
-    }
+    $this->requirePostgreSql('Clean-origin qualification requires PostgreSQL 16.');
     $this->config('agency_host.settings')->set('enabled', FALSE)->save();
     $identity = Settings::get('agency_host_identity');
     $identity['binding_mode'] = 'unbound_only';
@@ -963,6 +982,8 @@ final class DiscoveryHostTest extends KernelTestBase {
 
   /**
    * Clean-origin subjects cannot inherit matching Drupal account bindings.
+   *
+   * @dataProvider dedicatedBindingProviders
    */
   #[DataProvider('dedicatedBindingProviders')]
   public function testDedicatedAuthorityUnboundOnly(string $provider, bool $orphan): void {
@@ -1006,6 +1027,8 @@ final class DiscoveryHostTest extends KernelTestBase {
 
   /**
    * Restoring authority configuration cannot revive a drifted history epoch.
+   *
+   * @dataProvider dedicatedAuthorityChanges
    */
   #[DataProvider('dedicatedAuthorityChanges')]
   public function testDedicatedAuthorityDrift(string $field, string $changed): void {
@@ -1114,6 +1137,8 @@ final class DiscoveryHostTest extends KernelTestBase {
 
   /**
    * Unknown or missing binding semantics cannot pass either identity path.
+   *
+   * @dataProvider dedicatedInvalidModes
    */
   #[DataProvider('dedicatedInvalidModes')]
   public function testDedicatedAuthorityInvalidMode(?string $mode): void {
@@ -1435,6 +1460,7 @@ final class DiscoveryHostTest extends KernelTestBase {
    * Complete configuration passes before participant entry is enabled.
    */
   public function testRuntimeReadinessAcceptsCompleteConfiguration(): void {
+    $this->requirePostgreSql('Complete readiness includes the PostgreSQL 16 check.');
     $this->config('agency.settings')->set('langcode', 'en')->save();
     $this->config('agency_host.settings')->set('enabled', FALSE)
       ->set('bff_client_id', 'synthetic-bff')->save();
@@ -2141,9 +2167,17 @@ final class DiscoveryHostTest extends KernelTestBase {
       $stack->pop();
     }
 
-    $result = $this->container->get('access_manager')->checkNamedRoute('agency_host.console', [], $this->coordinator, TRUE);
-    $this->assertTrue($result->isForbidden());
-    $this->assertSame(0, $result->getCacheMaxAge());
+    try {
+      $result = $this->container->get('access_manager')->checkNamedRoute('agency_host.console', [], $this->coordinator, TRUE);
+      $this->assertTrue($result->isForbidden());
+      $this->assertSame(0, $result->getCacheMaxAge());
+    }
+    finally {
+      // Kernel teardown saves the current request session.
+      $request = Request::create('/');
+      $request->setSession(new Session(new MockArraySessionStorage()));
+      $stack->push($request);
+    }
   }
 
   /**
@@ -3090,6 +3124,8 @@ final class DiscoveryHostTest extends KernelTestBase {
 
   /**
    * Computed dates require first-commit version evidence, never just a receipt.
+   *
+   * @dataProvider computedDeadlineCases
    */
   #[DataProvider('computedDeadlineCases')]
   public function testConsoleComputedDeadlineEvidence(string $command, bool $replay): void {
@@ -4836,6 +4872,8 @@ final class DiscoveryHostTest extends KernelTestBase {
 
   /**
    * A received transition with a lost response cannot suppress its opposite.
+   *
+   * @dataProvider unacknowledgedEvidenceTransitions
    */
   #[DataProvider('unacknowledgedEvidenceTransitions')]
   public function testEvidenceAlertUnacknowledgedTransition(int $lostResponse): void {
@@ -5047,6 +5085,7 @@ final class DiscoveryHostTest extends KernelTestBase {
    * Supplies only synthetic monitoring configuration for worker controls.
    */
   private function configureEvidenceWorker(): void {
+    $this->requirePostgreSql('Evidence worker locks require PostgreSQL.');
     $settings = new Settings(array_replace(Settings::getAll(), [
       'agency_host_evidence_alert' => [
         'url' => 'https://alerts.example.test/agency',
@@ -5061,6 +5100,7 @@ final class DiscoveryHostTest extends KernelTestBase {
    * Public health drives retryable degraded and recovery alert delivery.
    */
   public function testEvidenceHealthAlertDeliveryAndRecovery(): void {
+    $this->requirePostgreSql('Evidence health alerts require PostgreSQL locks.');
     $this->accepted();
     $outbox = $this->container->get('agency_staff.outbox');
     $outbox->drain();
@@ -5131,6 +5171,7 @@ final class DiscoveryHostTest extends KernelTestBase {
    * Age alone alerts before any delivery attempt has failed.
    */
   public function testEvidenceAgeOnlyOverdue(): void {
+    $this->requirePostgreSql('Evidence health alerts require PostgreSQL locks.');
     $this->accepted();
     $clock = $this->createMock(TimeInterface::class);
     $clock->method('getCurrentTime')->willReturn(time() + 301);

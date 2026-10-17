@@ -16,6 +16,8 @@ use PHPUnit\Framework\Attributes\Group;
  * Failure modes: inherited settings survive absence; malformed JSON/retention
  * enables custody; a malformed retained key is accepted; rotation loses the
  * previous key; an environment load prints key material.
+ *
+ * @group agency_host
  */
 #[Group('agency_host')]
 final class DeliveryEnvironmentTest extends UnitTestCase {

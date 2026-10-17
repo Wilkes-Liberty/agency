@@ -14,6 +14,13 @@ final class StrictConsoleStorage extends DatabaseStorage {
   /**
    * {@inheritdoc}
    */
+  public function getAllKeys(): iterable {
+    return array_keys($this->getAll());
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function getMultiple(array $keys) {
     if (!$keys) {
       return [];

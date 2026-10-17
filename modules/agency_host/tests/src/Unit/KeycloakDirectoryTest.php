@@ -18,6 +18,8 @@ use PHPUnit\Framework\Attributes\Group;
 
 /**
  * Exercises readback failures without contacting an identity provider.
+ *
+ * @group agency_host
  */
 #[CoversClass(KeycloakDirectory::class)]
 #[Group('agency_host')]

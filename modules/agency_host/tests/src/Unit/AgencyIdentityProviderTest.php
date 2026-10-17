@@ -26,6 +26,8 @@ use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
  * Proves issuer and changing-account failures at the trusted identity boundary.
+ *
+ * @group agency_host
  */
 #[CoversClass(AgencyIdentityProvider::class)]
 #[Group('agency_host')]

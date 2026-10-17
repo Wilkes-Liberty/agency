@@ -24,6 +24,8 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 
 /**
  * Verifies the participant channel's client-credentials boundary.
+ *
+ * @group agency_host
  */
 #[CoversClass(BffAccess::class)]
 #[Group('agency_host')]

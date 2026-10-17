@@ -14,6 +14,8 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
  * Exercises policy import/export using the committed ignore list.
+ *
+ * @group agency_host
  */
 #[Group('agency_host')]
 #[RunTestsInSeparateProcesses]

@@ -21,6 +21,8 @@ use Symfony\Component\Routing\Route;
 
 /**
  * Covers language prefixes, failed routing and unrelated response boundaries.
+ *
+ * @group agency_host
  */
 #[CoversClass(PrivateResponseSubscriber::class)]
 #[Group('agency_host')]
@@ -28,6 +30,8 @@ final class PrivateResponseSubscriberTest extends UnitTestCase {
 
   /**
    * Localized and aliased responses retain privacy before and after routing.
+   *
+   * @dataProvider protectedResponses
    */
   #[DataProvider('protectedResponses')]
   public function testProtectedResponse(string $raw_path, string $processed_path, ?string $route_path, int $status, string $method, ?array $expected_payload): void {

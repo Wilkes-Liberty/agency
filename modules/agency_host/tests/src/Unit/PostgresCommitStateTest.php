@@ -12,12 +12,16 @@ use PHPUnit\Framework\Attributes\Group;
 
 /**
  * Uncertain client status cannot authorize clearing the transaction stack.
+ *
+ * @group agency_host
  */
 #[Group('agency_host')]
 final class PostgresCommitStateTest extends UnitTestCase {
 
   /**
    * Both an active transaction and an unreadable status remain rollbackable.
+   *
+   * @dataProvider uncertainStates
    */
   #[DataProvider('uncertainStates')]
   public function testUncertainStatusPreservesRollback(bool $unreadable): void {

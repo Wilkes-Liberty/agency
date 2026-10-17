@@ -43,6 +43,8 @@ use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
  * the checkout, where composer-patches has already applied the cast.
  *
  * @see \Drupal\openid_connect\Service\LogoutService::getMappedUsers()
+ *
+ * @group agency_host
  */
 #[CoversClass(LogoutService::class)]
 #[CoversClass(OpenIDConnectRedirectController::class)]

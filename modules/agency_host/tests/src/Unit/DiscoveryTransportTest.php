@@ -14,6 +14,8 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 /**
  * Covers ambiguous persistence and JSON object boundaries before routing fixes.
+ *
+ * @group agency_host
  */
 #[CoversClass(DiscoveryTransport::class)]
 #[Group('agency_host')]
