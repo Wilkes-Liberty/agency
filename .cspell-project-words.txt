@@ -12,6 +12,8 @@ allowlisted
 BFF
 Drush
 drush
+HMAC
+webcms
 billability
 ciphertext
 cutover
