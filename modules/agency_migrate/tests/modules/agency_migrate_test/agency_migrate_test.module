@@ -1,0 +1,6 @@
+<?php
+
+/**
+ * @file
+ * Synthetic types used only by agency_migrate kernel tests.
+ */

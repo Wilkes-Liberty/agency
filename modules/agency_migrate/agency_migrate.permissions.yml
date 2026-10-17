@@ -1,0 +1,8 @@
+run agency migrate:
+  title: 'Run Agency record migration'
+  description: 'Copy, resume, reconcile, report and roll back migrated records. Write commands still require an explicit execute flag.'
+  restrict access: true
+administer agency migrate authority:
+  title: 'Change Agency migration authority'
+  description: 'Advance or roll back the per-domain authority register. Each change is recorded as evidence.'
+  restrict access: true
