@@ -1,0 +1,39 @@
+agency_migrate.authority:
+  type: config_object
+  label: 'Agency migration authority'
+  constraints:
+    FullyValidatable: ~
+  mapping:
+    domains:
+      type: sequence
+      label: 'Domains'
+      sequence:
+        type: mapping
+        label: 'Domain authority'
+        mapping:
+          state:
+            type: string
+            label: 'Authority state'
+            constraints:
+              Choice:
+                choices:
+                  - legacy
+                  - shadow
+                  - agency
+                  - removed
+          changed:
+            type: integer
+            label: 'Changed timestamp'
+          actor_hash:
+            type: string
+            label: 'Actor hash'
+            constraints:
+              Regex:
+                pattern: '/^[a-f0-9]{64}\z/'
+          reason:
+            type: string
+            label: 'Change reason'
+            constraints:
+              Length:
+                min: 1
+                max: 255

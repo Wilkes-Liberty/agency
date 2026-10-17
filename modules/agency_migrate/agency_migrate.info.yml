@@ -1,0 +1,8 @@
+name: Agency Migrate
+type: module
+description: 'Copies host records into Agency types with lineage, shadow reconciliation and reversible authority.'
+core_version_requirement: ^10.6 || ^11.3
+package: Agency
+dependencies:
+  - agency:agency
+  - audit_chain:audit_chain

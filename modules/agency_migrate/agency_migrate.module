@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * @file
+ * Schedules delivery of minimized migration lineage events.
+ */
+
+/**
+ * Implements hook_cron().
+ */
+function agency_migrate_cron(): void {
+  \Drupal::service('agency_migrate.outbox')->drain();
+}

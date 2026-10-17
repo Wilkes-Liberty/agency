@@ -1,0 +1,298 @@
+<?php
+
+/**
+ * @file
+ * Installs lineage, run, outbox and post-cutover write storage.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function agency_migrate_schema(): array {
+  return [
+    'agency_migrate_lineage' => [
+      'description' => 'Maps each copied source record to its Agency counterpart.',
+      'fields' => [
+        'lid' => [
+          'type' => 'serial',
+          'not null' => TRUE,
+        ],
+        'run_id' => [
+          'type' => 'varchar',
+          'length' => 36,
+          'not null' => TRUE,
+        ],
+        'source_entity_type' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'source_id' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+        'source_uuid' => [
+          'type' => 'varchar',
+          'length' => 36,
+          'not null' => TRUE,
+        ],
+        'source_revision_id' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+        'target_entity_type' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'target_id' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+        'target_uuid' => [
+          'type' => 'varchar',
+          'length' => 36,
+          'not null' => TRUE,
+        ],
+        'target_revision_id' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+        'content_digest' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'recorded' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+      ],
+      'primary key' => ['lid'],
+      'unique keys' => [
+        'source' => ['source_entity_type', 'source_id'],
+        'target' => ['target_entity_type', 'target_id'],
+      ],
+      'indexes' => [
+        'run' => ['run_id'],
+        'source_uuid' => ['source_uuid'],
+        'target_uuid' => ['target_uuid'],
+      ],
+    ],
+    'agency_migrate_run' => [
+      'description' => 'Bounded copy runs with a resume cursor.',
+      'fields' => [
+        'run_id' => [
+          'type' => 'varchar',
+          'length' => 36,
+          'not null' => TRUE,
+        ],
+        'plugin_id' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'status' => [
+          'type' => 'varchar',
+          'length' => 32,
+          'not null' => TRUE,
+        ],
+        'cursor_source_id' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+        'batch_size' => [
+          'type' => 'int',
+          'not null' => TRUE,
+        ],
+        'copied' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+        'skipped' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+        'started' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+        'updated' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+        'finished' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+        'error' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => FALSE,
+        ],
+      ],
+      'primary key' => ['run_id'],
+      'indexes' => [
+        'plugin_status' => ['plugin_id', 'status'],
+      ],
+    ],
+    'agency_migrate_outbox' => [
+      'description' => 'Minimized lineage and authority intents for Audit Chain.',
+      'fields' => [
+        'id' => [
+          'type' => 'varchar',
+          'length' => 36,
+          'not null' => TRUE,
+        ],
+        'operation' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'fingerprint' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'metadata' => [
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+        'recorded' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+        'delivered' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+        'attempts' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+        'last_attempt_at' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+        'last_error_at' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+      ],
+      'primary key' => ['id'],
+      'unique keys' => [
+        'fingerprint' => ['fingerprint'],
+      ],
+      'indexes' => [
+        'queued' => ['delivered', 'recorded'],
+      ],
+    ],
+    'agency_migrate_write_log' => [
+      'description' => 'Agency writes made after a domain became Agency-authoritative.',
+      'fields' => [
+        'wid' => [
+          'type' => 'serial',
+          'not null' => TRUE,
+        ],
+        'domain' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'entity_type' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'entity_id' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+        'entity_uuid' => [
+          'type' => 'varchar',
+          'length' => 36,
+          'not null' => TRUE,
+        ],
+        'recorded' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+        'replayed' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+      ],
+      'primary key' => ['wid'],
+      'indexes' => [
+        'pending' => ['domain', 'replayed'],
+      ],
+    ],
+    'agency_migrate_authority_event' => [
+      'description' => 'Durable authority transitions with actor hash and reason.',
+      'fields' => [
+        'eid' => [
+          'type' => 'serial',
+          'not null' => TRUE,
+        ],
+        'domain' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'from_state' => [
+          'type' => 'varchar',
+          'length' => 32,
+          'not null' => TRUE,
+        ],
+        'to_state' => [
+          'type' => 'varchar',
+          'length' => 32,
+          'not null' => TRUE,
+        ],
+        'actor_hash' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'reason' => [
+          'type' => 'varchar',
+          'length' => 255,
+          'not null' => TRUE,
+        ],
+        'recorded' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+      ],
+      'primary key' => ['eid'],
+      'indexes' => [
+        'domain' => ['domain', 'recorded'],
+      ],
+    ],
+  ];
+}
