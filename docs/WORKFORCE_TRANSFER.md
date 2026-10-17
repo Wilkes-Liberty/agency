@@ -1,15 +1,18 @@
 # Workforce transfer (Slice 2)
 
 Status: design and unregistered scaffolding. This is not an implementation
-contract and is not ready for gate G1. Slice 2 expand waits on ledger
-completion (package 01), ontology v0 (package 02) and operator G1 approval.
+contract and is not ready for gate G1. Package 01 published the caller
+ledger as draft [webcms#1900](https://github.com/Wilkes-Liberty/webcms/pull/1900)
+(`docs/agency-extraction/ledger.json` at
+`2216df30c3af736bd7f8b47832c2ea8572c1fd2b`). Slice 2 expand still waits on
+ontology v0 approval ([agency#25](https://github.com/Wilkes-Liberty/agency/pull/25)
+is draft, not approved) and operator G1.
 
 The document distinguishes **observed** Agency Discovery behavior in this
-package from **proposed** Slice 2 transfer. Rows that depend on the caller
-ledger or ontology v0 are marked **pending**. Legacy host source listed in
-the extraction plan was not readable from this checkout; mappings that
-need that source are **unverified** until reconciled against the ledger
-and the host tree.
+package from **proposed** Slice 2 transfer. Slice 2 ledger rows below cite
+that `ledger.json`. Ontology machine names stay **pending** until agency#25
+is approved. Host-tree class names that the ledger inventories but this
+checkout still cannot open remain **unverified** for expand.
 
 No tenant name, policy period, operating record or credential belongs in
 this package. Host identity, File Gate, Field Guard and Audit Chain remain
@@ -18,16 +21,17 @@ workforce relationship, account, role or invitation, and sends no message.
 
 ## 1. Responsibilities in scope
 
-Proposed ledger rows for Slice 2. Identifiers are placeholders until
-package 01 publishes the canonical ledger.
+Slice 2 rows from `docs/agency-extraction/ledger.json` at webcms#1900
+(`2216df30c3af736bd7f8b47832c2ea8572c1fd2b`). Row ids S2-L1–L5 are this
+design's labels, not ontology machine names.
 
-| Proposed row | Current authority (plan) | Target | Notes |
+| Proposed row | Current authority (ledger) | Target | Notes |
 | --- | --- | --- | --- |
-| S2-L1 Staff invitation and onboarding | Host `chronicle_staff_invite` | Agency Staff | Employee/contractor invitation, single-use token, classification chosen by the issuer not the invitee. Account, role and profile-bundle minting stay on the host adapter after Agency commits acceptance. **Pending 01.** |
-| S2-L2 Client-access invitation protocol (dormant) | Host `chronicle_client_access` (not enabled) | Agency Staff, adapted | Issuer/subject binding, POST-only acceptance, per-read entitlement. Do not enable or depend on the dormant host module. **Pending 01.** |
-| S2-L3 Personnel and profile evidence | Host `chronicle_personnel` plus profile configuration | Agency workforce | Personnel facts and marked profile evidence. Private files stay under File Gate. **Pending 01.** |
-| S2-L4 Person/profile API projection | Host `chronicle_api` person/profile and account projections | Agency projection; host keeps transport | Existing own-profile and account-summary response contracts stay unchanged. **Pending 01.** |
-| S2-L5 Recruiting editorial versus recruiting rules | Host editorial content and application form | Split: host keeps editorial content; Agency recruiting rules | Slice 2/3 boundary. **Open decision.** **Pending 01.** |
+| S2-L1 Staff invitation and onboarding | Host `chronicle_staff_invite` | Agency Staff | Ledger: staff onboard Webform. Issuer-minted single-use token; the invitee does not choose classification. After Agency commits acceptance, the host adapter mints uid, fail-closed role and matching Profile. Keycloak remains the IdP; not a password signup. |
+| S2-L2 Invitation protocol and `/invite` door | Host `chronicle_client_access` (not enabled) plus host `Query.wlInviteStatus` | Agency Staff, adapted | Ledger: Keycloak invitation protocol adapts into Agency Staff (issuer/subject, POST-only accept, per-read entitlement). Do not enable the dormant module. Host inspect door is `wlInviteStatus` on `/invite`; GET never consumes. |
+| S2-L3 Personnel and profile evidence | Host `chronicle_personnel` plus profile configuration | Agency workforce | Ledger person/account/profile split: Profile holds marked evidence, not identity. Private files stay under File Gate. |
+| S2-L4 Person / account / profile projection | Host `chronicle_api` person, account and profile projections | Agency projection; host keeps transport | Ledger S2 split: person (IdP), account (host uid/role), profile (evidence projection). Own-profile and account-summary contracts stay unchanged. |
+| S2-L5 Recruiting editorial versus recruiting rules | Host editorial content and application form | Split: host keeps editorial content; Agency recruiting rules | Slice 2/3 boundary. **Open operator decision** (§10.4). |
 
 Out of Slice 2: Discovery relationships (already Agency), CRM, intake,
 engagement/time, client membership policy (placement reviewed in the
@@ -41,15 +45,17 @@ roster membership or assignment. Slice 2 must preserve that wall.
 
 ## 2. Target object types and actions
 
-Proposed ontology subset. Machine names and property lists are **pending
-02**. Existing Discovery storage names are observed and must not be
-reused as staff provisioning paths.
+Proposed ontology subset. Machine names and property lists stay
+**pending** until [agency#25](https://github.com/Wilkes-Liberty/agency/pull/25)
+is approved. Do not adopt draft ontology names from that PR. Existing
+Discovery storage names are observed and must not be reused as staff
+provisioning paths.
 
 | Proposed object | Observed related storage | Slice 2 role |
 | --- | --- | --- |
-| Person | Internal `agency_person` is a thin Discovery resolver (display name and contact) | Canonical person in the ontology. Discovery and workforce relationships may link to the same person; that link is not an entitlement. Whether expand extends the thin row or adds a personnel record type is **pending 02**. |
-| Principal binding | Internal `agency_principal` | Exact issuer/subject. Contact never selects a principal. Reuse the host `IdentityProviderInterface`. |
-| Organization / Membership | none in this package | Workforce membership is distinct from Discovery participation and from client membership. **Pending 02.** |
+| Person | Internal `agency_person` is a thin Discovery resolver (display name and contact) | Canonical person in the ontology. Discovery and workforce relationships may link to the same person; that link is not an entitlement. Whether expand extends the thin row or adds a personnel record type is **pending** until agency#25 is approved. Ledger S2 split: person is not the Drupal account and not the Profile. |
+| Principal binding | Internal `agency_principal` | Exact issuer/subject from the Keycloak invitation protocol. Contact never selects a principal. Reuse the host `IdentityProviderInterface`. |
+| Organization / Membership | none in this package | Workforce membership is distinct from Discovery participation and from client membership. **Pending** until agency#25 is approved. |
 | Relationship (workforce) | Internal `agency_discovery` | New workforce relationship type. Never the Discovery entity. |
 | Invitation (staff) | Internal `agency_invitation` (Discovery generations) | New staff invitation type. Never share the Discovery generation table or command class. |
 | Entitlement (workforce) | Internal `agency_entitlement` (Discovery grants) | New workforce entitlement. Never share the Discovery grant table or command class. |
@@ -66,14 +72,16 @@ Proposed actions (input schemas in scaffolding; no service yet):
 
 Proposed reads (host transport, Agency projection):
 
-- Inspect a staff invitation token: status only. GET never consumes or binds.
+- Inspect a staff invitation token: status only, matching the host
+  `wlInviteStatus` `/invite` door. GET never consumes or binds.
 - Own-profile projection for the current principal.
 - Account-summary projection for the current principal.
 - Coordinator read of one workforce relationship.
 
-Lifecycle states proposed for the workforce relationship, **pending 02**:
-`invited`, `active`, `revoked`, `suspended`, `ended`. These are not
-Discovery states. Application/recruiting labels remain out of this enum.
+Lifecycle states proposed for the workforce relationship, **pending**
+until agency#25 is approved: `invited`, `active`, `revoked`, `suspended`,
+`ended`. These are not Discovery states. Application/recruiting labels
+remain out of this enum.
 
 ## 3. Separation rule
 
@@ -133,24 +141,33 @@ Observed Discovery ceremony that Slice 2 reuses as rules, not as classes:
 Adaptations for staff, distinct from Discovery:
 
 - The invitee does not choose classification. The issuer supplies a
-  workforce kind. Scaffolding allowlists `employee` and `contractor`
-  until the ledger lists any further kinds.
+  workforce kind. The ledger's staff onboard Webform records employee
+  and contractor provisioning; scaffolding allowlists those two and
+  refuses Discovery/client kinds until the operator adds further kinds
+  (§10.3).
 - Acceptance may trigger host-side uid/role/profile provisioning through
   the host adapter **after** the Agency workforce commit. Agency does
-  not mint a user. Host provisioning failure must not be repaired by
-  silently creating a second Agency relationship; it is an `uncertain`
-  host follow-up against the committed receipt.
+  not mint a user. That is the ledger's account side of the
+  person/account/profile split. Host provisioning failure must not be
+  repaired by silently creating a second Agency relationship; it is an
+  `uncertain` host follow-up against the committed receipt.
 - Staff invitation copy and languages stay in the host catalog. This
   package ships no invitation wording.
+- Host inspect for invitation doors is `Query.wlInviteStatus` on
+  `/invite`. Inspect is read-only. GET never consumes or binds.
 - Client-access remainders that would grant client-portal membership are
-  not activated. If the ledger shows the dormant module also encoded a
-  client membership grant, that grant stays out of Slice 2 expand
-  (**pending 01**, reviewed with client-membership placement).
+  not activated. The Keycloak invitation protocol adapts into Agency
+  Staff without enabling `chronicle_client_access`. A membership grant,
+  if present on the dormant module, stays out of Slice 2 expand
+  (operator decision §10.5, reviewed with client-membership placement).
 
 ## 5. Person/profile API
 
-Agency owns the projection. The host keeps HTTP transport, authentication
-session plumbing, CSRF, cache headers and translation.
+Ledger S2 person/account/profile split: Agency owns the projection. The
+host keeps HTTP transport, authentication session plumbing, CSRF, cache
+headers and translation. Person identity stays with the IdP. The Drupal
+account (uid/role) stays on the host adapter. Profile is evidence and an
+allowlisted projection, not a second identity.
 
 Allowlisted audiences for Slice 2:
 
@@ -159,8 +176,9 @@ Allowlisted audiences for Slice 2:
 | `own` | Entitled person, for fields marked writable on that audience | The same person | Existing own-profile contract. Fields, names and error shape stay host-compatible. |
 | `account_summary` | Not a staff-invite side effect | The entitled person | Existing account-summary contract. Discovery, CRM and payment facts are not smuggled in. |
 
-Coordinator and network audiences are **pending 02** and the network
-profile contract. They are not part of this scaffolding.
+Coordinator and network audiences are **pending** until agency#25 is
+approved and the network profile contract is reviewed. They are not part
+of this scaffolding.
 
 Rules:
 
@@ -201,9 +219,11 @@ Rules:
 - Synthetic fixtures only. No live personnel, receipts or credentials in
   this repository.
 
-**Pending 01** for the exact table/field inventory. **Pending 05** for
-the copy implementation. **Unverified** against the host tree from this
-checkout.
+Exact table, field, route, service and test inventory is
+`docs/agency-extraction/ledger.json` at webcms#1900 (`2216df30`).
+**Pending 05** for the copy implementation. Host PHP class files remain
+**unverified** from this checkout; expand reads the ledger rather than
+re-inventorying.
 
 ## 7. Authority, shadow-write, reconciliation and rollback
 
@@ -245,8 +265,9 @@ cutover, tooling in package 05):
 - Token ceremony parity: GET inspect does not consume; POST accept
   consumes once; wrong issuer/subject is `wrong_account` or equivalent
   without leaking whether the token existed beyond existing host
-  behavior. **Pending 01** to confirm the public reason strings the host
-  already exposes.
+  behavior. Public reason strings stay an operator decision (§10.7);
+  host inspect uses `wlInviteStatus` and must not be treated as a
+  consume or bind.
 - No unexplained drift over the rehearsal window.
 
 Rollback:
@@ -287,17 +308,19 @@ eligibility; staff expand must keep that adapter).
 
 ## 9. Test-parity list
 
-Class-level inventory is **pending 01** and the assurance kit (package
-08). Removal of a legacy module is blocked by any unmapped test without
-a reviewed reason. This checkout could not read the host tree, so names
-below are module scopes and behavioral cases, not claimed class names.
+Test classes per module are inventoried in `ledger.json` at webcms#1900
+(`2216df30`). The class-level port map is the assurance kit (package 08,
+webcms#1897). Removal of a legacy module is blocked by any unmapped test
+without a reviewed reason. Names below are ledger module scopes and
+behavioral cases; this checkout still cannot open the host PHP files.
 
 | Legacy scope | Behavioral cases to port | Agency or host-adapter destination |
 | --- | --- | --- |
-| `chronicle_staff_invite` | Token works once; invitee cannot choose type; fail-closed role; matching profile bundle; not a password signup; private files remain File Gate-protected; languages stay in the host catalog | Workforce actions + host adapter tests |
-| `chronicle_personnel` | Personnel field access; evidence update; unmarked field refused; revision preservation | `updateProfileEvidence` + migrate reconciliation |
-| `chronicle_client_access` | Protocol tests only: issuer/subject, POST-only accept, per-read entitlement. Module enablement tests must not start passing because of this slice | Workforce invitation ceremony; no host module enable |
-| `chronicle_api` person/profile and account summary | Own-profile and account-summary fixtures stay green; allowlisted audiences; denied cross-person | Workforce reads + host transport |
+| `chronicle_staff_invite` | Staff onboard Webform: token works once; invitee cannot choose type; fail-closed role; matching profile bundle; not a password signup; private files remain File Gate-protected; languages stay in the host catalog | Workforce actions + host adapter tests |
+| `chronicle_personnel` | Personnel field access; evidence update; unmarked field refused; revision preservation; Profile is not the person or the account | `updateProfileEvidence` + migrate reconciliation |
+| `chronicle_client_access` | Keycloak invitation protocol tests only: issuer/subject, POST-only accept, per-read entitlement. Module enablement tests must not start passing because of this slice | Workforce invitation ceremony; no host module enable |
+| Host `wlInviteStatus` / `/invite` | GET inspect does not consume; wrong subject shares the closed/not-found shape the host already exposes | Workforce inspect read + host transport |
+| `chronicle_api` person/profile and account summary | Person/account/profile split; own-profile and account-summary fixtures stay green; allowlisted audiences; denied cross-person | Workforce reads + host transport |
 | Host identity / private files | Identity deactivation and rebinding deny staff reads; File Gate UUID still authorizes delivery | Existing identity adapter + File Gate, not copied |
 
 Discovery tests in this package remain the Slice 1 suite. Slice 2
@@ -311,9 +334,9 @@ scaffolding must not change their outcomes.
 2. Approve the four authority states and that workforce is one register
    row (plan decision 2).
 3. Workforce classification allowlist: keep `employee` and `contractor`
-   only in the package, or add further kinds after the ledger lists them.
-   Scaffolding currently allowlists those two and refuses Discovery/client
-   kinds.
+   only in the package, matching the ledger's staff onboard Webform, or
+   add further kinds by operator decision. Scaffolding currently
+   allowlists those two and refuses Discovery/client kinds.
 4. Recruiting: host editorial content stays host; Agency recruiting rules
    wait for Slice 3 versus a later Slice 2 expand.
 5. Client membership and eligibility policy: remain a later slice, or
