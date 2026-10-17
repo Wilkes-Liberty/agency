@@ -23,6 +23,7 @@ interface BindingHistoryInterface {
    * Authmap provider machine names covered by this history.
    *
    * @return list<string>
+   *   Covered authmap provider machine names.
    */
   public function providers(): array;
 

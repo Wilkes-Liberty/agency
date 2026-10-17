@@ -83,8 +83,8 @@ final class TrackedAuthmap implements AuthmapInterface {
   /**
    * {@inheritdoc}
    */
-  public function getAll(int $uid): array {
-    return $this->inner->getAll($uid);
+  public function getAll(int|string $uid): array {
+    return $this->inner->getAll((int) $uid);
   }
 
   /**

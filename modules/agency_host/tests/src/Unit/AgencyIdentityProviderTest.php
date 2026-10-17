@@ -96,7 +96,12 @@ final class AgencyIdentityProviderTest extends UnitTestCase {
       'openid_connect.client_portal' => $rebound ? 'other' : 'person',
     ]);
     $tokens = $this->createMock(ImmutableConfig::class);
-    $tokens->method('get')->willReturnMap([['paladin_issuer', self::ISSUER], ['paladin_audience', 'synthetic-agency'], ['issuer', self::ISSUER], ['audience', 'synthetic-agency']]);
+    $tokens->method('get')->willReturnMap([
+      ['paladin_issuer', self::ISSUER],
+      ['paladin_audience', 'synthetic-agency'],
+      ['issuer', self::ISSUER],
+      ['audience', 'synthetic-agency'],
+    ]);
     $host = $this->createMock(ImmutableConfig::class);
     $host->method('get')->willReturn([]);
     $config = $this->createMock(ConfigFactoryInterface::class);

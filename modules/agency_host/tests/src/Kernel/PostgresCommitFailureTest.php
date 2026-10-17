@@ -44,6 +44,14 @@ final class PostgresCommitFailureTest extends KernelTestBase {
     $this->assertInstanceOf(\PDOException::class, $failure);
     $this->assertSame('23505', $failure->getCode());
     $this->assertFalse($database->getClientConnection()->inTransaction());
+    // Drupal 11.4 core leaves the failed root Active after PDO::commit()
+    // throws, even though PostgreSQL already ended the session transaction.
+    // Open a fresh client transaction so rollback can clear the stack
+    // without a second COMMIT at shutdown.
+    if ($database->transactionManager()->stackDepth() !== 0) {
+      $database->getClientConnection()->beginTransaction();
+      $transaction->rollBack();
+    }
     $this->assertSame(0, $database->transactionManager()->stackDepth());
     // Exercise the same manager path used at shutdown before destruction.
     $database->transactionManager()->commitAll();

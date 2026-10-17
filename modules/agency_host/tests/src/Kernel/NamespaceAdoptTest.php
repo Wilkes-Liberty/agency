@@ -19,8 +19,9 @@ final class NamespaceAdoptTest extends KernelTestBase {
    * {@inheritdoc}
    */
   protected static $modules = [
-    'system', 'user', 'field', 'field_guard', 'key', 'encrypt', 'audit_chain',
-    'externalauth', 'consumers', 'serialization', 'simple_oauth', 'openid_connect',
+    'system', 'user', 'field', 'file', 'options', 'path_alias', 'field_guard',
+    'key', 'encrypt', 'audit_chain', 'externalauth', 'consumers',
+    'serialization', 'simple_oauth', 'openid_connect',
   ];
 
   /**
@@ -54,9 +55,16 @@ final class NamespaceAdoptTest extends KernelTestBase {
       'observed_at' => 1,
       'changed_at' => 2,
     ])->execute();
-    $this->config('chronicle_agency.settings')->set('enabled', TRUE)->set('bff_client_id', 'copied-bff')->save();
-    $this->config('chronicle_agency.identity_tokens')->set('paladin_issuer', 'https://identity.example.test/realms/copied')
-      ->set('paladin_audience', 'copied-audience')->save();
+    // Former chronicle_agency config has no schema in this package.
+    $this->container->get('config.storage')->write('chronicle_agency.settings', [
+      'enabled' => TRUE,
+      'bff_client_id' => 'copied-bff',
+    ]);
+    $this->container->get('config.storage')->write('chronicle_agency.identity_tokens', [
+      'paladin_issuer' => 'https://identity.example.test/realms/copied',
+      'paladin_audience' => 'copied-audience',
+    ]);
+    $this->container->get('config.factory')->reset();
     $this->container->get('state')->set('chronicle_agency.evidence_alert_status', 'degraded');
     $schema = $database->schema();
     if ($schema->tableExists('queue')) {

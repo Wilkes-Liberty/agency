@@ -116,7 +116,7 @@ final class DiscoveryHostTest extends KernelTestBase {
    * {@inheritdoc}
    */
   protected static $modules = [
-    'system', 'user', 'field', 'text', 'filter', 'file', 'image',
+    'system', 'user', 'field', 'text', 'filter', 'file', 'image', 'options',
     'path_alias', 'entity', 'field_guard', 'key', 'encrypt', 'audit_chain',
     'externalauth', 'consumers', 'serialization', 'simple_oauth', 'openid_connect',
   ];
@@ -561,6 +561,8 @@ final class DiscoveryHostTest extends KernelTestBase {
     $database = $this->container->get('database');
     $updates = $this->container->get('update.update_hook_registry');
     $updates->setInstalledVersion('agency_host', 10002);
+    // Fingerprints stay keyed to the former chronicle_agency schema slot.
+    $updates->setInstalledVersion('chronicle_agency', 10002);
     $history = $this->container->get('agency_host.binding_history');
     $database->update('agency_host_binding_coverage')->fields(['fingerprint' => $history->fingerprint()])->execute();
     $this->assertTrue($history->qualificationReady());
@@ -568,6 +570,7 @@ final class DiscoveryHostTest extends KernelTestBase {
     $database->schema()->dropTable('agency_host_binding_origin');
     \agency_host_update_10003();
     $updates->setInstalledVersion('agency_host', 10003);
+    $updates->setInstalledVersion('chronicle_agency', 10003);
     \agency_host_update_10003();
     $this->assertEquals($old, $database->select('agency_host_binding_coverage', 'c')->fields('c')->execute()->fetchAllAssoc('scope'));
     $this->assertSame(0, (int) $database->select('agency_host_binding_origin', 'o')->countQuery()->execute()->fetchField());
@@ -903,8 +906,10 @@ final class DiscoveryHostTest extends KernelTestBase {
     $portal = 'https://identity.example.test/realms/portal';
     $agency = 'https://identity.example.test/realms/agency';
     $this->config('agency_host.ordinary_tokens')
+      ->set('issuer', $portal)->set('audience', 'portal-api')
       ->set('paladin_issuer', $portal)->set('paladin_audience', 'portal-api')->save();
     $this->config('agency_host.identity_tokens')
+      ->set('issuer', $agency)->set('audience', 'agency-api')
       ->set('paladin_issuer', $agency)->set('paladin_audience', 'agency-api')->save();
     $key = openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
     $details = openssl_pkey_get_details($key);
@@ -947,7 +952,7 @@ final class DiscoveryHostTest extends KernelTestBase {
     }
     $other_key = openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
     $this->assertNull($dedicated->validate(JWT::encode($claims, $other_key, 'RS256', 'synthetic')));
-    $this->config('agency_host.identity_tokens')->set('paladin_issuer', '')->save();
+    $this->config('agency_host.identity_tokens')->set('issuer', '')->set('paladin_issuer', '')->save();
     $this->assertFalse($dedicated->isConfigured());
     $this->assertNull($dedicated->validate($portal_proof));
     $this->assertSame('synthetic-person', $ordinary->validate($portal_proof));
@@ -1165,6 +1170,15 @@ final class DiscoveryHostTest extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
+    // Clean-origin sourceDigest hashes the deployed settings.php. A
+    // recommended-project host only scaffolds default.settings.php.
+    $settings_php = DRUPAL_ROOT . '/sites/default/settings.php';
+    if (!is_file($settings_php)) {
+      $default = DRUPAL_ROOT . '/sites/default/default.settings.php';
+      if (!is_file($default) || !copy($default, $settings_php)) {
+        $this->fail('Clean-origin tests require sites/default/settings.php.');
+      }
+    }
     // Kernel's memory key/value factories do not create Core database stores.
     $schema = $this->container->get('database')->schema();
     foreach ([
@@ -1722,6 +1736,9 @@ final class DiscoveryHostTest extends KernelTestBase {
    * The qualified existing SMTP plugin produces exactly the approved envelope.
    */
   public function testInvitationDeliveryActualSmtpEnvelopeWithoutNetwork(): void {
+    if (!$this->container->get('extension.list.module')->exists('smtp')) {
+      $this->markTestSkipped('Requires the smtp module on the test host.');
+    }
     $this->deliveryFixture();
     $this->enableModules(['smtp']);
     $this->installConfig(['smtp']);
@@ -1963,6 +1980,9 @@ final class DiscoveryHostTest extends KernelTestBase {
    * The installed public suppression policy denies consent and outage states.
    */
   public function testInvitationDeliveryUsesAuthoritativeSuppression(): void {
+    if (!$this->container->get('extension.list.module')->exists('postmark_webhooks')) {
+      $this->markTestSkipped('Requires the postmark_webhooks module on the test host.');
+    }
     $this->enableModules(['postmark_webhooks']);
     $this->installConfig(['postmark_webhooks']);
     $this->installSchema('postmark_webhooks', ['postmark_suppression']);
@@ -3886,9 +3906,9 @@ final class DiscoveryHostTest extends KernelTestBase {
     $controller = ParticipantDiscoveryController::create($this->container);
     $request = $this->request('person-one', 'GET');
     $this->assertSame('available', $this->payload($controller->workspace($id, $request))['outcome']);
-    $updates->setInstalledVersion('agency_host', 10004);
+    $updates->setInstalledVersion('chronicle_agency', 10004);
     $this->assertSame('identity_unavailable', $this->payload($controller->workspace($id, $request))['reason']);
-    $updates->setInstalledVersion('agency_host', 10003);
+    $updates->setInstalledVersion('chronicle_agency', 10003);
     $this->assertSame('identity_unavailable', $this->payload($controller->workspace($id, $request))['reason']);
   }
 
@@ -4009,8 +4029,12 @@ final class DiscoveryHostTest extends KernelTestBase {
     $authmap = new TrackedAuthmap($inner, $history);
     $original_authmap = $this->container->get('externalauth.authmap');
     $this->container->set('externalauth.authmap', $authmap);
+    $this->enableModules(['node']);
     $this->installEntitySchema('node');
-    $this->installEntitySchema('profile');
+    if ($this->container->get('extension.list.module')->exists('profile')) {
+      $this->enableModules(['profile']);
+      $this->installEntitySchema('profile');
+    }
     $this->installEntitySchema('file');
     $unlinked = User::create(['name' => 'unlinked-delete', 'status' => 1]);
     $unlinked->save();

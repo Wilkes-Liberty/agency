@@ -1,4 +1,5 @@
 name: Agency Host synthetic
+description: 'Synthetic IdP, mail and recording fixtures for Agency Host kernel tests.'
 package: Testing
 type: module
 hidden: true

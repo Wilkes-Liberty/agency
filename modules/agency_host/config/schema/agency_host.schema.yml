@@ -65,3 +65,20 @@ agency_host.identity_tokens:
     paladin_audience:
       type: string
       label: 'Historical audience key retained for qualified binding fingerprints'
+
+agency_host.ordinary_tokens:
+  type: config_object
+  label: 'Ordinary token authority scanned as extra containment'
+  mapping:
+    issuer:
+      type: string
+      label: 'Ordinary issuer'
+    audience:
+      type: string
+      label: 'Ordinary audience'
+    paladin_issuer:
+      type: string
+      label: 'Historical ordinary issuer key'
+    paladin_audience:
+      type: string
+      label: 'Historical ordinary audience key'

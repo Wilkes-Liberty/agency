@@ -25,12 +25,13 @@ final class PostgresCommitStateTest extends UnitTestCase {
     $client->expects($this->once())->method('beginTransaction')->willReturn(TRUE);
     $original = new \PDOException('Synthetic commit failure');
     $client->expects($this->once())->method('commit')->willThrowException($original);
-    $probe = $client->expects($this->once())->method('inTransaction');
+    // Drupal 11.4 does not probe PDO::inTransaction() after a throwing
+    // commit(); keep both states from authorizing a cleared stack.
     if ($unreadable) {
-      $probe->willThrowException(new \PDOException('Synthetic status failure'));
+      $client->method('inTransaction')->willThrowException(new \PDOException('Synthetic status failure'));
     }
     else {
-      $probe->willReturn(TRUE);
+      $client->method('inTransaction')->willReturn(TRUE);
     }
     $client->expects($this->once())->method('rollBack')->willReturn(TRUE);
     $connection = $this->createMock(Connection::class);

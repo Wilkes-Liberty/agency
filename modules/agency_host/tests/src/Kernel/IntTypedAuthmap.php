@@ -11,9 +11,8 @@ use Drupal\user\UserInterface;
  * Authmap double whose user-id arguments match the interface.
  *
  * The installed externalauth Authmap::getAll() omits the int type on its
- * user id, so a string id does not throw. Production decorates that service
- * with an implementation that keeps getAll(int). This double is that
- * signature, and it forwards to the real authmap after the type check.
+ * user id, so a string id does not throw. Drupal account ids are numeric
+ * strings; production and this double cast before the inner authmap.
  */
 final class IntTypedAuthmap implements AuthmapInterface {
 
@@ -45,8 +44,8 @@ final class IntTypedAuthmap implements AuthmapInterface {
   /**
    * {@inheritdoc}
    */
-  public function getAll(int $uid): array {
-    return $this->inner->getAll($uid);
+  public function getAll(int|string $uid): array {
+    return $this->inner->getAll((int) $uid);
   }
 
   /**
