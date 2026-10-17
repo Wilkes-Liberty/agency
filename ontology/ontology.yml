@@ -1,0 +1,2288 @@
+version: "0.1.0"
+status: draft
+title: Agency ontology contract
+ships_tenant_defaults: false
+compatibility:
+  scheme: semver
+  beta_freezes_released_types: true
+  breaking_change: deprecation_cycle
+  notes:
+    - Draft versions may add proposed types and refine unimplemented shapes.
+    - The first beta freezes implemented S1 and S2 types.
+    - Removing or renaming an implemented type, state, action, marking or
+      required property is a breaking change and needs a deprecation cycle.
+    - Host configuration values are not part of this contract.
+rules:
+  - id: schema_valid
+    statement: Objects, links and actions validate against the JSON Schemas.
+  - id: every_property_has_a_marking
+    statement: Every property has a marking.
+  - id: every_action_has_a_permission
+    statement: Every action names a permission and its kind.
+  - id: every_action_has_evidence
+    statement: Every action declares evidence fields and forbidden items.
+  - id: no_tenant_specific_strings
+    statement: The contract contains no tenant names or domains.
+  - id: no_host_prefix_outside_legacy_sources
+    statement: Host-prefixed type ids appear only in legacy_sources.
+  - id: cross_tenant_reads_denied
+    statement: Cross-tenant reads are denied on every object type.
+  - id: projections_are_allowlisted
+    statement: Each audience projection lists declared properties only.
+  - id: identifiers_are_declared
+    statement: Every type declares integer id, UUID and revision-id flags.
+  - id: transitions_are_closed
+    statement: Transitions name declared states and action types.
+  - id: implemented_discovery_matches_storage
+    statement: Implemented Discovery storage matches the internal entities.
+  - id: s5_types_remain_proposed
+    statement: Expense, Credential, Availability and Campaign stay proposed.
+  - id: compatibility_follows_semver
+    statement: Compatibility follows semantic versioning and a deprecation cycle.
+  - id: machine_names_use_agency_prefix
+    statement: Machine names use the agency_ prefix.
+  - id: links_declare_cardinality_and_owner
+    statement: Every link declares cardinality and which side owns the reference.
+  - id: revisionable_matches_revision_id
+    statement: revisionable matches identifiers.revision_id.
+  - id: tenant_values_are_host_configuration
+    statement: Tenant names, policy periods and copy are host configuration.
+  - id: implemented_actions_are_discovery_commands
+    statement: Implemented actions include the current Discovery commands.
+x-tenant: &tenant_scope
+  isolation: tenant
+  cross_tenant_reads: denied
+x-shared: &shared_scope
+  isolation: shared_within_tenant
+  cross_tenant_reads: denied
+x-evidence: &discovery_evidence
+  emitted: true
+  when: Co-transactional outbox insert on the local write.
+  fields:
+    - event_id
+    - relationship_id
+    - subject_hash
+    - state
+    - waiting_on
+    - effective_at
+  forbidden:
+    - contact
+    - note
+    - token
+    - credential
+    - file
+    - guessed_identifier
+x-read-evidence: &read_evidence
+  emitted: false
+  when: Reads do not append evidence.
+  fields: []
+  forbidden:
+    - contact
+    - note
+    - token
+    - credential
+    - file
+    - guessed_identifier
+x-idempotency: &discovery_idempotency
+  required: true
+  pattern: '^[A-Za-z0-9_.:-]{8,128}$'
+  fingerprint: SHA-256 of the canonical input after authorization.
+objects:
+  - id: Person
+    machine_name: agency_person
+    label: Person
+    status: implemented
+    slice: S1
+    owning_submodule:
+      name: agency_staff
+      status: existing
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: false
+    revisionable: false
+    lifecycle:
+      states:
+        - id: recorded
+          terminal: false
+          notes: Thin resolver row. Removal deletes the row when unreferenced.
+      transitions: []
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: display_name
+        type: string
+        marking: personal
+      - name: contact_kind
+        type: string
+        marking: personal
+      - name: contact_value
+        type: string
+        marking: personal
+    tenant_scope: *shared_scope
+    legacy_sources:
+      - crm_contact
+      - chronicle_personnel
+    notes: Discovery stores a thin resolver only. Workforce profile fields are proposed later.
+  - id: PrincipalBinding
+    machine_name: agency_principal
+    label: Principal binding
+    status: implemented
+    slice: S1
+    owning_submodule:
+      name: agency_staff
+      status: existing
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: false
+    revisionable: false
+    lifecycle:
+      states:
+        - id: active
+          terminal: false
+        - id: minimized
+          terminal: true
+      transitions:
+        - from: active
+          to: minimized
+          action: removeExpiredDiscovery
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: confidential
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: principal_key
+        type: string
+        marking: confidential
+      - name: issuer
+        type: string
+        marking: confidential
+      - name: subject
+        type: string
+        marking: confidential
+      - name: person_uuid
+        type: uuid
+        marking: internal
+      - name: status
+        type: string
+        marking: internal
+    tenant_scope: *shared_scope
+    legacy_sources: []
+    notes: Exact issuer and subject pair. Contact data never selects this row.
+  - id: Organization
+    machine_name: agency_organization
+    label: Organization
+    status: proposed
+    slice: S2
+    owning_submodule:
+      name: agency_workforce
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: active
+          terminal: false
+        - id: archived
+          terminal: true
+      transitions:
+        - from: none
+          to: active
+          action: createOrganization
+        - from: active
+          to: archived
+          action: archiveOrganization
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: public
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: display_name
+        type: string
+        marking: public
+      - name: legal_name
+        type: string
+        marking: confidential
+      - name: kind
+        type: string
+        marking: internal
+      - name: status
+        type: string
+        marking: public
+    tenant_scope: *shared_scope
+    legacy_sources:
+      - crm_contact
+    notes: First consumer is workforce. Commercial slices reuse the same type.
+  - id: Membership
+    machine_name: agency_membership
+    label: Membership
+    status: proposed
+    slice: S2
+    owning_submodule:
+      name: agency_workforce
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: active
+          terminal: false
+        - id: suspended
+          terminal: false
+        - id: ended
+          terminal: true
+      transitions:
+        - from: none
+          to: active
+          action: grantMembership
+        - from: active
+          to: ended
+          action: endMembership
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: person_uuid
+        type: uuid
+        marking: internal
+      - name: organization_uuid
+        type: uuid
+        marking: internal
+      - name: role
+        type: string
+        marking: internal
+      - name: status
+        type: string
+        marking: public
+      - name: started_at
+        type: timestamp
+        marking: internal
+      - name: ended_at
+        type: timestamp
+        marking: internal
+    tenant_scope: *tenant_scope
+    legacy_sources:
+      - chronicle_personnel
+    notes: Roster membership is not an access grant and not an assignment.
+  - id: Relationship
+    machine_name: agency_discovery
+    label: Relationship
+    status: implemented
+    slice: S1
+    owning_submodule:
+      name: agency_staff
+      status: existing
+    kinds:
+      - id: discovery
+        machine_name: agency_discovery
+        status: implemented
+        slice: S1
+      - id: workforce
+        machine_name: agency_workforce
+        status: proposed
+        slice: S2
+      - id: client
+        machine_name: agency_client
+        status: proposed
+        slice: S3
+      - id: partner
+        machine_name: agency_partner
+        status: proposed
+        slice: S3
+      - id: supplier
+        machine_name: agency_supplier
+        status: proposed
+        slice: S3
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: invited
+          terminal: false
+        - id: exploring
+          terminal: false
+        - id: prepared
+          terminal: false
+        - id: paused
+          terminal: false
+        - id: moved_forward
+          terminal: false
+        - id: withdrawn
+          terminal: true
+        - id: closed
+          terminal: true
+      transitions:
+        - from: none
+          to: invited
+          action: startDiscovery
+        - from: invited
+          to: exploring
+          action: accept
+        - from: exploring
+          to: exploring
+          action: respond
+        - from: exploring
+          to: prepared
+          action: respond
+        - from: exploring
+          to: paused
+          action: pauseRelationship
+        - from: exploring
+          to: moved_forward
+          action: moveForward
+        - from: exploring
+          to: withdrawn
+          action: withdrawRelationship
+        - from: exploring
+          to: closed
+          action: close
+        - from: prepared
+          to: exploring
+          action: respond
+        - from: prepared
+          to: prepared
+          action: respond
+        - from: prepared
+          to: paused
+          action: pauseRelationship
+        - from: prepared
+          to: moved_forward
+          action: moveForward
+        - from: prepared
+          to: withdrawn
+          action: withdrawRelationship
+        - from: prepared
+          to: closed
+          action: close
+        - from: paused
+          to: exploring
+          action: resumeRelationship
+        - from: paused
+          to: withdrawn
+          action: withdrawRelationship
+        - from: paused
+          to: closed
+          action: close
+        - from: moved_forward
+          to: closed
+          action: close
+        - from: moved_forward
+          to: withdrawn
+          action: withdrawRelationship
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: public
+        notes: Opaque workspace identifier in participant projections.
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: public
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: revision_created
+        type: timestamp
+        marking: internal
+      - name: person_uuid
+        type: uuid
+        marking: internal
+      - name: principal_uuid
+        type: uuid
+        marking: confidential
+      - name: owner_uid
+        type: integer
+        marking: internal
+        notes: Never projected. Owner identity is a display name and typed route.
+      - name: state
+        type: string
+        marking: public
+      - name: waiting_on
+        type: string
+        marking: public
+      - name: version
+        type: integer
+        marking: public
+      - name: details
+        type: string_long
+        marking: confidential
+        notes: Storage blob. Audience fields are listed separately and allowlisted.
+      - name: kind
+        type: string
+        marking: public
+        notes: Discovery projections emit discovery. Other kinds are proposed.
+      - name: display_waiting_on
+        type: string
+        marking: public
+        notes: Derived. Participant pause may show nobody.
+      - name: owner_name
+        type: string
+        marking: public
+      - name: owner_contact
+        type: json
+        marking: personal
+      - name: owner_changed_at
+        type: timestamp
+        marking: public
+      - name: owner_unavailable
+        type: boolean
+        marking: internal
+      - name: next_action
+        type: json
+        marking: public
+      - name: agency_late
+        type: boolean
+        marking: public
+      - name: pause_origin
+        type: string
+        marking: public
+      - name: proposal
+        type: json
+        marking: public
+      - name: agreed_next_step
+        type: json
+        marking: public
+      - name: permitted_actions
+        type: json
+        marking: public
+      - name: permitted_choices
+        type: json
+        marking: public
+      - name: pause_note
+        type: string_long
+        marking: confidential
+      - name: withdrawal_note
+        type: string_long
+        marking: confidential
+      - name: response
+        type: json
+        marking: confidential
+      - name: close_category
+        type: string
+        marking: public
+      - name: close_message
+        type: string_long
+        marking: public
+      - name: close_contact
+        type: json
+        marking: personal
+      - name: closing_delivery
+        type: json
+        marking: internal
+      - name: last_agency_action_at
+        type: timestamp
+        marking: internal
+      - name: notification
+        type: json
+        marking: internal
+      - name: terminal_at
+        type: timestamp
+        marking: public
+    tenant_scope: *tenant_scope
+    legacy_sources: []
+    notes: Discovery is implemented as agency_discovery. Other kinds are proposed storage ids.
+  - id: Invitation
+    machine_name: agency_invitation
+    label: Invitation
+    status: implemented
+    slice: S1
+    owning_submodule:
+      name: agency_staff
+      status: existing
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: false
+    revisionable: false
+    lifecycle:
+      states:
+        - id: active
+          terminal: false
+        - id: consumed
+          terminal: true
+        - id: superseded
+          terminal: true
+        - id: revoked
+          terminal: true
+      transitions:
+        - from: none
+          to: active
+          action: issue
+        - from: active
+          to: consumed
+          action: accept
+        - from: active
+          to: superseded
+          action: resend
+        - from: active
+          to: revoked
+          action: revokeInvitation
+        - from: active
+          to: revoked
+          action: revoke
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: relationship_uuid
+        type: uuid
+        marking: internal
+      - name: principal_uuid
+        type: uuid
+        marking: confidential
+      - name: token_hash
+        type: string
+        marking: confidential
+      - name: status
+        type: string
+        marking: internal
+      - name: expires
+        type: timestamp
+        marking: internal
+      - name: delivery_state
+        type: string
+        marking: internal
+    tenant_scope: *tenant_scope
+    legacy_sources:
+      - chronicle_staff_invite
+    notes: Bearer token is returned once. Capture is not sending.
+  - id: Entitlement
+    machine_name: agency_entitlement
+    label: Entitlement
+    status: implemented
+    slice: S1
+    owning_submodule:
+      name: agency_staff
+      status: existing
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: false
+    revisionable: false
+    lifecycle:
+      states:
+        - id: pending
+          terminal: false
+        - id: active
+          terminal: false
+        - id: summary_only
+          terminal: false
+        - id: denied
+          terminal: true
+        - id: revoked
+          terminal: true
+        - id: suspended
+          terminal: true
+      transitions:
+        - from: none
+          to: pending
+          action: startDiscovery
+        - from: pending
+          to: active
+          action: accept
+        - from: pending
+          to: revoked
+          action: revokeInvitation
+        - from: active
+          to: denied
+          action: withdrawRelationship
+        - from: active
+          to: denied
+          action: close
+        - from: denied
+          to: summary_only
+          action: withdrawRelationship
+        - from: denied
+          to: summary_only
+          action: close
+        - from: active
+          to: suspended
+          action: suspendAccess
+        - from: summary_only
+          to: suspended
+          action: suspendAccess
+        - from: denied
+          to: suspended
+          action: suspendAccess
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: relationship_uuid
+        type: uuid
+        marking: internal
+      - name: principal_uuid
+        type: uuid
+        marking: confidential
+      - name: status
+        type: string
+        marking: internal
+      - name: version
+        type: integer
+        marking: internal
+      - name: readable_until
+        type: timestamp
+        marking: public
+      - name: details
+        type: string_long
+        marking: confidential
+    tenant_scope: *tenant_scope
+    legacy_sources: []
+    notes: Workspace and summary authority are separate entitlement statuses.
+  - id: Opportunity
+    machine_name: agency_opportunity
+    label: Opportunity
+    status: proposed
+    slice: S3
+    owning_submodule:
+      name: agency_commercial
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: open
+          terminal: false
+        - id: won
+          terminal: true
+        - id: lost
+          terminal: true
+      transitions:
+        - from: none
+          to: open
+          action: createOpportunity
+        - from: open
+          to: won
+          action: closeOpportunity
+        - from: open
+          to: lost
+          action: closeOpportunity
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: organization_uuid
+        type: uuid
+        marking: internal
+      - name: title
+        type: string
+        marking: internal
+      - name: stage
+        type: string
+        marking: internal
+      - name: amount
+        type: decimal
+        marking: financial
+      - name: status
+        type: string
+        marking: internal
+    tenant_scope: *tenant_scope
+    legacy_sources:
+      - crm_opportunity
+  - id: Activity
+    machine_name: agency_activity
+    label: Activity
+    status: proposed
+    slice: S3
+    owning_submodule:
+      name: agency_commercial
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: false
+    revisionable: false
+    lifecycle:
+      states:
+        - id: recorded
+          terminal: false
+        - id: cancelled
+          terminal: true
+      transitions:
+        - from: none
+          to: recorded
+          action: recordActivity
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: opportunity_uuid
+        type: uuid
+        marking: internal
+      - name: kind
+        type: string
+        marking: internal
+      - name: summary
+        type: string
+        marking: confidential
+      - name: occurred_at
+        type: timestamp
+        marking: internal
+    tenant_scope: *tenant_scope
+    legacy_sources:
+      - crm_activity
+  - id: IntakeSubmission
+    machine_name: agency_intake_submission
+    label: Intake submission
+    status: proposed
+    slice: S3
+    owning_submodule:
+      name: agency_intake
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: received
+          terminal: false
+        - id: accepted
+          terminal: true
+        - id: declined
+          terminal: true
+        - id: withdrawn
+          terminal: true
+      transitions:
+        - from: none
+          to: received
+          action: submitIntake
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: organization_uuid
+        type: uuid
+        marking: internal
+      - name: status
+        type: string
+        marking: internal
+      - name: payload
+        type: json
+        marking: personal
+      - name: dispatch_key
+        type: string
+        marking: internal
+    tenant_scope: *tenant_scope
+    legacy_sources:
+      - career_application
+    notes: Generic form mechanics stay with the host. This type owns business intake.
+  - id: Agreement
+    machine_name: agency_agreement
+    label: Agreement
+    status: proposed
+    slice: S5
+    owning_submodule:
+      name: agency_agreement
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: draft
+          terminal: false
+        - id: signed
+          terminal: false
+        - id: active
+          terminal: false
+        - id: terminated
+          terminal: true
+      transitions: []
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: engagement_uuid
+        type: uuid
+        marking: internal
+      - name: status
+        type: string
+        marking: internal
+      - name: terms
+        type: string_long
+        marking: confidential
+    tenant_scope: *tenant_scope
+    legacy_sources: []
+  - id: Engagement
+    machine_name: agency_engagement
+    label: Engagement
+    status: proposed
+    slice: S4
+    owning_submodule:
+      name: agency_engagement
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: agreed
+          terminal: false
+        - id: active
+          terminal: false
+        - id: completed
+          terminal: true
+        - id: cancelled
+          terminal: true
+      transitions: []
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: organization_uuid
+        type: uuid
+        marking: internal
+      - name: status
+        type: string
+        marking: internal
+      - name: title
+        type: string
+        marking: internal
+    tenant_scope: *tenant_scope
+    legacy_sources:
+      - wl_time_engagement
+  - id: Assignment
+    machine_name: agency_assignment
+    label: Assignment
+    status: proposed
+    slice: S4
+    owning_submodule:
+      name: agency_engagement
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: offered
+          terminal: false
+        - id: accepted
+          terminal: false
+        - id: declined
+          terminal: true
+        - id: completed
+          terminal: true
+      transitions:
+        - from: none
+          to: offered
+          action: offerAssignment
+        - from: offered
+          to: accepted
+          action: acceptAssignment
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: engagement_uuid
+        type: uuid
+        marking: internal
+      - name: person_uuid
+        type: uuid
+        marking: internal
+      - name: status
+        type: string
+        marking: internal
+    tenant_scope: *tenant_scope
+    legacy_sources:
+      - wl_time_assignment
+    notes: Assignment is not roster membership and not an access grant.
+  - id: TimeEntry
+    machine_name: agency_time_entry
+    label: Time entry
+    status: proposed
+    slice: S4
+    owning_submodule:
+      name: agency_engagement
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: drafted
+          terminal: false
+        - id: submitted
+          terminal: false
+        - id: accepted
+          terminal: true
+        - id: rejected
+          terminal: true
+      transitions:
+        - from: drafted
+          to: submitted
+          action: submitTime
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: assignment_uuid
+        type: uuid
+        marking: internal
+      - name: minutes
+        type: integer
+        marking: financial
+      - name: billable
+        type: boolean
+        marking: financial
+      - name: status
+        type: string
+        marking: internal
+    tenant_scope: *tenant_scope
+    legacy_sources:
+      - wl_time_entry
+  - id: TimeSession
+    machine_name: agency_time_session
+    label: Time session
+    status: proposed
+    slice: S4
+    owning_submodule:
+      name: agency_engagement
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: false
+    revisionable: false
+    lifecycle:
+      states:
+        - id: open
+          terminal: false
+        - id: closed
+          terminal: true
+        - id: void
+          terminal: true
+      transitions: []
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: assignment_uuid
+        type: uuid
+        marking: internal
+      - name: started_at
+        type: timestamp
+        marking: internal
+      - name: ended_at
+        type: timestamp
+        marking: internal
+      - name: status
+        type: string
+        marking: internal
+    tenant_scope: *tenant_scope
+    legacy_sources:
+      - wl_time_session
+  - id: TimeSubmission
+    machine_name: agency_time_submission
+    label: Time submission
+    status: proposed
+    slice: S4
+    owning_submodule:
+      name: agency_engagement
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: submitted
+          terminal: false
+        - id: accepted
+          terminal: true
+        - id: rejected
+          terminal: true
+      transitions:
+        - from: none
+          to: submitted
+          action: submitTime
+        - from: submitted
+          to: accepted
+          action: acceptTimeSubmission
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: status
+        type: string
+        marking: internal
+      - name: period_start
+        type: timestamp
+        marking: internal
+      - name: period_end
+        type: timestamp
+        marking: internal
+    tenant_scope: *tenant_scope
+    legacy_sources:
+      - wl_time_submission
+    notes: Approval of a submission is not settlement.
+  - id: Statement
+    machine_name: agency_statement
+    label: Statement
+    status: proposed
+    slice: S4
+    owning_submodule:
+      name: agency_engagement
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: issued
+          terminal: false
+        - id: accepted
+          terminal: false
+        - id: disputed
+          terminal: false
+        - id: settled
+          terminal: true
+      transitions:
+        - from: none
+          to: issued
+          action: issueStatement
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: status
+        type: string
+        marking: internal
+      - name: total
+        type: decimal
+        marking: financial
+      - name: currency
+        type: string
+        marking: financial
+    tenant_scope: *tenant_scope
+    legacy_sources: []
+    notes: Payment engine ownership stays outside Agency.
+  - id: Expense
+    machine_name: agency_expense
+    label: Expense
+    status: proposed
+    slice: S5
+    owning_submodule:
+      name: agency_expense
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: drafted
+          terminal: false
+        - id: submitted
+          terminal: false
+        - id: approved
+          terminal: false
+        - id: reimbursed
+          terminal: true
+      transitions:
+        - from: none
+          to: drafted
+          action: recordExpense
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: assignment_uuid
+        type: uuid
+        marking: internal
+      - name: amount
+        type: decimal
+        marking: financial
+      - name: status
+        type: string
+        marking: internal
+    tenant_scope: *tenant_scope
+    legacy_sources: []
+  - id: Credential
+    machine_name: agency_credential
+    label: Credential
+    status: proposed
+    slice: S5
+    owning_submodule:
+      name: agency_workforce
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: submitted
+          terminal: false
+        - id: verified
+          terminal: false
+        - id: expired
+          terminal: true
+        - id: revoked
+          terminal: true
+      transitions:
+        - from: none
+          to: submitted
+          action: verifyCredential
+        - from: submitted
+          to: verified
+          action: verifyCredential
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: person_uuid
+        type: uuid
+        marking: internal
+      - name: kind
+        type: string
+        marking: confidential
+      - name: status
+        type: string
+        marking: confidential
+      - name: expires
+        type: timestamp
+        marking: confidential
+    tenant_scope: *tenant_scope
+    legacy_sources: []
+    notes: Verification is not readiness and not an access grant.
+  - id: Availability
+    machine_name: agency_availability
+    label: Availability
+    status: proposed
+    slice: S5
+    owning_submodule:
+      name: agency_workforce
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: false
+    revisionable: false
+    lifecycle:
+      states:
+        - id: offered
+          terminal: false
+        - id: withdrawn
+          terminal: true
+        - id: expired
+          terminal: true
+      transitions:
+        - from: none
+          to: offered
+          action: offerAvailability
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: person_uuid
+        type: uuid
+        marking: internal
+      - name: window_start
+        type: timestamp
+        marking: internal
+      - name: window_end
+        type: timestamp
+        marking: internal
+      - name: status
+        type: string
+        marking: public
+    tenant_scope: *tenant_scope
+    legacy_sources: []
+    notes: Availability is not a commitment and not an assignment.
+  - id: Campaign
+    machine_name: agency_campaign
+    label: Campaign
+    status: proposed
+    slice: S5
+    owning_submodule:
+      name: agency_campaign
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: draft
+          terminal: false
+        - id: active
+          terminal: false
+        - id: paused
+          terminal: false
+        - id: completed
+          terminal: true
+      transitions:
+        - from: none
+          to: draft
+          action: launchCampaign
+        - from: draft
+          to: active
+          action: launchCampaign
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: title
+        type: string
+        marking: internal
+      - name: status
+        type: string
+        marking: internal
+    tenant_scope: *tenant_scope
+    legacy_sources: []
+links:
+  - id: person_principal
+    from: Person
+    to: PrincipalBinding
+    cardinality: "1:N"
+    reference_owner: to
+    reference_property: person_uuid
+    status: implemented
+    slice: S1
+  - id: relationship_person
+    from: Relationship
+    to: Person
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: person_uuid
+    status: implemented
+    slice: S1
+  - id: relationship_principal
+    from: Relationship
+    to: PrincipalBinding
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: principal_uuid
+    status: implemented
+    slice: S1
+  - id: invitation_relationship
+    from: Invitation
+    to: Relationship
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: relationship_uuid
+    status: implemented
+    slice: S1
+  - id: invitation_principal
+    from: Invitation
+    to: PrincipalBinding
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: principal_uuid
+    status: implemented
+    slice: S1
+  - id: entitlement_relationship
+    from: Entitlement
+    to: Relationship
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: relationship_uuid
+    status: implemented
+    slice: S1
+  - id: entitlement_principal
+    from: Entitlement
+    to: PrincipalBinding
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: principal_uuid
+    status: implemented
+    slice: S1
+  - id: membership_person
+    from: Membership
+    to: Person
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: person_uuid
+    status: proposed
+    slice: S2
+  - id: membership_organization
+    from: Membership
+    to: Organization
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: organization_uuid
+    status: proposed
+    slice: S2
+  - id: relationship_organization
+    from: Relationship
+    to: Organization
+    cardinality: "N:1"
+    reference_owner: from
+    status: proposed
+    slice: S3
+    notes: Proposed for client, partner and supplier kinds.
+  - id: opportunity_organization
+    from: Opportunity
+    to: Organization
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: organization_uuid
+    status: proposed
+    slice: S3
+  - id: activity_opportunity
+    from: Activity
+    to: Opportunity
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: opportunity_uuid
+    status: proposed
+    slice: S3
+  - id: intake_organization
+    from: IntakeSubmission
+    to: Organization
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: organization_uuid
+    status: proposed
+    slice: S3
+  - id: agreement_engagement
+    from: Agreement
+    to: Engagement
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: engagement_uuid
+    status: proposed
+    slice: S5
+  - id: engagement_organization
+    from: Engagement
+    to: Organization
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: organization_uuid
+    status: proposed
+    slice: S4
+  - id: assignment_engagement
+    from: Assignment
+    to: Engagement
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: engagement_uuid
+    status: proposed
+    slice: S4
+  - id: assignment_person
+    from: Assignment
+    to: Person
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: person_uuid
+    status: proposed
+    slice: S4
+  - id: time_entry_assignment
+    from: TimeEntry
+    to: Assignment
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: assignment_uuid
+    status: proposed
+    slice: S4
+  - id: time_session_assignment
+    from: TimeSession
+    to: Assignment
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: assignment_uuid
+    status: proposed
+    slice: S4
+  - id: submission_time_entry
+    from: TimeSubmission
+    to: TimeEntry
+    cardinality: "N:M"
+    reference_owner: join
+    status: proposed
+    slice: S4
+  - id: statement_submission
+    from: Statement
+    to: TimeSubmission
+    cardinality: "N:M"
+    reference_owner: join
+    status: proposed
+    slice: S4
+  - id: expense_assignment
+    from: Expense
+    to: Assignment
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: assignment_uuid
+    status: proposed
+    slice: S5
+  - id: credential_person
+    from: Credential
+    to: Person
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: person_uuid
+    status: proposed
+    slice: S5
+  - id: availability_person
+    from: Availability
+    to: Person
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: person_uuid
+    status: proposed
+    slice: S5
+actions:
+  - id: startDiscovery
+    target_type: Relationship
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.commands
+    input_schema:
+      type: object
+      required:
+        - display_name
+        - contact
+        - owner_contact
+        - next_action
+    validation_rules:
+      - Intended issuer and subject are resolved before any write.
+      - Contact data never selects or merges a principal.
+      - Invitation policy and display name must already be valid.
+      - Next-action dates must be future instants.
+    permission:
+      id: coordinate agency discovery
+      kind: drupal_permission
+      notes: Also requires host eligibility and Field Guard.
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key:
+      <<: *discovery_idempotency
+      fingerprint: SHA-256 of input plus the trusted issuer and subject.
+    reduces_access: false
+  - id: setNextAction
+    target_type: Relationship
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.commands
+    input_schema:
+      type: object
+    validation_rules:
+      - Ordinary edits require the current version.
+      - Owner-only recovery accepts only an owner payload.
+      - Moved-forward permits only an agency-owned next action.
+    permission:
+      id: coordinate agency discovery
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: respond
+    target_type: Relationship
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.commands
+    input_schema:
+      type: object
+      required:
+        - choice
+    validation_rules:
+      - Choice is yes, not_now, message, ready or decline_proposal.
+      - decline_proposal requires a current proposal.
+      - Ready means prepared, not consent or classification.
+    permission:
+      id: agency_staff.entitled_principal
+      kind: entitled_principal
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: pauseRelationship
+    target_type: Relationship
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.commands
+    input_schema:
+      type: object
+    validation_rules:
+      - Side selects the path. Authority still comes from services.
+      - Agency pause requires summary, purpose and a future date.
+    permission:
+      id: agency_staff.entitled_principal
+      kind: entitled_principal
+      notes: Agency side uses coordinate agency discovery instead.
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: resumeRelationship
+    target_type: Relationship
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.commands
+    input_schema:
+      type: object
+    validation_rules:
+      - Only the pausing side may resume.
+      - Resume returns exploring and waits on the agency.
+    permission:
+      id: agency_staff.entitled_principal
+      kind: entitled_principal
+      notes: Agency side uses coordinate agency discovery instead.
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: withdrawRelationship
+    target_type: Relationship
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.commands
+    input_schema:
+      type: object
+    validation_rules:
+      - Applies to the latest authorized state despite a stale version.
+      - Denial and immutable intent commit together.
+      - Terminal retry returns not_found and never restores a grant.
+    permission:
+      id: agency_staff.entitled_principal
+      kind: entitled_principal
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: true
+  - id: revokeInvitation
+    target_type: Relationship
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.commands
+    input_schema:
+      type: object
+    validation_rules:
+      - Revokes generations and entitlement despite a stale version.
+      - Relationship state is not reopened.
+    permission:
+      id: coordinate agency discovery
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: true
+  - id: revoke
+    target_type: Invitation
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.invitations
+    input_schema:
+      type: object
+    validation_rules:
+      - Delegates to revokeInvitation.
+    permission:
+      id: coordinate agency discovery
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: true
+  - id: suspendAccess
+    target_type: Relationship
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.commands
+    input_schema:
+      type: object
+    validation_rules:
+      - Removes pending, workspace and summary authority immediately.
+      - Also applies after withdrawal or close.
+    permission:
+      id: suspend agency discovery access
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: true
+  - id: close
+    target_type: Relationship
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.commands
+    input_schema:
+      type: object
+      required:
+        - category
+        - message
+        - contact
+    validation_rules:
+      - Category must be a configured close reason.
+      - Requires durable local evidence.
+    permission:
+      id: coordinate agency discovery
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: moveForward
+    target_type: Relationship
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.commands
+    input_schema:
+      type: object
+    validation_rules:
+      - Coordinator proposal keeps state exploring.
+      - Participant consent requires the current proposal and version.
+      - Consent creates no role, classification or external access.
+    permission:
+      id: coordinate agency discovery
+      kind: drupal_permission
+      notes: Participant consent uses entitled_principal.
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: issue
+    target_type: Invitation
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.invitations
+    input_schema:
+      type: object
+    validation_rules:
+      - Relationship must be invited with a pending entitlement.
+      - Token is returned only on the first success.
+    permission:
+      id: coordinate agency discovery
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: resend
+    target_type: Invitation
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.invitations
+    input_schema:
+      type: object
+    validation_rules:
+      - Supersedes every earlier active generation.
+      - Retry of the same key never returns the bearer token.
+    permission:
+      id: coordinate agency discovery
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: accept
+    target_type: Invitation
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.invitations
+    input_schema:
+      type: object
+      required:
+        - token
+    validation_rules:
+      - POST only.
+      - Current authenticated issuer and subject must match the intended pair.
+      - Used token cannot bind again.
+    permission:
+      id: agency_staff.entitled_principal
+      kind: entitled_principal
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: inspect
+    target_type: Invitation
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.invitations
+    input_schema:
+      type: object
+      required:
+        - token
+    validation_rules:
+      - GET never consumes or binds.
+      - Missing, closed and used tokens share a closed shape plus support route.
+    permission:
+      id: invitation.token
+      kind: invitation_token
+    approval_rule: null
+    evidence: *read_evidence
+    idempotency_key:
+      required: false
+      pattern: '^[A-Za-z0-9_.:-]{8,128}$'
+    reduces_access: false
+  - id: removeExpiredDiscovery
+    target_type: Relationship
+    status: implemented
+    slice: S1
+    owning_service: agency_staff.retention_removal
+    input_schema:
+      type: object
+      required:
+        - plan_sha256
+    validation_rules:
+      - Rechecks the exact plan under the writer and policy fences.
+      - Shared person and identity rows remain when still referenced.
+    permission:
+      id: remove expired agency discovery
+      kind: maintenance_permission
+    approval_rule: Reviewed retention plan and exact retry key.
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+    notes: Retention after a terminal state. Not the deny-first access path.
+  - id: createOrganization
+    target_type: Organization
+    status: proposed
+    slice: S2
+    input_schema:
+      type: object
+    validation_rules:
+      - Display name is required. Legal name is optional.
+    permission:
+      id: agency_workforce.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: archiveOrganization
+    target_type: Organization
+    status: proposed
+    slice: S2
+    input_schema:
+      type: object
+    validation_rules:
+      - Archiving does not delete membership history.
+    permission:
+      id: agency_workforce.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: grantMembership
+    target_type: Membership
+    status: proposed
+    slice: S2
+    input_schema:
+      type: object
+    validation_rules:
+      - Membership is not an access grant or assignment.
+    permission:
+      id: agency_workforce.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: endMembership
+    target_type: Membership
+    status: proposed
+    slice: S2
+    input_schema:
+      type: object
+    validation_rules:
+      - Ending membership does not delete the person.
+    permission:
+      id: agency_workforce.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: createOpportunity
+    target_type: Opportunity
+    status: proposed
+    slice: S3
+    input_schema:
+      type: object
+    validation_rules:
+      - Discovery explorers never become commercial contacts through this action.
+    permission:
+      id: agency_commercial.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: closeOpportunity
+    target_type: Opportunity
+    status: proposed
+    slice: S3
+    input_schema:
+      type: object
+    validation_rules:
+      - Outcome is won or lost.
+    permission:
+      id: agency_commercial.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: recordActivity
+    target_type: Activity
+    status: proposed
+    slice: S3
+    input_schema:
+      type: object
+    validation_rules:
+      - Summary is bounded plain text.
+    permission:
+      id: agency_commercial.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: submitIntake
+    target_type: IntakeSubmission
+    status: proposed
+    slice: S3
+    input_schema:
+      type: object
+    validation_rules:
+      - Dispatch is idempotent on dispatch_key.
+    permission:
+      id: agency_intake.submit
+      kind: entitled_principal
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: offerAssignment
+    target_type: Assignment
+    status: proposed
+    slice: S4
+    input_schema:
+      type: object
+    validation_rules:
+      - Offer creates no access grant.
+    permission:
+      id: agency_engagement.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: acceptAssignment
+    target_type: Assignment
+    status: proposed
+    slice: S4
+    input_schema:
+      type: object
+    validation_rules:
+      - Acceptance is not settlement.
+    permission:
+      id: agency_staff.entitled_principal
+      kind: entitled_principal
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: submitTime
+    target_type: TimeSubmission
+    status: proposed
+    slice: S4
+    input_schema:
+      type: object
+    validation_rules:
+      - Entries in the submission must belong to the actor.
+    permission:
+      id: agency_staff.entitled_principal
+      kind: entitled_principal
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: acceptTimeSubmission
+    target_type: TimeSubmission
+    status: proposed
+    slice: S4
+    input_schema:
+      type: object
+    validation_rules:
+      - Acceptance is not settlement and does not move money.
+    permission:
+      id: agency_engagement.coordinate
+      kind: drupal_permission
+    approval_rule: optional reviewer approval policy supplied by the host
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: issueStatement
+    target_type: Statement
+    status: proposed
+    slice: S4
+    input_schema:
+      type: object
+    validation_rules:
+      - Statement snapshots accepted submissions. Payment stays outside Agency.
+    permission:
+      id: agency_engagement.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: recordExpense
+    target_type: Expense
+    status: proposed
+    slice: S5
+    input_schema:
+      type: object
+    validation_rules:
+      - Amount is required and marked financial.
+    permission:
+      id: agency_engagement.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: verifyCredential
+    target_type: Credential
+    status: proposed
+    slice: S5
+    input_schema:
+      type: object
+    validation_rules:
+      - Verification is not readiness and not an access grant.
+    permission:
+      id: agency_workforce.coordinate
+      kind: drupal_permission
+    approval_rule: optional verifier approval policy supplied by the host
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: offerAvailability
+    target_type: Availability
+    status: proposed
+    slice: S5
+    input_schema:
+      type: object
+    validation_rules:
+      - Availability is not a commitment.
+    permission:
+      id: agency_staff.entitled_principal
+      kind: entitled_principal
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: launchCampaign
+    target_type: Campaign
+    status: proposed
+    slice: S5
+    input_schema:
+      type: object
+    validation_rules:
+      - Launch does not grant relationship or roster authority.
+    permission:
+      id: agency_campaign.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+projections:
+  - audience: participant_workspace
+    object: Relationship
+    fields:
+      - uuid
+      - kind
+      - state
+      - waiting_on
+      - display_waiting_on
+      - owner_name
+      - owner_contact
+      - owner_changed_at
+      - next_action
+      - agency_late
+      - changed
+      - version
+      - pause_origin
+      - proposal
+      - agreed_next_step
+      - permitted_actions
+      - permitted_choices
+  - audience: participant_summary
+    object: Relationship
+    fields:
+      - state
+      - terminal_at
+      - close_message
+      - close_contact
+  - audience: participant_summary_entitlement
+    object: Entitlement
+    fields:
+      - readable_until
+  - audience: coordinator_queue
+    object: Relationship
+    fields:
+      - uuid
+      - state
+      - waiting_on
+      - version
+      - owner_unavailable
+      - last_agency_action_at
+      - pause_note
+      - withdrawal_note
+      - permitted_actions
+  - audience: evidence_metadata
+    object: Evidence
+    fields:
+      - event_id
+      - relationship_id
+      - subject_hash
+      - state
+      - waiting_on
+      - effective_at
