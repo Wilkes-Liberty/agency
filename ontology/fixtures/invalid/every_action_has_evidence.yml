@@ -1,0 +1,80 @@
+version: 0.1.0
+status: draft
+ships_tenant_defaults: false
+compatibility:
+  scheme: semver
+  beta_freezes_released_types: true
+  breaking_change: deprecation_cycle
+objects:
+- id: Person
+  machine_name: agency_person
+  label: Person
+  status: implemented
+  slice: S1
+  owning_submodule:
+    name: agency_staff
+    status: existing
+  identifiers:
+    integer_id: true
+    uuid: true
+    revision_id: false
+  revisionable: false
+  lifecycle:
+    states:
+    - id: recorded
+      terminal: false
+    transitions: []
+  properties:
+  - name: id
+    type: integer
+    marking: internal
+  - name: uuid
+    type: uuid
+    marking: internal
+  - name: created
+    type: timestamp
+    marking: internal
+  - name: changed
+    type: timestamp
+    marking: internal
+  - name: display_name
+    type: string
+    marking: personal
+  - name: contact_kind
+    type: string
+    marking: personal
+  - name: contact_value
+    type: string
+    marking: personal
+  tenant_scope:
+    isolation: shared_within_tenant
+    cross_tenant_reads: denied
+  legacy_sources:
+  - crm_contact
+links:
+- id: person_principal
+  from: Person
+  to: Person
+  cardinality: 1:N
+  reference_owner: from
+  status: implemented
+actions:
+- id: startDiscovery
+  target_type: Relationship
+  status: implemented
+  input_schema:
+    type: object
+  validation_rules:
+  - Requires a valid intended principal.
+  permission:
+    id: coordinate agency discovery
+    kind: drupal_permission
+  idempotency_key:
+    required: true
+    pattern: ^[A-Za-z0-9_.:-]{8,128}$
+  reduces_access: false
+projections:
+- audience: coordinator_queue
+  object: Person
+  fields:
+  - display_name
