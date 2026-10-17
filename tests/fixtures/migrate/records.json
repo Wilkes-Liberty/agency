@@ -1,0 +1,25 @@
+{
+  "records": [
+    {
+      "title": "Alpha",
+      "payload": "body-a",
+      "related_id": 0,
+      "access_class": "open",
+      "revision_log": "first-alpha"
+    },
+    {
+      "title": "Beta",
+      "payload": "body-b",
+      "related_id": 0,
+      "access_class": "restricted",
+      "revision_log": "first-beta"
+    },
+    {
+      "title": "Gamma",
+      "payload": "body-c",
+      "related_id": 0,
+      "access_class": "open",
+      "revision_log": "first-gamma"
+    }
+  ]
+}
