@@ -21,6 +21,19 @@ Prepared prerelease; publication requires maintainer approval. See the
 
 ### Added
 
+- `agency_host` generic Discovery host adapter: identity history, private
+  transport, coordinator console, invitation custody, evidence maintenance,
+  and `drush agency:readiness`. Tenant values stay with the installing site.
+  Enabling the module copies former `chronicle_agency` tables, config, state,
+  key/value collections and queue items without dropping the source. Qualified
+  binding fingerprints keep HMAC `chronicle-agency-history-key-v1` and the
+  digest schema slot keyed `chronicle_agency`. Contact policy and delivery
+  audit are replaceable ports. Historical `paladin_issuer` / `paladin_audience`
+  token keys remain readable so already-qualified coverage does not change.
+  Ships in this tag so [webcms#1899](https://github.com/Wilkes-Liberty/webcms/pull/1899)
+  can require `^1.0.0-alpha3`. See
+  [DEV-1008](https://wilkesliberty.atlassian.net/browse/DEV-1008).
+
 - Interrupted-batch and withdrawn-terminal retention controls. An earlier
   committed removal stays removed when a later item rolls back; the same
   current policy and recorded terminal time apply after Stop. GitHub CI now
