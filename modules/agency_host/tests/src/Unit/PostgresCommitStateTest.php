@@ -25,6 +25,9 @@ final class PostgresCommitStateTest extends UnitTestCase {
    */
   #[DataProvider('uncertainStates')]
   public function testUncertainStatusPreservesRollback(bool $unreadable): void {
+    if (version_compare(\Drupal::VERSION, '11.3.0', '<')) {
+      $this->markTestSkipped('Documents Drupal 11.3+ throwing-commit stack behavior.');
+    }
     $client = $this->createMock(\PDO::class);
     $client->expects($this->once())->method('beginTransaction')->willReturn(TRUE);
     $original = new \PDOException('Synthetic commit failure');
