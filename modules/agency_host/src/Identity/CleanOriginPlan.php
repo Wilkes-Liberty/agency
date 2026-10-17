@@ -8,6 +8,7 @@ use Drupal\agency_host\HostSettings;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\StorageInterface;
 use Drupal\Core\Database\Connection;
+use Drupal\Core\Database\StatementInterface;
 use Drupal\Core\Database\Statement\FetchAs;
 use Drupal\Core\Site\Settings;
 
@@ -193,7 +194,7 @@ final class CleanOriginPlan {
       };
       $query->condition($key, $owned[$table], '<>');
     }
-    $rows = $query->execute()->fetchAll(FetchAs::Associative);
+    $rows = $this->fetchAssociative($query->execute());
     if (count($rows) > self::MAX_ROWS) {
       throw new \UnexpectedValueException();
     }
@@ -320,6 +321,16 @@ final class CleanOriginPlan {
    */
   private function digest(array $value): string {
     return hash_hmac('sha256', json_encode($value, JSON_THROW_ON_ERROR), Settings::getHashSalt());
+  }
+
+  /**
+   * Returns associative rows on Drupal 10 PDO modes and Drupal 11 FetchAs.
+   */
+  private function fetchAssociative(StatementInterface $statement): array {
+    if (class_exists(FetchAs::class)) {
+      return $statement->fetchAll(FetchAs::Associative);
+    }
+    return $statement->fetchAll(\PDO::FETCH_ASSOC);
   }
 
 }

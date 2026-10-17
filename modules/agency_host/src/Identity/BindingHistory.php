@@ -10,6 +10,7 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Config\StorageInterface;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\IntegrityConstraintViolationException;
+use Drupal\Core\Database\StatementInterface;
 use Drupal\Core\Database\Statement\FetchAs;
 use Drupal\agency_host\HostSettings;
 use Drupal\Core\Extension\ModuleHandlerInterface;
@@ -236,8 +237,10 @@ final class BindingHistory implements BindingHistoryInterface {
       if ($this->database->getConnectionOptions()['driver'] === 'pgsql') {
         $this->database->query('LOCK TABLE {authmap} IN SHARE ROW EXCLUSIVE MODE');
       }
-      $coverages = $this->database->select('agency_host_binding_coverage', 'c')
-        ->fields('c')->condition('qualified', 1)->execute()->fetchAll(FetchAs::Associative);
+      $coverages = $this->fetchAssociative(
+        $this->database->select('agency_host_binding_coverage', 'c')
+          ->fields('c')->condition('qualified', 1)->execute()
+      );
       foreach ($coverages as $coverage) {
         if (!$this->latch->invalidated($coverage['epoch'])) {
           // This independent commit precedes any observation of map/config
@@ -324,7 +327,17 @@ final class BindingHistory implements BindingHistoryInterface {
     if ($provider !== NULL) {
       $query->condition('provider', $provider);
     }
-    return $query->execute()->fetchAll(FetchAs::Associative);
+    return $this->fetchAssociative($query->execute());
+  }
+
+  /**
+   * Returns associative rows on Drupal 10 PDO modes and Drupal 11 FetchAs.
+   */
+  private function fetchAssociative(StatementInterface $statement): array {
+    if (class_exists(FetchAs::class)) {
+      return $statement->fetchAll(FetchAs::Associative);
+    }
+    return $statement->fetchAll(\PDO::FETCH_ASSOC);
   }
 
   /**

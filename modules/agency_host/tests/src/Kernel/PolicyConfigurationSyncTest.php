@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\agency_host\Kernel;
 
 use Drupal\Component\Serialization\Yaml;
+use Drupal\Core\Config\ConfigImporter;
 use Drupal\Core\Config\ConfigImporterFactory;
 use Drupal\Core\Config\StorageComparer;
 use Drupal\KernelTests\KernelTestBase;
@@ -91,7 +92,24 @@ final class PolicyConfigurationSyncTest extends KernelTestBase {
   private function importConfiguration(): void {
     $source = $this->container->get('config.import_transformer')->transform($this->container->get('config.storage.sync'));
     $comparer = new StorageComparer($source, $this->container->get('config.storage'));
-    $importer = $this->container->get(ConfigImporterFactory::class)->get($comparer);
+    if (class_exists(ConfigImporterFactory::class) && $this->container->has(ConfigImporterFactory::class)) {
+      $importer = $this->container->get(ConfigImporterFactory::class)->get($comparer);
+    }
+    else {
+      $importer = new ConfigImporter(
+        $comparer,
+        $this->container->get('event_dispatcher'),
+        $this->container->get('config.manager'),
+        $this->container->get('lock'),
+        $this->container->get('config.typed'),
+        $this->container->get('module_handler'),
+        $this->container->get('module_installer'),
+        $this->container->get('theme_handler'),
+        $this->container->get('string_translation'),
+        $this->container->get('extension.list.module'),
+        $this->container->get('extension.list.theme'),
+      );
+    }
     $importer->reset()->import();
     $this->assertSame([], $importer->getErrors());
     $this->assertSame('Imported synthetic site', $this->config('system.site')->get('name'));

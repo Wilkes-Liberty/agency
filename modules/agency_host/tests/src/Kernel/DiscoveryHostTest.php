@@ -848,6 +848,9 @@ final class DiscoveryHostTest extends KernelTestBase {
    * Makes a synthetic pinned receipt while preserving the old coverage record.
    */
   private function cleanOriginPlanner(?string $issuer = NULL): array {
+    if ($this->container->get('database')->getConnectionOptions()['driver'] !== 'pgsql') {
+      $this->markTestSkipped('Clean-origin qualification requires PostgreSQL 16.');
+    }
     $this->config('agency_host.settings')->set('enabled', FALSE)->save();
     $identity = Settings::get('agency_host_identity');
     $identity['binding_mode'] = 'unbound_only';
@@ -1736,7 +1739,10 @@ final class DiscoveryHostTest extends KernelTestBase {
    * The qualified existing SMTP plugin produces exactly the approved envelope.
    */
   public function testInvitationDeliveryActualSmtpEnvelopeWithoutNetwork(): void {
-    if (!$this->container->get('extension.list.module')->exists('smtp')) {
+    $extensions = $this->container->has('extension.list.module')
+      ? $this->container->get('extension.list.module')
+      : NULL;
+    if ($extensions === NULL || !$extensions->exists('smtp')) {
       $this->markTestSkipped('Requires the smtp module on the test host.');
     }
     $this->deliveryFixture();
@@ -1980,7 +1986,10 @@ final class DiscoveryHostTest extends KernelTestBase {
    * The installed public suppression policy denies consent and outage states.
    */
   public function testInvitationDeliveryUsesAuthoritativeSuppression(): void {
-    if (!$this->container->get('extension.list.module')->exists('postmark_webhooks')) {
+    $extensions = $this->container->has('extension.list.module')
+      ? $this->container->get('extension.list.module')
+      : NULL;
+    if ($extensions === NULL || !$extensions->exists('postmark_webhooks')) {
       $this->markTestSkipped('Requires the postmark_webhooks module on the test host.');
     }
     $this->enableModules(['postmark_webhooks']);

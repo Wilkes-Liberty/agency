@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\agency_host\Kernel;
 
+use Drupal\agency_host\Identity\OriginTransaction;
 use Drupal\Core\Database\Database;
 use Drupal\KernelTests\KernelTestBase;
 use PHPUnit\Framework\Attributes\Group;
@@ -21,7 +22,9 @@ final class PostgresCommitFailureTest extends KernelTestBase {
    */
   public function testDeferredCommitFailure(): void {
     $database = $this->container->get('database');
-    $this->assertSame('pgsql', $database->driver());
+    if ($database->driver() !== 'pgsql') {
+      $this->markTestSkipped('Independent durable PostgreSQL commit-failure proof.');
+    }
     $database->query('CREATE TABLE {commit_failure_control} (id INT UNIQUE DEFERRABLE INITIALLY DEFERRED)');
     $database->insert('commit_failure_control')->fields(['id' => 1])->execute();
     $key = 'commit_failure_reader_' . bin2hex(random_bytes(8));
@@ -44,14 +47,7 @@ final class PostgresCommitFailureTest extends KernelTestBase {
     $this->assertInstanceOf(\PDOException::class, $failure);
     $this->assertSame('23505', $failure->getCode());
     $this->assertFalse($database->getClientConnection()->inTransaction());
-    // Drupal 11.4 core leaves the failed root Active after PDO::commit()
-    // throws, even though PostgreSQL already ended the session transaction.
-    // Open a fresh client transaction so rollback can clear the stack
-    // without a second COMMIT at shutdown.
-    if ($database->transactionManager()->stackDepth() !== 0) {
-      $database->getClientConnection()->beginTransaction();
-      $transaction->rollBack();
-    }
+    OriginTransaction::rollBack($transaction);
     $this->assertSame(0, $database->transactionManager()->stackDepth());
     // Exercise the same manager path used at shutdown before destruction.
     $database->transactionManager()->commitAll();

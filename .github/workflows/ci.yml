@@ -104,7 +104,7 @@ jobs:
     # share a per-IP quota across GitHub-hosted runners and fail the job
     # before checkout.
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -180,9 +180,23 @@ jobs:
           composer config --no-plugins allow-plugins.drupal/core-project-message true
           composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
           composer config --no-plugins allow-plugins.phpstan/extension-installer true
+          composer config --no-plugins allow-plugins.php-http/discovery true
           composer config repositories.agency --json '{"type":"path","url":"../module","options":{"symlink":true,"versions":{"drupal/agency":"1.x-dev"}}}'
           composer require -W --no-interaction --no-progress 'drupal/agency:1.x-dev'
           composer require -W --dev --no-interaction --no-progress "drupal/core-dev:${CORE_CONSTRAINT}"
+          # Host kernel tests need the identity/OAuth stack and Drush discovery.
+          # Pin the reviewed Externalauth and OpenID Connect writers. Do not
+          # install smtp or postmark_webhooks: those cases skip when absent.
+          composer require -W --no-interaction --no-progress \
+            'drupal/config_ignore:^3.4' \
+            'drupal/consumers:^1.24' \
+            'drupal/entity:^1.8' \
+            'drupal/externalauth:2.0.13' \
+            'drupal/openid_connect:3.0.0-alpha9' \
+            'drupal/simple_oauth:^6.1' \
+            'drush/drush:^12.5 || ^13' \
+            'firebase/php-jwt:^6 || ^7' \
+            'phpmailer/phpmailer:^6 || ^7'
       - name: Assert the candidate and core version
         working-directory: drupal
         env:
@@ -258,6 +272,70 @@ jobs:
             echo "Executed tests: $executed\n";
             if ($executed < 2) { exit(1); }
           '
+      - name: Run agency_host unit, kernel and functional tests
+        working-directory: drupal
+        env:
+          SIMPLETEST_DB: ${{ matrix.driver }}://agency_test:test_only@127.0.0.1/agency_test
+          SIMPLETEST_BASE_URL: http://127.0.0.1:8888
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          export BROWSERTEST_OUTPUT_DIRECTORY="$PWD/web/sites/simpletest/browser_output"
+          host="$PWD/web/modules/contrib/agency/modules/agency_host/tests/src"
+          test -d "$host/Kernel"
+          paths=("$host/Unit" "$host/Kernel")
+          if [ -d "$host/Functional" ]; then
+            paths+=("$host/Functional")
+          fi
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/agency-host-junit.xml" \
+            "${paths[@]}"
+          # PHP expressions are intentionally passed literally to PHP.
+          # shellcheck disable=SC2016
+          php -r '
+            $xml = simplexml_load_file("agency-host-junit.xml");
+            if ($xml === false) { exit(1); }
+            $driver = getenv("SIMPLETEST_DB");
+            $pgsql = is_string($driver) && str_starts_with($driver, "pgsql:");
+            $executed = 0;
+            $skipped = [];
+            $names = [];
+            foreach ($xml->xpath("//testcase") as $case) {
+              $name = (string) $case["name"];
+              $names[] = $name;
+              if (isset($case->failure) || isset($case->error)) { exit(1); }
+              if (isset($case->skipped)) {
+                $skipped[] = $name;
+                continue;
+              }
+              $executed++;
+            }
+            echo "Executed agency_host tests: $executed\n";
+            echo "Skipped agency_host tests: " . count($skipped) . "\n";
+            if ($executed < 1) { exit(1); }
+            $optional = [
+              "testInvitationDeliveryActualSmtpEnvelopeWithoutNetwork",
+              "testInvitationDeliveryUsesAuthoritativeSuppression",
+            ];
+            foreach ($optional as $name) {
+              if (in_array($name, $skipped, TRUE)) {
+                echo "Skipped optional $name (module absent)\n";
+              }
+            }
+            if (!$pgsql) { exit(0); }
+            $required = [
+              "testCleanOriginQualificationPrimaryRollback with data set #1",
+              "testCleanOriginQualificationLedgerFault with data set #4",
+              "testCleanOriginQualificationLedgerFault with data set #5",
+              "testCleanOriginQualificationLedgerFault with data set #6",
+              "testCleanOriginQualificationLedgerFault with data set #7",
+            ];
+            foreach ($required as $name) {
+              if (!in_array($name, $names, TRUE) || in_array($name, $skipped, TRUE)) {
+                fwrite(STDERR, "PostgreSQL 16 must execute $name without skip\n");
+                exit(1);
+              }
+            }
+          '
       - name: Stop test server
         if: always()
         run: |
@@ -271,5 +349,6 @@ jobs:
           path: |
             drupal/junit.xml
             drupal/domain-junit.xml
+            drupal/agency-host-junit.xml
             drupal/composer.lock
             drupal/server.log
