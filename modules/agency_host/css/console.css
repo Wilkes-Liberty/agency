@@ -1,0 +1,6 @@
+.agency-console { max-width: 72rem; overflow-wrap: anywhere; }
+.agency-console__row { border-block-start: 1px solid currentColor; padding-block: 1rem; }
+.agency-console__row a { display: inline-block; margin-inline-end: 1rem; margin-block: .5rem; }
+.agency-console input, .agency-console textarea, .agency-console select { max-width: 100%; box-sizing: border-box; }
+
+.agency-console__mail { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }

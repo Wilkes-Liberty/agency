@@ -1,0 +1,7 @@
+name: Agency Host synthetic
+package: Testing
+type: module
+hidden: true
+core_version_requirement: ^10.6 || ^11.3
+dependencies:
+  - agency:agency_host

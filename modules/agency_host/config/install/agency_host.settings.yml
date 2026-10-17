@@ -1,0 +1,11 @@
+enabled: false
+bff_client_id: ''
+binding_providers: []
+contained_openid_clients: []
+disallowed_role_ids: []
+disallowed_role_prefixes: []
+protected_account_names: []
+source_digest_modules:
+  - agency_host
+extra_containment_config: []
+extra_containment_settings: []

@@ -1,0 +1,40 @@
+<?php
+
+/**
+ * @file
+ * Host-owned mail composition and encrypted payload retention.
+ */
+
+/**
+ * Implements hook_mail().
+ */
+function agency_host_mail(string $key, array &$message, array $params): void {
+  if ($key !== 'invitation') {
+    $message['send'] = FALSE;
+    return;
+  }
+  $sender = $params['sender'];
+  $message['subject'] = $params['content']['subject'];
+  $message['body'] = [$params['content']['body']];
+  $message['from'] = $sender['email'];
+  $message['headers']['From'] = $sender['email'];
+  $message['headers']['Sender'] = $sender['email'];
+  $message['headers']['Return-Path'] = $sender['email'];
+  $message['headers']['Content-Type'] = 'text/plain; charset=utf-8';
+  $message['params'] = ['from_name' => $sender['name'], 'from_mail' => $sender['email']];
+}
+
+/**
+ * Implements hook_cron().
+ */
+function agency_host_cron(): void {
+  // Cleanup never sends, retries, removes attempt fences or chooses a period.
+  \Drupal::service('agency_host.delivery_ledger')->purge();
+}
+
+/**
+ * Implements hook_openid_connect_pre_authorize().
+ */
+function agency_host_openid_connect_pre_authorize($account, array $context): bool {
+  return \Drupal::service('agency_host.portal_sign_in_policy')->allows((string) ($context['plugin_id'] ?? ''));
+}

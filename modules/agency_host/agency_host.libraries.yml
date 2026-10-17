@@ -1,0 +1,9 @@
+console:
+  css:
+    component:
+      css/console.css: {}
+  js:
+    js/console.js: {}
+  dependencies:
+    - core/drupal
+    - core/once

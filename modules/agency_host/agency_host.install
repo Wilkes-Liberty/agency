@@ -1,0 +1,258 @@
+<?php
+
+/**
+ * @file
+ * Host-owned identity history; contains no Agency-owned storage.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function agency_host_schema(): array {
+  return [
+    'agency_host_binding_origin' => [
+      'description' => 'Consumed clean-origin attestations, independent of binding version and hash salt.',
+      'fields' => [
+        'issuer_key' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'receipt' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'incarnation' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'plan' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'scope' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'epoch' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'guard' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'fingerprint' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'state' => ['type' => 'varchar_ascii', 'length' => 16, 'not null' => TRUE],
+        'created' => ['type' => 'int', 'not null' => TRUE],
+        'completed' => ['type' => 'int', 'not null' => TRUE, 'default' => 0],
+      ],
+      'primary key' => ['issuer_key'],
+      'unique keys' => ['receipt' => ['receipt'], 'incarnation' => ['incarnation']],
+    ],
+    'agency_host_delivery' => [
+      'description' => 'Host-owned encrypted invitation custody and delivery fences.',
+      'fields' => [
+        'id' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'kind' => ['type' => 'varchar_ascii', 'length' => 16, 'not null' => TRUE],
+        'relationship_id' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'fingerprint' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'state' => ['type' => 'varchar_ascii', 'length' => 32, 'not null' => TRUE],
+        'revision' => ['type' => 'int', 'not null' => TRUE],
+        'created' => ['type' => 'int', 'not null' => TRUE],
+        'expires' => ['type' => 'int', 'not null' => TRUE],
+        'payload' => ['type' => 'text', 'size' => 'big', 'not null' => TRUE],
+      ],
+      'primary key' => ['id'],
+      'indexes' => ['mapping' => ['relationship_id', 'kind', 'state'], 'retention' => ['expires']],
+    ],
+    'agency_host_binding_guard' => [
+      'fields' => [
+        'id' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'epoch' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+      ],
+      'primary key' => ['id'],
+      'indexes' => ['qualification' => ['epoch']],
+    ],
+    'agency_host_binding_invalid' => [
+      'fields' => [
+        'epoch' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+      ],
+      'primary key' => ['epoch'],
+    ],
+    'agency_host_binding_mutex' => [
+      'fields' => [
+        'id' => ['type' => 'int', 'not null' => TRUE],
+        'value' => ['type' => 'int', 'not null' => TRUE, 'default' => 0],
+      ],
+      'primary key' => ['id'],
+    ],
+    'agency_host_binding_history' => [
+      'fields' => [
+        'id' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'scope' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'revoked' => ['type' => 'int', 'size' => 'tiny', 'not null' => TRUE, 'default' => 0],
+        'observed_at' => ['type' => 'int', 'not null' => TRUE],
+        'changed_at' => ['type' => 'int', 'not null' => TRUE],
+      ],
+      'primary key' => ['id'],
+    ],
+    'agency_host_binding_association' => [
+      'fields' => [
+        'id' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'subject_key' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'uid' => ['type' => 'int', 'not null' => TRUE],
+        'provider' => ['type' => 'varchar_ascii', 'length' => 255, 'not null' => TRUE],
+      ],
+      'primary key' => ['id'],
+      'indexes' => ['affected_mapping' => ['uid', 'provider']],
+    ],
+    'agency_host_binding_coverage' => [
+      'fields' => [
+        'scope' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'epoch' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'fingerprint' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'provenance' => ['type' => 'varchar', 'length' => 255, 'not null' => TRUE],
+        'qualified' => ['type' => 'int', 'size' => 'tiny', 'not null' => TRUE, 'default' => 0],
+      ],
+      'primary key' => ['scope'],
+    ],
+    'agency_host_delivery_audit' => [
+      'description' => 'Required invitation-custody evidence independent of encrypted payloads.',
+      'fields' => [
+        'event_id' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'operation' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'created' => ['type' => 'int', 'not null' => TRUE],
+        'payload' => ['type' => 'text', 'size' => 'big', 'not null' => TRUE],
+      ],
+      'primary key' => ['event_id'],
+      'indexes' => ['created' => ['created']],
+    ],
+  ];
+}
+
+
+/**
+ * Implements hook_install().
+ */
+function agency_host_install(): void {
+  $database = \Drupal::database();
+  if (!(int) $database->select('agency_host_binding_mutex', 'm')->countQuery()->execute()->fetchField()) {
+    $database->insert('agency_host_binding_mutex')->fields(['id' => 1, 'value' => 0])->execute();
+  }
+  agency_host_adopt_chronicle_agency_namespace();
+}
+
+/**
+ * Adds host history without asserting retrospective binding coverage.
+ */
+function agency_host_update_10001(): void {
+  $schema = \Drupal::database()->schema();
+  foreach (agency_host_schema() as $name => $definition) {
+    if (!$schema->tableExists($name)) {
+      $schema->createTable($name, $definition);
+    }
+  }
+  \Drupal::database()->merge('agency_host_binding_mutex')->key('id', 1)->fields(['value' => 0])->execute();
+  if ($schema->tableExists('agency_host_binding_coverage')) {
+    \Drupal::database()->update('agency_host_binding_coverage')->fields(['qualified' => 0])->execute();
+  }
+}
+
+/**
+ * Adds disabled-by-default host invitation custody; never backfills identities.
+ */
+function agency_host_update_10002(): void {
+  $schema = \Drupal::database()->schema();
+  if (!$schema->tableExists('agency_host_delivery')) {
+    $schema->createTable('agency_host_delivery', agency_host_schema()['agency_host_delivery']);
+  }
+}
+
+/**
+ * Adds clean-origin consumption without qualifying or replacing history.
+ */
+function agency_host_update_10003(): void {
+  $schema = \Drupal::database()->schema();
+  if (!$schema->tableExists('agency_host_binding_origin')) {
+    $schema->createTable('agency_host_binding_origin', agency_host_schema()['agency_host_binding_origin']);
+  }
+}
+
+/**
+ * Adopts the former chronicle_agency namespace without deleting it.
+ *
+ * Source tables, state keys and queue names stay in place so a code rollback
+ * can still read custody. This never drops keys or queues.
+ */
+function agency_host_adopt_chronicle_agency_namespace(): void {
+  $database = \Drupal::database();
+  $schema = $database->schema();
+  $definitions = agency_host_schema();
+  $tables = [
+    'binding_origin',
+    'delivery',
+    'binding_guard',
+    'binding_invalid',
+    'binding_mutex',
+    'binding_history',
+    'binding_association',
+    'binding_coverage',
+  ];
+  foreach ($tables as $suffix) {
+    $source = 'chronicle_agency_' . $suffix;
+    $destination = 'agency_host_' . $suffix;
+    if (!$schema->tableExists($source)) {
+      continue;
+    }
+    if (!$schema->tableExists($destination) && isset($definitions[$destination])) {
+      $schema->createTable($destination, $definitions[$destination]);
+    }
+    if (!$schema->tableExists($destination)) {
+      continue;
+    }
+    $count = (int) $database->select($destination, 'd')->countQuery()->execute()->fetchField();
+    $source_count = (int) $database->select($source, 's')->countQuery()->execute()->fetchField();
+    if ($count === 0 && $source_count > 0) {
+      $database->query('INSERT INTO {' . $destination . '} SELECT * FROM {' . $source . '}');
+    }
+  }
+
+  $config = \Drupal::configFactory();
+  $legacy_settings = $config->get('chronicle_agency.settings');
+  $host_settings = $config->getEditable('agency_host.settings');
+  if ($legacy_settings->get('bff_client_id') && !$host_settings->get('bff_client_id')) {
+    $host_settings->set('enabled', (bool) $legacy_settings->get('enabled'));
+    $host_settings->set('bff_client_id', $legacy_settings->get('bff_client_id'));
+    $host_settings->save();
+  }
+  $legacy_tokens = $config->get('chronicle_agency.identity_tokens');
+  $host_tokens = $config->getEditable('agency_host.identity_tokens');
+  $issuer = $legacy_tokens->get('paladin_issuer') ?: $legacy_tokens->get('issuer');
+  $audience = $legacy_tokens->get('paladin_audience') ?: $legacy_tokens->get('audience');
+  if (is_string($issuer) && $issuer !== '' && !$host_tokens->get('issuer') && !$host_tokens->get('paladin_issuer')) {
+    $host_tokens->set('issuer', $issuer);
+    $host_tokens->set('audience', $audience ?: '');
+    $host_tokens->set('paladin_issuer', $issuer);
+    $host_tokens->set('paladin_audience', $audience ?: '');
+    $host_tokens->save();
+  }
+
+  $state = \Drupal::state();
+  if ($state->get('agency_host.evidence_alert_status') === NULL) {
+    $previous = $state->get('chronicle_agency.evidence_alert_status');
+    if ($previous !== NULL) {
+      $state->set('agency_host.evidence_alert_status', $previous);
+    }
+  }
+
+  foreach (['key_value', 'key_value_expire'] as $table) {
+    if (!$schema->tableExists($table)) {
+      continue;
+    }
+    $map = [
+      'chronicle_agency.console' => 'agency_host.console',
+      'chronicle_agency.console_payload' => 'agency_host.console_payload',
+    ];
+    foreach ($map as $from => $to) {
+      $database->query('INSERT INTO {' . $table . '} (collection, name, value)
+        SELECT :to, name, value FROM {' . $table . '} source
+        WHERE collection = :from
+        AND NOT EXISTS (
+          SELECT 1 FROM {' . $table . '} dest
+          WHERE dest.collection = :to AND dest.name = source.name
+        )', [':from' => $from, ':to' => $to]);
+    }
+  }
+
+  if ($schema->tableExists('queue')) {
+    $database->query("INSERT INTO {queue} (name, data, expire, created)
+      SELECT replace(name, 'chronicle_agency.', 'agency_host.'), data, expire, created
+      FROM {queue} source
+      WHERE name LIKE 'chronicle_agency.%'
+      AND NOT EXISTS (
+        SELECT 1 FROM {queue} dest
+        WHERE dest.name = replace(source.name, 'chronicle_agency.', 'agency_host.')
+        AND dest.data IS NOT DISTINCT FROM source.data
+        AND dest.created = source.created
+      )");
+  }
+}
