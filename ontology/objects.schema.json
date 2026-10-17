@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://www.drupal.org/project/agency/ontology/objects.schema.json",
+  "title": "Agency object types",
+  "description": "Object types owned by the Agency ontology contract.",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "id",
+      "machine_name",
+      "label",
+      "status",
+      "slice",
+      "owning_submodule",
+      "identifiers",
+      "revisionable",
+      "lifecycle",
+      "properties",
+      "tenant_scope",
+      "legacy_sources"
+    ],
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Za-z0-9]+$"
+      },
+      "machine_name": {
+        "type": "string",
+        "pattern": "^agency_[a-z0-9_]+$"
+      },
+      "label": {
+        "type": "string",
+        "minLength": 1
+      },
+      "status": {
+        "type": "string",
+        "enum": ["implemented", "proposed"]
+      },
+      "slice": {
+        "type": "string",
+        "enum": ["S1", "S2", "S3", "S4", "S5"]
+      },
+      "owning_submodule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^agency(_[a-z0-9_]+)?$"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["existing", "proposed"]
+          }
+        }
+      },
+      "kinds": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "machine_name", "status", "slice"],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "machine_name": {
+              "type": "string",
+              "pattern": "^agency_[a-z0-9_]+$"
+            },
+            "status": {
+              "type": "string",
+              "enum": ["implemented", "proposed"]
+            },
+            "slice": {
+              "type": "string",
+              "enum": ["S1", "S2", "S3", "S4", "S5"]
+            }
+          }
+        }
+      },
+      "identifiers": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["integer_id", "uuid", "revision_id"],
+        "properties": {
+          "integer_id": {
+            "type": "boolean"
+          },
+          "uuid": {
+            "type": "boolean"
+          },
+          "revision_id": {
+            "type": "boolean"
+          }
+        }
+      },
+      "revisionable": {
+        "type": "boolean"
+      },
+      "lifecycle": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["states", "transitions"],
+        "properties": {
+          "states": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "terminal"],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "terminal": {
+                  "type": "boolean"
+                },
+                "notes": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "transitions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["from", "to", "action"],
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "pattern": "^(none|[a-z][a-z0-9_]*)$"
+                },
+                "to": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*$"
+                },
+                "action": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      },
+      "properties": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "type", "marking"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "integer",
+                "string",
+                "string_long",
+                "uuid",
+                "timestamp",
+                "boolean",
+                "json",
+                "decimal",
+                "entity_reference"
+              ]
+            },
+            "marking": {
+              "type": "string",
+              "enum": [
+                "public",
+                "internal",
+                "confidential",
+                "personal",
+                "financial"
+              ]
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "tenant_scope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["isolation", "cross_tenant_reads"],
+        "properties": {
+          "isolation": {
+            "type": "string",
+            "enum": ["tenant", "shared_within_tenant"]
+          },
+          "cross_tenant_reads": {
+            "type": "string",
+            "enum": ["denied"]
+          }
+        }
+      },
+      "legacy_sources": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        }
+      },
+      "notes": {
+        "type": "string"
+      }
+    }
+  }
+}
