@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0-alpha3]
+
+Prepared prerelease; publication requires maintainer approval. See the
+[draft release notes](docs/RELEASE_NOTES_1.0.0-alpha3.md).
+
 ### Changed
 
 - AGENTS.md: PR and issue text is written for the reviewing operator; agent rules are not restated there.
@@ -19,13 +24,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Interrupted-batch and withdrawn-terminal retention controls. An earlier
   committed removal stays removed when a later item rolls back; the same
   current policy and recorded terminal time apply after Stop. GitHub CI now
-  requires these concurrent retention cases to execute.
+  requires these concurrent retention cases to execute. See
+  [issue 3630743](https://www.drupal.org/project/agency/issues/3630743).
 
 - Discovery verification for identical missing and unrelated refusals, stored
   summary-window expiry, and an interrupted evidence drain that retains one
   pending intent. Drupal.org PHPUnit runs the `agency` group so MySQL lanes do
   not execute the explicit PostgreSQL host-qualification test. CSpell uses a
-  project dictionary, and COPYING is ignored as GPL boilerplate.
+  project dictionary, and COPYING is ignored as GPL boilerplate. See
+  [issue 3629756](https://www.drupal.org/project/agency/issues/3629756).
 
 ## [1.0.0-alpha2] - 2026-10-14
 
