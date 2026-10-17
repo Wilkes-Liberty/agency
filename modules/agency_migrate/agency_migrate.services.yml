@@ -1,0 +1,56 @@
+services:
+  plugin.manager.agency_migrate.copier:
+    class: Drupal\agency_migrate\Plugin\CopierManager
+    parent: default_plugin_manager
+  agency_migrate.identity_writer:
+    class: Drupal\agency_migrate\IdentityPreservingWriter
+    arguments: ['@entity_type.manager', '@database']
+  agency_migrate.lineage:
+    class: Drupal\agency_migrate\LineageStore
+    arguments: ['@database', '@datetime.time']
+  agency_migrate.outbox:
+    class: Drupal\agency_migrate\MigrateOutbox
+    arguments: ['@database', '@audit_chain.logger', '@uuid', '@datetime.time']
+  agency_migrate.writes:
+    class: Drupal\agency_migrate\PostCutoverWriteLog
+    arguments: ['@database', '@datetime.time']
+  agency_migrate.authority:
+    class: Drupal\agency_migrate\AuthorityRegister
+    arguments:
+      - '@config.factory'
+      - '@current_user'
+      - '@agency_migrate.outbox'
+      - '@database'
+      - '@datetime.time'
+  agency_migrate.runner:
+    class: Drupal\agency_migrate\MigrationRunner
+    arguments:
+      - '@plugin.manager.agency_migrate.copier'
+      - '@agency_migrate.lineage'
+      - '@agency_migrate.outbox'
+      - '@database'
+      - '@uuid'
+      - '@datetime.time'
+      - '@current_user'
+  agency_migrate.reconciler:
+    class: Drupal\agency_migrate\Reconciler
+    arguments:
+      - '@plugin.manager.agency_migrate.copier'
+      - '@agency_migrate.lineage'
+      - '@current_user'
+  agency_migrate.rollback:
+    class: Drupal\agency_migrate\RollbackService
+    arguments:
+      - '@plugin.manager.agency_migrate.copier'
+      - '@agency_migrate.writes'
+      - '@agency_migrate.authority'
+      - '@current_user'
+  agency_migrate.commands:
+    class: Drupal\agency_migrate\Drush\Commands\AgencyMigrateCommands
+    arguments:
+      - '@agency_migrate.runner'
+      - '@agency_migrate.reconciler'
+      - '@agency_migrate.authority'
+      - '@agency_migrate.rollback'
+    tags:
+      - { name: drush.command }

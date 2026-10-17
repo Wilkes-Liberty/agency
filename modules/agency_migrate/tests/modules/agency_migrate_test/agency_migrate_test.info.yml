@@ -1,0 +1,7 @@
+name: Agency Migrate test
+type: module
+description: 'Synthetic source and target types for agency_migrate kernel tests.'
+package: Testing
+core_version_requirement: ^10.6 || ^11.3
+dependencies:
+  - agency:agency_migrate
