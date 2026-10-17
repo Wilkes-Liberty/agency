@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://www.drupal.org/project/agency/ontology/links.schema.json",
+  "title": "Agency link types",
+  "description": "Directed associations between ontology object types.",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "id",
+      "from",
+      "to",
+      "cardinality",
+      "reference_owner",
+      "status"
+    ],
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "from": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Za-z0-9]+$"
+      },
+      "to": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Za-z0-9]+$"
+      },
+      "cardinality": {
+        "type": "string",
+        "enum": ["1:1", "1:N", "N:1", "N:M"]
+      },
+      "reference_owner": {
+        "type": "string",
+        "enum": ["from", "to", "join"]
+      },
+      "reference_property": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"
+      },
+      "status": {
+        "type": "string",
+        "enum": ["implemented", "proposed"]
+      },
+      "slice": {
+        "type": "string",
+        "enum": ["S1", "S2", "S3", "S4", "S5"]
+      },
+      "notes": {
+        "type": "string"
+      }
+    }
+  }
+}
