@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Slice 2 workforce transfer design and unregistered Staff command, read
+  and host-adapter scaffolding, with value-object validation tests.
+  Expand, service registration and schema wait on design gate G1.
+
 ## [1.0.0-alpha3]
 
 Prepared prerelease; publication requires maintainer approval. See the

@@ -23,7 +23,10 @@ interface WorkforceHostAdapterInterface {
    * Agency never mints the account. Call only after the workforce
    * relationship commit. Do not grant Discovery privileges.
    */
-  public function provisionAcceptedStaff(StaffClassification $classification, string $personUuid): HostAccountBinding;
+  public function provisionAcceptedStaff(
+    StaffClassification $classification,
+    string $personUuid,
+  ): HostAccountBinding;
 
   /**
    * Hands a captured invitation to host delivery. Capture is not sending.

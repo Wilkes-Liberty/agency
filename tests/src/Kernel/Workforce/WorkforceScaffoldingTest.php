@@ -6,6 +6,7 @@ namespace Drupal\Tests\agency\Kernel\Workforce;
 
 use Drupal\agency_staff\InvitationCommands;
 use Drupal\agency_staff\RelationshipCommands;
+use Drupal\agency_staff\Storage\DomainStore;
 use Drupal\agency_staff\Workforce\AcceptStaffInvitation;
 use Drupal\agency_staff\Workforce\AuthorityState;
 use Drupal\agency_staff\Workforce\HostAccountBinding;
@@ -48,22 +49,35 @@ final class WorkforceScaffoldingTest extends KernelTestBase {
    * Workforce ports are not registered and Discovery services stay in place.
    */
   public function testWorkforceIsNotRegisteredAsServices(): void {
-    $ids = $this->container->getServiceIds();
-    foreach ([
-      'agency_staff.workforce',
-      'agency_staff.workforce_commands',
-      'agency_staff.workforce_reads',
-      'agency_staff.workforce_host',
-    ] as $id) {
-      $this->assertFalse(in_array($id, $ids, TRUE), $id . ' must not be registered.');
+    foreach ($this->container->getDefinitions() as $id => $definition) {
+      $class = $definition->getClass();
+      if (is_string($class) && str_starts_with($class, 'Drupal\\agency_staff\\Workforce\\')) {
+        $this->fail($id . ' must not register a workforce class.');
+      }
     }
     $this->assertTrue($this->container->has('agency_staff.commands'));
     $this->assertTrue($this->container->has('agency_staff.invitations'));
     $this->assertSame(RelationshipCommands::class, $this->container->getDefinition('agency_staff.commands')->getClass());
     $this->assertSame(InvitationCommands::class, $this->container->getDefinition('agency_staff.invitations')->getClass());
-    $this->assertTrue(interface_exists(WorkforceCommandsInterface::class));
-    $this->assertTrue(interface_exists(WorkforceReadsInterface::class));
-    $this->assertTrue(interface_exists(WorkforceHostAdapterInterface::class));
+    $this->assertSame([
+      'agency_person',
+      'agency_principal',
+      'agency_discovery',
+      'agency_invitation',
+      'agency_entitlement',
+    ], DomainStore::TYPES);
+    $commands = new \ReflectionClass(WorkforceCommandsInterface::class);
+    $this->assertTrue($commands->hasMethod('inviteStaff'));
+    $this->assertTrue($commands->hasMethod('acceptStaffInvitation'));
+    $this->assertTrue($commands->hasMethod('revokeStaffInvitation'));
+    $this->assertTrue($commands->hasMethod('updateProfileEvidence'));
+    $reads = new \ReflectionClass(WorkforceReadsInterface::class);
+    $this->assertTrue($reads->hasMethod('inspectInvitation'));
+    $this->assertTrue($reads->hasMethod('ownProfile'));
+    $this->assertTrue($reads->hasMethod('accountSummary'));
+    $host = new \ReflectionClass(WorkforceHostAdapterInterface::class);
+    $this->assertTrue($host->hasMethod('authority'));
+    $this->assertSame(AuthorityState::class, $host->getMethod('authority')->getReturnType()?->getName());
   }
 
   /**
@@ -78,9 +92,9 @@ final class WorkforceScaffoldingTest extends KernelTestBase {
     $this->assertSame(StaffClassification::CONTRACTOR, $invite->classification->id);
     $accept = AcceptStaffInvitation::fromArray([
       'token' => str_repeat('cd', 32),
-      'method' => 'POST',
     ]);
-    $this->assertSame('POST', $accept->method);
+    $this->assertSame(str_repeat('cd', 32), $accept->token);
+    $person = '00000000-0000-4000-8000-0000000000bb';
     $adapter = new class() implements WorkforceHostAdapterInterface {
 
       /**
@@ -92,14 +106,17 @@ final class WorkforceScaffoldingTest extends KernelTestBase {
        * {@inheritdoc}
        */
       public function authority(): AuthorityState {
-        return new AuthorityState(AuthorityState::LEGACY_AUTHORITATIVE);
+        return new AuthorityState(AuthorityState::LEGACY);
       }
 
       /**
        * {@inheritdoc}
        */
-      public function provisionAcceptedStaff(StaffClassification $classification, string $personUuid): HostAccountBinding {
-        return new HostAccountBinding('account', $personUuid);
+      public function provisionAcceptedStaff(
+        StaffClassification $classification,
+        string $personUuid,
+      ): HostAccountBinding {
+        return new HostAccountBinding(HostAccountBinding::ACCOUNT, 'host-account-1001');
       }
 
       /**
@@ -110,8 +127,11 @@ final class WorkforceScaffoldingTest extends KernelTestBase {
       }
 
     };
-    $this->assertSame(AuthorityState::LEGACY_AUTHORITATIVE, $adapter->authority()->id);
+    $this->assertSame(AuthorityState::LEGACY, $adapter->authority()->id);
     $this->assertFalse($adapter->authority()->agencyWrites());
+    $binding = $adapter->provisionAcceptedStaff($invite->classification, $person);
+    $this->assertSame(HostAccountBinding::ACCOUNT, $binding->kind);
+    $this->assertNotSame($person, $binding->value);
   }
 
 }

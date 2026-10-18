@@ -25,10 +25,11 @@ final class ProtectedFileRef {
    */
   public static function fromUnknown(mixed $value): self {
     if (is_array($value)) {
-      if (isset($value['bytes']) || isset($value['content']) || isset($value['data']) || isset($value['uri'])) {
+      WorkforceInput::onlyKeys($value, ['uuid']);
+      if (!array_key_exists('uuid', $value)) {
         throw new Refusal('invalid');
       }
-      return new self(WorkforceInput::uuid($value['uuid'] ?? NULL));
+      return new self(WorkforceInput::uuid($value['uuid']));
     }
     if (!is_string($value) || str_starts_with($value, 'data:') || str_contains($value, '://')) {
       throw new Refusal('invalid');

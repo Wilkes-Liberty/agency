@@ -4,15 +4,19 @@ Status: design and unregistered scaffolding. This is not an implementation
 contract and is not ready for gate G1. Package 01 published the caller
 ledger as draft [webcms#1900](https://github.com/Wilkes-Liberty/webcms/pull/1900)
 (`docs/agency-extraction/ledger.json` at
-`2216df30c3af736bd7f8b47832c2ea8572c1fd2b`). Slice 2 expand still waits on
-ontology v0 approval ([agency#25](https://github.com/Wilkes-Liberty/agency/pull/25)
-is draft, not approved) and operator G1.
+`2216df30c3af736bd7f8b47832c2ea8572c1fd2b`). Ontology draft v0.1.0 landed
+in [agency#25](https://github.com/Wilkes-Liberty/agency/pull/25). Package
+05 shipped the authority register in
+[agency#27](https://github.com/Wilkes-Liberty/agency/pull/27) with machine
+names `legacy`, `shadow`, `agency` and `removed` (see
+[Migration](MIGRATION.md)). Slice 2 expand still waits on operator G1.
 
 The document distinguishes **observed** Agency Discovery behavior in this
 package from **proposed** Slice 2 transfer. Slice 2 ledger rows below cite
-that `ledger.json`. Ontology machine names stay **pending** until agency#25
-is approved. Host-tree class names that the ledger inventories but this
-checkout still cannot open remain **unverified** for expand.
+that `ledger.json`. Draft ontology names are in `ontology/ontology.yml`;
+they are not an implementation contract until G1. Host-tree class names
+that the ledger inventories but this checkout still cannot open remain
+**unverified** for expand.
 
 No tenant name, policy period, operating record or credential belongs in
 this package. Host identity, File Gate, Field Guard and Audit Chain remain
@@ -45,17 +49,17 @@ roster membership or assignment. Slice 2 must preserve that wall.
 
 ## 2. Target object types and actions
 
-Proposed ontology subset. Machine names and property lists stay
-**pending** until [agency#25](https://github.com/Wilkes-Liberty/agency/pull/25)
-is approved. Do not adopt draft ontology names from that PR. Existing
-Discovery storage names are observed and must not be reused as staff
-provisioning paths.
+Proposed ontology subset. Draft v0.1.0 machine names are in
+`ontology/ontology.yml` after agency#25. They remain draft: G1 is still
+required before expand uses them as an implementation contract.
+Existing Discovery storage names are observed and must not be reused as
+staff provisioning paths.
 
 | Proposed object | Observed related storage | Slice 2 role |
 | --- | --- | --- |
-| Person | Internal `agency_person` is a thin Discovery resolver (display name and contact) | Canonical person in the ontology. Discovery and workforce relationships may link to the same person; that link is not an entitlement. Whether expand extends the thin row or adds a personnel record type is **pending** until agency#25 is approved. Ledger S2 split: person is not the Drupal account and not the Profile. |
+| Person | Internal `agency_person` is a thin Discovery resolver (display name and contact) | Canonical person in the ontology. Discovery and workforce relationships may link to the same person; that link is not an entitlement. Ontology notes that workforce profile fields remain proposed. Ledger S2 split: person is not the Drupal account and not the Profile. |
 | Principal binding | Internal `agency_principal` | Exact issuer/subject from the Keycloak invitation protocol. Contact never selects a principal. Reuse the host `IdentityProviderInterface`. |
-| Organization / Membership | none in this package | Workforce membership is distinct from Discovery participation and from client membership. **Pending** until agency#25 is approved. |
+| Organization / Membership | none in this package | Workforce membership is distinct from Discovery participation and from client membership. Draft ontology v0 proposes `agency_organization` and `agency_membership` for S2; expand still waits on G1. |
 | Relationship (workforce) | Internal `agency_discovery` | New workforce relationship type. Never the Discovery entity. |
 | Invitation (staff) | Internal `agency_invitation` (Discovery generations) | New staff invitation type. Never share the Discovery generation table or command class. |
 | Entitlement (workforce) | Internal `agency_entitlement` (Discovery grants) | New workforce entitlement. Never share the Discovery grant table or command class. |
@@ -68,7 +72,7 @@ Proposed actions (input schemas in scaffolding; no service yet):
 | `inviteStaff` | Eligible coordinator | Creates a workforce relationship in an invited state, pending workforce entitlement and a captured staff invitation. Classification is an input from the issuer. No uid, role, Profile or message send. |
 | `acceptStaffInvitation` | Authenticated intended principal, POST only | Consumes one generation under a row lock, activates workforce entitlement, then asks the host adapter to mint the host account/role/profile bundle. Wrong account, reused token and GET are refusals. |
 | `revokeStaffInvitation` | Assigned coordinator | Revokes generations and workforce entitlement. Stale expected version still applies, matching Discovery denial. Does not reopen Discovery state. |
-| `updateProfileEvidence` | Authorized coordinator or the entitled person for own-profile fields | Writes marked evidence. Unmapped markings refuse. File bytes are not accepted; only File Gate references. |
+| `updateProfileEvidence` | Authorized coordinator or the entitled person for own-profile fields | Writes own-profile evidence. Field names must match the server marking map; caller-chosen markings that disagree are refused. Account-summary is a read projection, not a write audience. File bytes are not accepted; only File Gate references. |
 
 Proposed reads (host transport, Agency projection):
 
@@ -78,10 +82,11 @@ Proposed reads (host transport, Agency projection):
 - Account-summary projection for the current principal.
 - Coordinator read of one workforce relationship.
 
-Lifecycle states proposed for the workforce relationship, **pending**
-until agency#25 is approved: `invited`, `active`, `revoked`, `suspended`,
-`ended`. These are not Discovery states. Application/recruiting labels
-remain out of this enum.
+Lifecycle states proposed for the workforce relationship: `invited`,
+`active`, `revoked`, `suspended`, `ended`. Draft ontology v0 currently
+lists Discovery-oriented Relationship states; workforce-specific states
+remain an operator G1 decision. Application/recruiting labels remain out
+of this enum.
 
 ## 3. Separation rule
 
@@ -176,9 +181,8 @@ Allowlisted audiences for Slice 2:
 | `own` | Entitled person, for fields marked writable on that audience | The same person | Existing own-profile contract. Fields, names and error shape stay host-compatible. |
 | `account_summary` | Not a staff-invite side effect | The entitled person | Existing account-summary contract. Discovery, CRM and payment facts are not smuggled in. |
 
-Coordinator and network audiences are **pending** until agency#25 is
-approved and the network profile contract is reviewed. They are not part
-of this scaffolding.
+Coordinator and network audiences remain out of this scaffolding until
+G1 reviews the network profile contract.
 
 Rules:
 
@@ -227,14 +231,16 @@ re-inventorying.
 
 ## 7. Authority, shadow-write, reconciliation and rollback
 
-Authority states (one state per domain; workforce is one domain):
+Authority states match the `agency_migrate` register (one state per
+domain; whether workforce is one row is §10.2). English labels such as
+"legacy-authoritative" stay in prose:
 
 | State | Agency writes | Agency reads | Legacy writes | Legacy reads |
 | --- | --- | --- | --- | --- |
-| `legacy_authoritative` | no | no | yes | yes |
+| `legacy` | no | no | yes | yes |
 | `shadow` | yes, parallel, never used for authorization | no | yes | yes |
-| `agency_authoritative` | yes | yes | no (fail closed and alert) | read-only overlap |
-| `legacy_removed` | yes | yes | no | no; lineage remains for audit verification |
+| `agency` | yes | yes | no (fail closed and alert) | read-only overlap |
+| `removed` | yes | yes | no | no; lineage remains for audit verification |
 
 The host adapter reads this flag. This package ships no default and no
 configuration schema for it in this change. A later expand may document
@@ -272,7 +278,7 @@ cutover, tooling in package 05):
 
 Rollback:
 
-- Flip the workforce flag to `legacy_authoritative`.
+- Flip the workforce flag to `legacy`.
 - Replay Agency writes to legacy through the lineage map. Do not restore
   a database backup as the rollback procedure.
 - Limits: a message the host already sent is not unsent; capture versus
@@ -300,7 +306,7 @@ Package 08 writes the Slice 2 threat model. Inputs from this design:
 | S2-T9 | Agency mints a uid and becomes a second account authority | Host adapter | Agency commits workforce state first; host mints uid; uncertain recovery if the host step fails |
 | S2-T10 | Inline file bytes in profile evidence | File Gate | Value objects refuse bytes, data URIs and remote file bodies; File Gate UUID only |
 | S2-T11 | Client membership policy smuggled through staff accept | Placement | Out of Slice 2 expand until the operator places client membership |
-| S2-T12 | Shadow-state Agency records used for authorization | Authority flag | Host adapter is the only reader of the flag; Agency reads stay off until `agency_authoritative` |
+| S2-T12 | Shadow-state Agency records used for authorization | Authority flag | Host adapter is the only reader of the flag; Agency reads stay off until `agency` |
 
 Residuals for 08: host message delivery, identity-provider outage during
 accept, and mixed coordinator credentials (already refused by Discovery
@@ -331,8 +337,9 @@ scaffolding must not change their outcomes.
 1. Approve `agency_*` workforce types with ID-preserving copy and lineage,
    rather than moving host-named providers into this package (extraction
    plan decision 1, still open).
-2. Approve the four authority states and that workforce is one register
-   row (plan decision 2).
+2. Approve that workforce is one row in the existing `legacy` /
+   `shadow` / `agency` / `removed` register (plan decision 2). Machine
+   names are already shipped by agency#27; do not fork them.
 3. Workforce classification allowlist: keep `employee` and `contractor`
    only in the package, matching the ledger's staff onboard Webform, or
    add further kinds by operator decision. Scaffolding currently
@@ -342,8 +349,8 @@ scaffolding must not change their outcomes.
 5. Client membership and eligibility policy: remain a later slice, or
    move after the Slice 2 threat-model review.
 6. Own-profile writes during overlap: host Profile entity remains the
-   writer until `agency_authoritative`, with Agency shadow writes, versus
-   an earlier Agency-authoritative evidence path.
+   writer until `agency`, with Agency shadow writes, versus an earlier
+   Agency-authoritative evidence path.
 7. Public refusal strings for wrong-account and closed staff invitations:
    preserve host strings via the host adapter, or adopt Discovery's
    `wrong_account` / `invitation_closed` / `already_used` / `not_found`.
@@ -360,6 +367,12 @@ Unregistered, tenant-neutral PHP under
   provisioning and captured-invitation delivery
 - Value objects for the four actions' inputs, classification, audience,
   marking, File Gate reference, idempotency key and host account binding
+- `AuthorityState` ids `legacy`, `shadow`, `agency` and `removed`,
+  matching `agency_migrate`
+- `AcceptStaffInvitation` carries the bearer only; POST stays a
+  command-layer request-stack check, matching Discovery
+- `updateProfileEvidence` writes `own` only and applies a server
+  marking map (`display_name` is `personal`)
 
 Tests instantiate value objects directly. There is no service
 registration, no schema change and no Discovery behavior change.

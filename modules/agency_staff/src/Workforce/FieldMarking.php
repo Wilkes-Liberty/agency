@@ -8,6 +8,9 @@ use Drupal\agency_staff\Exception\Refusal;
 
 /**
  * Property marking that must travel with personnel and profile evidence.
+ *
+ * Allowed ids match CopierInterface::MARKINGS. This module does not
+ * depend on agency_migrate; the lists must stay identical.
  */
 final class FieldMarking {
 

@@ -8,19 +8,23 @@ use Drupal\agency_staff\Exception\Refusal;
 
 /**
  * Per-domain authority the host adapter reads for workforce records.
+ *
+ * Machine names match agency_migrate's register: legacy, shadow, agency
+ * and removed. See docs/MIGRATION.md. English labels such as
+ * "legacy-authoritative" stay in prose and must not appear as ids.
  */
 final class AuthorityState {
 
-  public const LEGACY_AUTHORITATIVE = 'legacy_authoritative';
+  public const LEGACY = 'legacy';
   public const SHADOW = 'shadow';
-  public const AGENCY_AUTHORITATIVE = 'agency_authoritative';
-  public const LEGACY_REMOVED = 'legacy_removed';
+  public const AGENCY = 'agency';
+  public const REMOVED = 'removed';
 
   public const ALLOWED = [
-    self::LEGACY_AUTHORITATIVE,
+    self::LEGACY,
     self::SHADOW,
-    self::AGENCY_AUTHORITATIVE,
-    self::LEGACY_REMOVED,
+    self::AGENCY,
+    self::REMOVED,
   ];
 
   public function __construct(
@@ -32,17 +36,31 @@ final class AuthorityState {
   }
 
   /**
-   * Agency records must not authorize reads in these states.
+   * Agency records authorize reads only after cutover.
    */
   public function agencyReads(): bool {
-    return in_array($this->id, [self::AGENCY_AUTHORITATIVE, self::LEGACY_REMOVED], TRUE);
+    return in_array($this->id, [self::AGENCY, self::REMOVED], TRUE);
   }
 
   /**
-   * Agency may persist parallel copies only in shadow or later states.
+   * Agency may persist copies in shadow and later states.
    */
   public function agencyWrites(): bool {
-    return $this->id !== self::LEGACY_AUTHORITATIVE;
+    return $this->id !== self::LEGACY;
+  }
+
+  /**
+   * Legacy remains writable until Agency is authoritative.
+   */
+  public function legacyWrites(): bool {
+    return in_array($this->id, [self::LEGACY, self::SHADOW], TRUE);
+  }
+
+  /**
+   * Legacy remains readable until the drain state.
+   */
+  public function legacyReads(): bool {
+    return $this->id !== self::REMOVED;
   }
 
 }

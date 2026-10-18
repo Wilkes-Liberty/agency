@@ -9,9 +9,26 @@ use Drupal\agency_staff\Exception\Refusal;
 /**
  * Shared structural checks for Slice 2 command inputs.
  *
+ * Matches RelationshipCommands text and contact rules without calling
+ * Discovery command classes.
+ *
  * @internal
  */
 final class WorkforceInput {
+
+  /**
+   * Refuses unexpected keys so deny paths stay closed.
+   *
+   * @param array<string, mixed> $input
+   *   Caller payload.
+   * @param list<string> $allowed
+   *   Allowlisted key names.
+   */
+  public static function onlyKeys(array $input, array $allowed): void {
+    if (array_diff_key($input, array_flip($allowed)) !== []) {
+      throw new Refusal('invalid');
+    }
+  }
 
   /**
    * Bounds plain text without treating it as HTML or instruction.
@@ -27,6 +44,7 @@ final class WorkforceInput {
    * Validates a typed contact route without choosing an identity from it.
    */
   public static function contact(array $contact): array {
+    self::onlyKeys($contact, ['kind', 'value']);
     $kind = self::text($contact['kind'] ?? '', 32);
     if (!preg_match('/^[a-z][a-z0-9_]*$/', $kind)) {
       throw new Refusal('invalid');
@@ -52,16 +70,6 @@ final class WorkforceInput {
       throw new Refusal('invalid');
     }
     return $value;
-  }
-
-  /**
-   * Requires POST so GET inspect cannot be confused with acceptance.
-   */
-  public static function postMethod(mixed $value): string {
-    if (!is_string($value) || strtoupper($value) !== 'POST') {
-      throw new Refusal('method_not_allowed');
-    }
-    return 'POST';
   }
 
   /**

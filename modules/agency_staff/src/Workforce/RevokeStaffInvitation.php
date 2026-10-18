@@ -20,14 +20,15 @@ final class RevokeStaffInvitation {
   public readonly int $version;
 
   public function __construct(string $relationshipId, int $version) {
-    $this->relationshipId = $relationshipId;
-    $this->version = $version;
+    $this->relationshipId = WorkforceInput::uuid($relationshipId);
+    $this->version = WorkforceInput::version($version);
   }
 
   /**
    * Validates coordinator-supplied revocation input.
    */
   public static function fromArray(array $input): self {
+    WorkforceInput::onlyKeys($input, ['relationship_id', 'version']);
     return new self(
       WorkforceInput::uuid($input['relationship_id'] ?? NULL),
       WorkforceInput::version($input['version'] ?? NULL),

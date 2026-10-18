@@ -26,9 +26,13 @@ final class InviteStaff {
    */
   public readonly StaffClassification $classification;
 
-  public function __construct(string $displayName, array $contact, StaffClassification $classification) {
-    $this->displayName = $displayName;
-    $this->contact = $contact;
+  public function __construct(
+    string $displayName,
+    array $contact,
+    StaffClassification $classification,
+  ) {
+    $this->displayName = WorkforceInput::text($displayName, 255);
+    $this->contact = WorkforceInput::contact($contact);
     $this->classification = $classification;
   }
 
@@ -36,6 +40,11 @@ final class InviteStaff {
    * Validates coordinator-supplied invitation input.
    */
   public static function fromArray(array $input): self {
+    WorkforceInput::onlyKeys($input, [
+      'display_name',
+      'contact',
+      'classification',
+    ]);
     $contact = $input['contact'] ?? NULL;
     if (!is_array($contact)) {
       throw new Refusal('invalid');
@@ -46,7 +55,7 @@ final class InviteStaff {
     }
     return new self(
       WorkforceInput::text($input['display_name'] ?? '', 255),
-      WorkforceInput::contact($contact),
+      $contact,
       new StaffClassification($classification),
     );
   }

@@ -4,13 +4,20 @@ declare(strict_types=1);
 
 namespace Drupal\agency_staff\Workforce;
 
+use Drupal\agency_staff\Exception\Refusal;
+
 /**
  * Opaque host account handle. Agency does not mint a uid.
  */
 final class HostAccountBinding {
 
   /**
-   * Typed host binding, for example a host account kind.
+   * Host account kind. Discovery and person kinds are refused.
+   */
+  public const ACCOUNT = 'account';
+
+  /**
+   * Typed host binding.
    */
   public readonly string $kind;
 
@@ -21,6 +28,9 @@ final class HostAccountBinding {
 
   public function __construct(string $kind, string $value) {
     $this->kind = WorkforceInput::text($kind, 32);
+    if ($this->kind !== self::ACCOUNT) {
+      throw new Refusal('invalid');
+    }
     $this->value = WorkforceInput::text($value, 255);
   }
 
