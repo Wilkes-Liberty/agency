@@ -6,13 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added
-
-- Slice 2 workforce transfer design and unregistered Staff command, read
-  and host-adapter scaffolding, with value-object validation tests.
-  Expand, service registration and schema wait on design gate G1.
-
-## [1.0.0-alpha3]
+## [1.0.0-alpha3] - 2026-10-18
 
 Prepared prerelease; publication requires maintainer approval. See the
 [draft release notes](docs/RELEASE_NOTES_1.0.0-alpha3.md).
@@ -39,6 +33,23 @@ Prepared prerelease; publication requires maintainer approval. See the
   Ships in this tag so [webcms#1899](https://github.com/Wilkes-Liberty/webcms/pull/1899)
   can require `^1.0.0-alpha3`. See
   [DEV-1008](https://wilkesliberty.atlassian.net/browse/DEV-1008).
+
+- Draft ontology contract v0.1.0: tenant-neutral object, link and action
+  types with machine-readable YAML, JSON Schemas and failing-fixture
+  contract tests. Discovery storage stays the implemented subset. See
+  [GitHub #25](https://github.com/Wilkes-Liberty/agency/pull/25).
+
+- `agency_migrate` identity-preserving copy, lineage, property markings,
+  reconciliation and reversible authority (`legacy` → `shadow` → `agency`
+  → `removed`). Host adapters supply copier plugins; this package ships a
+  synthetic plugin for kernel proofs only. See
+  [GitHub #27](https://github.com/Wilkes-Liberty/agency/pull/27).
+
+- Slice 2 workforce transfer design and unregistered Staff command, read
+  and host-adapter scaffolding, with value-object validation tests.
+  Authority ids match the migrate register. Expand, service registration
+  and schema wait on design gate G1. See
+  [GitHub #26](https://github.com/Wilkes-Liberty/agency/pull/26).
 
 - Interrupted-batch and withdrawn-terminal retention controls. An earlier
   committed removal stays removed when a later item rolls back; the same
