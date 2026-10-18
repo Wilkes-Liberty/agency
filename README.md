@@ -18,6 +18,8 @@ engines remain independent dependencies.
 - `agency` provides the shared package foundation and tenant configuration.
 - `agency_staff` is the capability boundary for workforce relationships and the
   Discovery workspace.
+- `agency_migrate` copies host records into Agency types with lineage, shadow
+  reconciliation and reversible authority. Host adapters supply copier plugins.
 
 `agency_staff` provides invitation-only Discovery domain services, internal
 entity storage, scoped workspace/summary projections and a durable evidence
@@ -122,6 +124,9 @@ Actual passing results, not the presence of a workflow, establish compatibility.
 - [Contributing](CONTRIBUTING.md): issue routing, focused changes and review.
 - [Development](docs/DEVELOPMENT.md): Composer, standards and installed-host tests.
 - [Architecture](docs/ARCHITECTURE.md): domain, host, integration and evidence boundaries.
+- [Ontology](docs/ONTOLOGY.md): draft tenant-neutral object, link and action contract.
+- [Migration](docs/MIGRATION.md): identity-preserving copy, reconciliation and rollback.
+- [Workforce transfer](docs/WORKFORCE_TRANSFER.md): Slice 2 design and unregistered scaffolding.
 - [Maintaining](docs/MAINTAINING.md): development line, remotes and release verification.
 - [Security](SECURITY.md): private vulnerability reporting and coverage status.
 

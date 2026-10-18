@@ -12,6 +12,9 @@ its [service contract](DISCOVERY_CONTRACT.md) through explicit adapters.
 | `agency.info.yml`, `agency.module`, `agency.install` | Base module and shared configuration guard |
 | `config/schema` | Typed tenant-configuration contract |
 | `modules/agency_staff` | Initial workforce capability boundary |
+| `modules/agency_host` | Generic Discovery host adapter |
+| `modules/agency_migrate` | Identity-preserving copy, lineage and authority |
+| `ontology/` | Draft object, link and action contract |
 | `tests/src/Functional` | Installed-host package verification |
 | `tests/src/Kernel`, `tests/fixtures` | Domain authorization, rollback and independent database writers |
 | `docs` | Product direction, boundaries and development guidance |
