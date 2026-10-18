@@ -1,0 +1,9 @@
+use agency discovery participant channel:
+  title: 'Use the Agency Discovery participant channel'
+  description: 'Restricted server-side channel; each participant must also present verified identity.'
+  restrict access: true
+
+approve agency discovery invitation delivery:
+  title: 'Approve Agency Discovery invitation delivery'
+  description: 'Review and authorize one message for an assigned Discovery invitation.'
+  restrict access: true

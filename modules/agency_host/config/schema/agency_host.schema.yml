@@ -1,0 +1,84 @@
+agency_host.settings:
+  type: config_object
+  label: 'Agency host integration'
+  mapping:
+    enabled:
+      type: boolean
+      label: 'Enable the private Discovery transport'
+    bff_client_id:
+      type: string
+      label: 'Authorized frontend server OAuth consumer'
+    binding_providers:
+      type: sequence
+      label: 'Authmap providers covered by binding history'
+      sequence:
+        type: string
+    contained_openid_clients:
+      type: sequence
+      label: 'OpenID Connect client IDs contained at sign-in'
+      sequence:
+        type: string
+    disallowed_role_ids:
+      type: sequence
+      label: 'Coordinator role IDs that are never eligible'
+      sequence:
+        type: string
+    disallowed_role_prefixes:
+      type: sequence
+      label: 'Coordinator role ID prefixes that are never eligible'
+      sequence:
+        type: string
+    protected_account_names:
+      type: sequence
+      label: 'Account names that cannot act as coordinators'
+      sequence:
+        type: string
+    source_digest_modules:
+      type: sequence
+      label: 'Module machine names included in a clean-origin source digest'
+      sequence:
+        type: string
+    extra_containment_config:
+      type: sequence
+      label: 'Additional config objects scanned for a shared identity realm'
+      sequence:
+        type: string
+    extra_containment_settings:
+      type: sequence
+      label: 'Additional PHP settings keys scanned for a shared identity realm'
+      sequence:
+        type: string
+
+agency_host.identity_tokens:
+  type: config_object
+  label: 'Agency participant token authority'
+  mapping:
+    issuer:
+      type: string
+      label: 'Dedicated participant issuer'
+    audience:
+      type: string
+      label: 'Dedicated participant audience'
+    paladin_issuer:
+      type: string
+      label: 'Historical issuer key retained for qualified binding fingerprints'
+    paladin_audience:
+      type: string
+      label: 'Historical audience key retained for qualified binding fingerprints'
+
+agency_host.ordinary_tokens:
+  type: config_object
+  label: 'Ordinary token authority scanned as extra containment'
+  mapping:
+    issuer:
+      type: string
+      label: 'Ordinary issuer'
+    audience:
+      type: string
+      label: 'Ordinary audience'
+    paladin_issuer:
+      type: string
+      label: 'Historical ordinary issuer key'
+    paladin_audience:
+      type: string
+      label: 'Historical ordinary audience key'

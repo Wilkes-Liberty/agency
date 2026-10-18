@@ -53,10 +53,17 @@ vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
   "$PWD/web/modules/contrib/agency/tests/src/Kernel"
 vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
   "$PWD/web/modules/contrib/agency/tests/src/Functional"
+vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+  "$PWD/web/modules/contrib/agency/modules/agency_host/tests/src"
 ```
 
-See [.github/workflows/ci.yml](../.github/workflows/ci.yml) for the complete executable
-setup, including version assertions and test-result checks.
+The GitHub matrix installs the host identity/OAuth stack and Drush so
+`modules/agency_host` unit tests run on every Drupal/PHP lane. Kernel tests
+run on the 11.x lanes, including PostgreSQL 16. Invitation smtp and
+postmark_webhooks cases skip when those modules are not on the test host.
+Clean-origin, evidence-lock and other PostgreSQL-only proofs skip on MySQL. See
+[.github/workflows/ci.yml](../.github/workflows/ci.yml) for the complete
+executable setup, including version assertions and test-result checks.
 
 ## Manual foundation smoke check
 
@@ -91,9 +98,12 @@ the resolved version and candidate symlink and requires executed, non-skipped
 functional tests. A separate job runs PHPStan against a Drupal 11.4 analysis host.
 Every database lane also executes the domain suite and explicitly checks that
 the independent-writer, interrupted-drain, delivery-marker, summary-savepoint
-and retention removal cases ran without skips. The CLI-only workers accept
-kernel-test-prefixed connection options via standard input and use synthetic
-identities and signing material.
+and retention removal cases ran without skips. The same lanes run
+`modules/agency_host` unit and kernel tests. The PostgreSQL 16 leg must
+execute the deferred clean-origin COMMIT-fault cases; it must not skip them.
+smtp and postmark_webhooks cases may skip when those modules are absent.
+The CLI-only workers accept kernel-test-prefixed connection options via
+standard input and use synthetic identities and signing material.
 
 The Drupal.org pipeline uses the standard contrib templates with previous-major,
 previous-minor and maximum-PHP lanes enabled. PHPUnit runs the `agency` group so

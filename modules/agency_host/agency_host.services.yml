@@ -1,0 +1,199 @@
+services:
+  agency_host.origin_ledger:
+    class: Drupal\agency_host\Identity\PostgresOriginLedger
+    arguments: ['@database']
+
+  agency_host.clean_origin_qualifier:
+    class: Drupal\agency_host\Identity\CleanOriginQualifier
+    arguments: ['@database', '@settings', '@agency_host.clean_origin_plan', '@agency_host.origin_ledger', '@agency_host.binding_history', '@update.update_hook_registry', '@datetime.time']
+
+  Drupal\agency_host\Identity\CleanOriginQualifier:
+    alias: agency_host.clean_origin_qualifier
+
+  agency_host.portal_sign_in_policy:
+    class: Drupal\agency_host\Identity\PortalSignInPolicy
+    arguments: ['@config.factory', '@config.storage.active']
+
+  agency_host.portal_sign_in_access:
+    class: Drupal\agency_host\Access\PortalSignInAccess
+    arguments: ['@agency_host.portal_sign_in_policy']
+    tags:
+      - { name: access_check, applies_to: _agency_host_portal_sign_in }
+
+  agency_host.portal_sign_in_routes:
+    class: Drupal\agency_host\EventSubscriber\PortalSignInRoutes
+    tags:
+      - { name: event_subscriber }
+
+  agency_host.clean_origin_receipt:
+    class: Drupal\agency_host\Identity\CleanOriginReceipt
+    arguments: ['@settings', '@datetime.time']
+
+  agency_host.clean_origin_plan:
+    class: Drupal\agency_host\Identity\CleanOriginPlan
+    arguments: ['@database', '@settings', '@config.factory', '@config.storage.active', '@agency_host.binding_history', '@agency_host.identity_authority', '@agency_host.idp_directory', '@agency_host.clean_origin_receipt']
+
+  Drupal\agency_host\Identity\CleanOriginPlan:
+    alias: agency_host.clean_origin_plan
+
+  agency_host.runtime_readiness:
+    class: Drupal\agency_host\RuntimeReadiness
+    arguments: ['@database', '@config.factory', '@config.typed', '@module_handler', '@settings', '@agency_staff.policy', '@agency_host.idp_directory', '@agency_host.binding_history', '@agency_host.delivery_configuration', '@agency_host.console', '@agency_staff.outbox', '@agency_host.identity_authority']
+
+  Drupal\agency_host\RuntimeReadiness:
+    alias: agency_host.runtime_readiness
+
+  agency_host.evidence_lock:
+    class: Drupal\agency_host\EvidenceLock
+    arguments: ['@database']
+
+  agency_host.evidence_worker:
+    class: Drupal\agency_host\EvidenceWorker
+    arguments: ['@agency_host.evidence_lock', '@agency_staff.outbox', '@agency_host.evidence_health_monitor', '@settings']
+
+  Drupal\agency_host\EvidenceWorker:
+    alias: agency_host.evidence_worker
+
+  agency_host.delivery_configuration:
+    class: Drupal\agency_host\Delivery\DeliveryConfiguration
+
+  agency_host.delivery_audit:
+    class: Drupal\agency_host\Delivery\DatabaseDeliveryAudit
+    arguments: ['@database', '@datetime.time']
+
+  agency_host.delivery_ledger:
+    class: Drupal\agency_host\Delivery\DeliveryLedger
+    arguments: ['@database', '@agency_host.delivery_configuration', '@datetime.time', '@agency_host.delivery_audit']
+
+  agency_host.delivery_suppression:
+    class: Drupal\agency_host\Delivery\DeliverySuppression
+    arguments: ['@?postmark_webhooks.suppression_policy']
+
+  agency_host.smtp_handoff:
+    class: Drupal\agency_host\Delivery\SmtpHandoffFactory
+    arguments: ['@service_container']
+
+  agency_host.invitation_mail:
+    class: Drupal\agency_host\Delivery\InvitationMail
+    arguments: ['@plugin.manager.mail', '@config.factory', '@agency_host.delivery_configuration', '@agency_host.smtp_handoff']
+
+  agency_host.invitation_delivery:
+    class: Drupal\agency_host\Delivery\InvitationDelivery
+    arguments: ['@agency_host.console', '@agency_host.console_selection', '@agency_host.identity', '@agency_staff.commands', '@agency_staff.reads', '@agency_staff.invitations', '@agency_host.delivery_configuration', '@agency_host.delivery_ledger', '@agency_host.invitation_mail', '@agency_host.delivery_suppression', '@current_user', '@lock', '@agency_staff.access', '@entity_type.manager', '@config.factory']
+
+  agency_host.idp_directory:
+    class: Drupal\agency_host\Identity\KeycloakDirectory
+    arguments: ['@http_client', '@settings']
+
+  agency_host.access_token_validator:
+    class: Drupal\agency_host\Identity\JwksAccessTokenValidator
+    arguments: ['@http_client', '@cache.default', '@datetime.time', '@logger.channel.agency_host', '@config.factory', 'agency_host.identity_tokens']
+
+  agency_host.identity_authority:
+    class: Drupal\agency_host\Identity\IdentityAuthority
+    arguments: ['@settings', '@config.factory']
+
+  agency_host.contact_policy:
+    class: Drupal\agency_host\Identity\EmailContactPolicy
+
+  agency_host.coordinator_policy:
+    class: Drupal\agency_host\Identity\CoordinatorPolicy
+    arguments: ['@config.factory']
+
+  agency_host.identity:
+    class: Drupal\agency_host\Identity\AgencyIdentityProvider
+    arguments:
+      - '@request_stack'
+      - '@agency_host.access_token_validator'
+      - '@agency_host.idp_directory'
+      - '@settings'
+      - '@agency_host.contact_policy'
+      - '@agency_host.coordinator_policy'
+      - '@entity_type.manager'
+      - '@config.factory'
+      - '@externalauth.authmap'
+      - '@agency_host.binding_history'
+      - '@agency_host.identity_authority'
+
+  agency_staff.identity:
+    alias: agency_host.identity
+    public: true
+
+  agency_host.transport:
+    class: Drupal\agency_host\DiscoveryTransport
+    arguments: ['@flood']
+
+  agency_host.private_response_subscriber:
+    class: Drupal\agency_host\EventSubscriber\PrivateResponseSubscriber
+    arguments: ['@path.current', '@path_processor_manager']
+    tags:
+      - { name: event_subscriber }
+
+
+  agency_host.evidence_health_monitor:
+    class: Drupal\agency_host\EvidenceHealthMonitor
+    arguments: ['@agency_staff.outbox', '@settings', '@state', '@http_client', '@logger.channel.agency_host', '@agency_host.evidence_lock']
+
+  Drupal\agency_host\EvidenceHealthMonitor:
+    alias: agency_host.evidence_health_monitor
+
+  logger.channel.agency_host:
+    parent: logger.channel_base
+    arguments: ['agency_host']
+
+  agency_host.binding_history:
+    class: Drupal\agency_host\Identity\BindingHistory
+    arguments: ['@database', '@settings', '@config.factory', '@module_handler', '@update.update_hook_registry', '@datetime.time', '@agency_host.qualification_latch', '@config.storage.active']
+
+  agency_host.tracked_authmap:
+    class: Drupal\agency_host\Identity\TrackedAuthmap
+    decorates: externalauth.authmap
+    arguments: ['@agency_host.tracked_authmap.inner', '@agency_host.binding_history']
+
+  agency_host.binding_route_subscriber:
+    class: Drupal\agency_host\EventSubscriber\BindingRouteSubscriber
+    tags:
+      - { name: event_subscriber }
+
+  agency_host.qualification_latch:
+    class: Drupal\agency_host\Identity\PostgresQualificationLatch
+    arguments: ['@database']
+
+  agency_host.console_copy:
+    class: Drupal\agency_host\Console\ConsoleCopy
+
+  agency_host.console_access:
+    class: Drupal\agency_host\Console\ConsoleAccess
+    arguments: ['@agency_staff.access', '@current_user', '@session_configuration', '@request_stack']
+
+  agency_host.console:
+    class: Drupal\agency_host\Console\ConsoleApplication
+    arguments: ['@agency_host.console_access', '@agency_staff.reads', '@agency_staff.commands', '@agency_staff.invitations', '@agency_host.transport', '@agency_host.console_state']
+
+  agency_host.console_selection:
+    class: Drupal\agency_host\Console\IdentitySelection
+    arguments: ['@agency_host.idp_directory', '@agency_host.identity', '@current_user', '@datetime.time', '@agency_host.transport']
+
+  agency_host.console_reviews:
+    class: Drupal\agency_host\Console\ConsoleReviewStore
+    arguments: ['@current_user', '@datetime.time', '@agency_host.console_state']
+
+  agency_host.console_metadata:
+    class: Drupal\agency_host\Console\StrictConsoleStorage
+    arguments: ['agency_host.console', '@serialization.phpserialize', '@database']
+
+  agency_host.console_payloads:
+    class: Drupal\agency_host\Console\StrictConsolePayloadStorage
+    arguments: ['agency_host.console_payload', '@serialization.phpserialize', '@database', '@datetime.time']
+
+  agency_host.console_state:
+    class: Drupal\agency_host\Console\ConsoleStateStore
+    arguments: ['@agency_host.console_metadata', '@agency_host.console_payloads', '@lock', '@current_user', '@datetime.time', '@database', '@session_handler.storage']
+
+  Drupal\agency_host\Console\ConsoleStateStore:
+    alias: agency_host.console_state
+
+  agency_host.console_form_cache:
+    class: Drupal\agency_host\Console\ConsoleFormCache
+    decorates: form_cache
+    arguments: ['@agency_host.console_form_cache.inner', '@agency_host.console', '@agency_host.console_reviews', '@agency_host.console_selection', '@request_stack', '@datetime.time']

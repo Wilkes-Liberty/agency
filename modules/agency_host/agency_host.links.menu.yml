@@ -1,0 +1,5 @@
+agency_host.console:
+  title: Conversations
+  description: Coordinate Discovery conversations.
+  route_name: agency_host.console
+  parent: system.admin_content
