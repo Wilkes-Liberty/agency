@@ -26,6 +26,38 @@ The host supplies authentication, transport and the participant interface.
 The default identity adapter denies access. Enabling the module creates no
 relationships, accounts, roles or invitations, and sends no notifications.
 
+## Host contract (`agency_host`)
+
+`agency_host` is the generic host adapter: identity history, private Discovery
+transport, coordinator console, invitation custody, evidence maintenance and
+`drush agency:readiness`. It replaces the default denying identity service.
+Tenant values stay in the installing site; this module ships empty defaults.
+
+The host supplies:
+
+- PHP settings `agency_host_identity` (issuer, binding version/mode, and IdP
+  Admin API connection). Former `chronicle_agency_*` setting names remain
+  readable during adoption.
+- Config `agency_host.settings` for the BFF consumer, covered authmap
+  providers, contained OpenID Connect clients, coordinator role denylist,
+  protected account names, clean-origin source modules, and extra containment
+  scans.
+- Config `agency_host.identity_tokens` for the dedicated participant issuer and
+  audience. Historical `paladin_issuer` / `paladin_audience` keys remain so
+  already-qualified binding fingerprints do not change.
+- Invitation custody in `$settings['agency_host_invitation_delivery']` (not
+  config). The AES associated data stays `agency-delivery:1:`.
+- Optional plugins: replace `agency_host.contact_policy` for CRM resolution,
+  and `agency_host.delivery_audit` when a site-specific audit recorder exists.
+
+Qualified binding fingerprints keep HMAC `chronicle-agency-history-key-v1` and
+the digest schema slot keyed `chronicle_agency`. Do not add `agency_host` to
+that array. Enabling `agency_host` copies former `chronicle_agency` tables,
+config, state, key/value collections and queue items; it never drops the
+source, so a code rollback can still read custody. Uninstall
+`chronicle_agency` only after `agency_host` is enabled and copies succeed.
+Clean-origin qualification stays pinned to schema 10003.
+
 ## Configuration boundary
 
 The host must provide `agency.settings`. No agency name or policy period ships

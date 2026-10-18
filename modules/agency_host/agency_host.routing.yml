@@ -1,0 +1,212 @@
+agency_host.participant_workspaces:
+  path: '/api/agency/discovery/workspaces'
+  defaults:
+    _controller: '\Drupal\agency_host\Controller\ParticipantDiscoveryController::workspaces'
+    _format: 'json'
+  methods: [GET]
+  requirements:
+    _custom_access: '\Drupal\agency_host\Access\BffAccess::access'
+  options:
+    _auth: [oauth2]
+    no_cache: TRUE
+
+agency_host.participant_workspace:
+  path: '/api/agency/discovery/workspaces/{relationship}'
+  defaults:
+    _controller: '\Drupal\agency_host\Controller\ParticipantDiscoveryController::workspace'
+    _format: 'json'
+  methods: [GET]
+  requirements:
+    _custom_access: '\Drupal\agency_host\Access\BffAccess::access'
+    relationship: '[a-f0-9-]{36}'
+  options:
+    _auth: [oauth2]
+    no_cache: TRUE
+
+agency_host.participant_command:
+  path: '/api/agency/discovery/workspaces/{relationship}/{command}'
+  defaults:
+    _controller: '\Drupal\agency_host\Controller\ParticipantDiscoveryController::command'
+    _format: 'json'
+  methods: [POST]
+  requirements:
+    _custom_access: '\Drupal\agency_host\Access\BffAccess::access'
+    relationship: '[a-f0-9-]{36}'
+    command: 'respond|pauseRelationship|resumeRelationship|withdrawRelationship|moveForward'
+  options:
+    _auth: [oauth2]
+    no_cache: TRUE
+
+agency_host.participant_summaries:
+  path: '/api/agency/discovery/summaries'
+  defaults:
+    _controller: '\Drupal\agency_host\Controller\ParticipantDiscoveryController::summaries'
+    _format: 'json'
+  methods: [GET]
+  requirements:
+    _custom_access: '\Drupal\agency_host\Access\BffAccess::access'
+  options:
+    _auth: [oauth2]
+    no_cache: TRUE
+
+agency_host.participant_summary:
+  path: '/api/agency/discovery/summaries/{relationship}'
+  defaults:
+    _controller: '\Drupal\agency_host\Controller\ParticipantDiscoveryController::summary'
+    _format: 'json'
+  methods: [GET]
+  requirements:
+    _custom_access: '\Drupal\agency_host\Access\BffAccess::access'
+    relationship: '[a-f0-9-]{36}'
+  options:
+    _auth: [oauth2]
+    no_cache: TRUE
+
+agency_host.invitation:
+  path: '/api/agency/discovery/invitations/{token}'
+  defaults:
+    _controller: '\Drupal\agency_host\Controller\ParticipantDiscoveryController::invitation'
+    _format: 'json'
+  methods: [GET]
+  requirements:
+    _custom_access: '\Drupal\agency_host\Access\BffAccess::access'
+    token: '[a-f0-9]{64}'
+  options:
+    _auth: [oauth2]
+    no_cache: TRUE
+
+agency_host.invitation_accept:
+  path: '/api/agency/discovery/invitations/{token}/accept'
+  defaults:
+    _controller: '\Drupal\agency_host\Controller\ParticipantDiscoveryController::accept'
+    _format: 'json'
+  methods: [POST]
+  requirements:
+    _custom_access: '\Drupal\agency_host\Access\BffAccess::access'
+    token: '[a-f0-9]{64}'
+  options:
+    _auth: [oauth2]
+    no_cache: TRUE
+
+agency_host.coordinator_queue:
+  path: '/admin/agency/discovery/queue'
+  defaults:
+    _controller: '\Drupal\agency_host\Controller\CoordinatorDiscoveryController::queue'
+    _format: 'json'
+  methods: [GET]
+  requirements:
+    _user_is_logged_in: 'TRUE'
+  options:
+    _auth: [cookie]
+    no_cache: TRUE
+
+agency_host.coordinator_start:
+  path: '/admin/agency/discovery/start'
+  defaults:
+    _controller: '\Drupal\agency_host\Controller\CoordinatorDiscoveryController::start'
+    _format: 'json'
+  methods: [POST]
+  requirements:
+    _user_is_logged_in: 'TRUE'
+    _csrf_request_header_token: 'TRUE'
+  options:
+    _auth: [cookie]
+    no_cache: TRUE
+
+agency_host.coordinator_command:
+  path: '/admin/agency/discovery/{relationship}/{command}'
+  defaults:
+    _controller: '\Drupal\agency_host\Controller\CoordinatorDiscoveryController::command'
+    _format: 'json'
+  methods: [POST]
+  requirements:
+    _user_is_logged_in: 'TRUE'
+    _csrf_request_header_token: 'TRUE'
+    relationship: '[a-f0-9-]{36}'
+    command: 'setNextAction|pauseRelationship|resumeRelationship|revokeInvitation|suspendAccess|close|moveForward|issue|resend'
+  options:
+    _auth: [cookie]
+    no_cache: TRUE
+
+agency_host.console:
+  path: '/admin/agency/discovery/console'
+  defaults:
+    _controller: '\Drupal\agency_host\Controller\DiscoveryConsoleController::queue'
+    _title: 'Conversations'
+  methods: [GET]
+  requirements:
+    _custom_access: '\Drupal\agency_host\Console\ConsoleAccess::access'
+  options:
+    _auth: [cookie]
+    _admin_route: TRUE
+    no_cache: TRUE
+
+agency_host.console_detail:
+  path: '/admin/agency/discovery/console/{relationship}'
+  defaults:
+    _controller: '\Drupal\agency_host\Controller\DiscoveryConsoleController::detail'
+    _title: 'Conversations'
+  methods: [GET]
+  requirements:
+    _custom_access: '\Drupal\agency_host\Console\ConsoleAccess::access'
+    relationship: '[a-f0-9-]{36}'
+  options:
+    _auth: [cookie]
+    _admin_route: TRUE
+    no_cache: TRUE
+
+agency_host.console_prepare:
+  path: '/admin/agency/discovery/console/prepare'
+  defaults:
+    _form: '\Drupal\agency_host\Form\DiscoveryPrepareForm'
+    _title: 'Prepare a conversation'
+  methods: [GET, POST]
+  requirements:
+    _custom_access: '\Drupal\agency_host\Console\ConsoleAccess::access'
+  options:
+    _auth: [cookie]
+    _admin_route: TRUE
+    no_cache: TRUE
+
+agency_host.console_command:
+  path: '/admin/agency/discovery/console/{relationship}/{command}'
+  defaults:
+    _form: '\Drupal\agency_host\Form\DiscoveryCommandForm'
+    _title: 'Conversations'
+  methods: [GET, POST]
+  requirements:
+    _custom_access: '\Drupal\agency_host\Console\ConsoleAccess::access'
+    relationship: '[a-f0-9-]{36}'
+    command: 'setNextAction|reassign|pauseRelationship|resumeRelationship|revokeInvitation|close|moveForward|issue|resend'
+  options:
+    _auth: [cookie]
+    _admin_route: TRUE
+    no_cache: TRUE
+
+agency_host.console_held:
+  path: '/admin/agency/discovery/console/held'
+  defaults:
+    _form: '\Drupal\agency_host\Form\DiscoveryHeldForm'
+    _title: 'Earlier requests this session is keeping'
+  methods: [GET, POST]
+  requirements:
+    _custom_access: '\Drupal\agency_host\Console\ConsoleAccess::access'
+  options:
+    _auth: [cookie]
+    _admin_route: TRUE
+    no_cache: TRUE
+
+agency_host.console_delivery:
+  path: '/admin/agency/discovery/console/delivery/{delivery}'
+  defaults:
+    _form: '\Drupal\agency_host\Form\InvitationDeliveryForm'
+    _title: 'Review invitation delivery'
+  methods: [GET, POST]
+  requirements:
+    _custom_access: '\Drupal\agency_host\Console\ConsoleAccess::access'
+    _permission: 'approve agency discovery invitation delivery'
+    delivery: '[a-f0-9]{64}'
+  options:
+    _auth: [cookie]
+    _admin_route: TRUE
+    no_cache: TRUE

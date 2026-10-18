@@ -1,0 +1,97 @@
+{
+  "fields": {
+    "display_name": "Names the conversation in the authorized coordinator queue.",
+    "email": "Checks contact policy and locates one existing sign-in for explicit confirmation.",
+    "owner.contact": "Gives the participant the named owner contact route.",
+    "owner.uid": "Selects a freshly eligible coordinator for explicit reassignment.",
+    "next_action.summary": "Explains the next obligation to both sides.",
+    "next_action.why": "Explains why the next obligation helps the participant.",
+    "next_action.side": "Identifies who acts; participant action remains optional.",
+    "next_action.expected_by": "Sets the dated obligation without changing policy.",
+    "close.category": "Records the approved reason in the participant closing summary.",
+    "close.message": "Records the message the participant can read.",
+    "close.contact": "Provides the participant a route for a second look.",
+    "close.confirm": "Confirms the irreversible close boundary.",
+    "proposal.purpose": "Describes a proposed next purpose without applying it.",
+    "proposal.message": "Explains the optional proposal for participant consent.",
+    "invitation.revoke_confirmation": "Confirms invitation revocation without collecting a note.",
+    "invitation.resend_confirmation": "Confirms supersession of the previous invitation.",
+    "review.nonce": "Retrieves the session-owned immutable review; never supplies command authority or business input.",
+    "delivery.preview_fingerprint": "Binds approval to the exact server-derived message already reviewed; never supplies message content.",
+    "delivery.approval_key": "Identifies one explicit approval command for exact-command reconciliation.",
+    "delivery.approve": "Records a deliberate approval of the exact recipient and message for one transport attempt."
+  },
+  "server_only": {
+    "selected_identity": "Bounded issuer/subject/contact tuple in authenticated server form state; never a hidden input.",
+    "intent": "Immutable command key, input and base version in authenticated server form state."
+  },
+  "framework_exemptions": [
+    "form_build_id",
+    "form_token",
+    "form_id"
+  ],
+  "controls": {
+    "find": "Looks up one sign-in from the entered email without preparing a conversation.",
+    "confirm": "Confirms the selected existing sign-in after fresh validation.",
+    "reject": "Clears the sign-in selection without changing a conversation.",
+    "prepare": "Prepares the explicitly confirmed conversation, or retries the frozen request.",
+    "retry": "Confirms or exactly retries the retained immutable command.",
+    "review": "Reads the latest authorized conversation alongside retained entries.",
+    "apply": "Reviews an explicit new intent only after a definitive previous result.",
+    "discard": "Discards local entries, never an unresolved domain command.",
+    "acknowledge": "Acknowledges a definitive result to release this session guard without changing the conversation.",
+    "edit": "Returns an unsubmitted review to editable entries without a domain command.",
+    "expired_continue": "Explicitly releases this session guard after request expiry without determining or replaying its outcome.",
+    "authorize_delivery": "Authorizes one reviewed delivery attempt; never means participant acceptance or confirmed delivery."
+  },
+  "system_inputs": {
+    "fixed.optional": "Every participant action remains optional; the coordinator cannot change this value."
+  },
+  "command_inputs": {
+    "prepare": {
+      "display_name": "display_name",
+      "contact.kind": "email",
+      "contact.value": "email",
+      "owner_contact.kind": "owner.contact",
+      "owner_contact.value": "owner.contact",
+      "next_action.summary": "next_action.summary",
+      "next_action.why_it_helps": "next_action.why",
+      "next_action.expected_by": "next_action.expected_by",
+      "next_action.side": "next_action.side",
+      "next_action.optional": "fixed.optional"
+    },
+    "setNextAction": {
+      "summary": "next_action.summary",
+      "why_it_helps": "next_action.why",
+      "expected_by": "next_action.expected_by",
+      "side": "next_action.side",
+      "optional": "fixed.optional"
+    },
+    "pauseRelationship": {
+      "summary": "next_action.summary",
+      "why_it_helps": "next_action.why",
+      "expected_by": "next_action.expected_by",
+      "side": "next_action.side",
+      "optional": "fixed.optional"
+    },
+    "resumeRelationship": {},
+    "issue": {},
+    "resend": {},
+    "revokeInvitation": {},
+    "close": {
+      "category": "close.category",
+      "message": "close.message",
+      "contact.kind": "close.contact",
+      "contact.value": "close.contact"
+    },
+    "moveForward": {
+      "target_purpose": "proposal.purpose",
+      "message": "proposal.message"
+    },
+    "reassign": {
+      "owner.uid": "owner.uid",
+      "owner.contact.kind": "owner.contact",
+      "owner.contact.value": "owner.contact"
+    }
+  }
+}
