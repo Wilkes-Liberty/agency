@@ -6,7 +6,6 @@ namespace Drupal\Tests\agency\Kernel\Workforce;
 
 use Drupal\agency_staff\InvitationCommands;
 use Drupal\agency_staff\RelationshipCommands;
-use Drupal\agency_staff\Storage\DomainStore;
 use Drupal\agency_staff\Workforce\AcceptStaffInvitation;
 use Drupal\agency_staff\Workforce\AuthorityState;
 use Drupal\agency_staff\Workforce\HostAccountBinding;
@@ -59,13 +58,17 @@ final class WorkforceScaffoldingTest extends KernelTestBase {
     $this->assertTrue($this->container->has('agency_staff.invitations'));
     $this->assertSame(RelationshipCommands::class, $this->container->getDefinition('agency_staff.commands')->getClass());
     $this->assertSame(InvitationCommands::class, $this->container->getDefinition('agency_staff.invitations')->getClass());
-    $this->assertSame([
+    $types = array_keys($this->container->get('entity_type.manager')->getDefinitions());
+    foreach ([
       'agency_person',
       'agency_principal',
       'agency_discovery',
       'agency_invitation',
       'agency_entitlement',
-    ], DomainStore::TYPES);
+    ] as $type) {
+      $this->assertContains($type, $types);
+    }
+    $this->assertNotContains('agency_workforce', $types);
     $commands = new \ReflectionClass(WorkforceCommandsInterface::class);
     $this->assertTrue($commands->hasMethod('inviteStaff'));
     $this->assertTrue($commands->hasMethod('acceptStaffInvitation'));
@@ -77,7 +80,9 @@ final class WorkforceScaffoldingTest extends KernelTestBase {
     $this->assertTrue($reads->hasMethod('accountSummary'));
     $host = new \ReflectionClass(WorkforceHostAdapterInterface::class);
     $this->assertTrue($host->hasMethod('authority'));
-    $this->assertSame(AuthorityState::class, $host->getMethod('authority')->getReturnType()?->getName());
+    $return = $host->getMethod('authority')->getReturnType();
+    $this->assertInstanceOf(\ReflectionNamedType::class, $return);
+    $this->assertSame(AuthorityState::class, $return->getName());
   }
 
   /**

@@ -17,7 +17,7 @@ final class UpdateProfileEvidence {
   /**
    * Server map for own-profile writes. Unmapped names refuse.
    *
-   * display_name marking matches ontology Person.display_name.
+   * The display_name marking matches ontology Person.display_name.
    */
   public const REQUIRED_MARKINGS = [
     'display_name' => FieldMarking::PERSONAL,
@@ -54,9 +54,9 @@ final class UpdateProfileEvidence {
    *   Person UUID the evidence belongs to.
    * @param \Drupal\agency_staff\Workforce\ProfileAudience $audience
    *   Own-profile write audience.
-   * @param list<array{name: string, marking: FieldMarking}> $fields
+   * @param array $fields
    *   Marked field names that already match REQUIRED_MARKINGS.
-   * @param list<ProtectedFileRef> $files
+   * @param array $files
    *   File Gate references, never file bodies.
    */
   public function __construct(
@@ -90,14 +90,16 @@ final class UpdateProfileEvidence {
         'marking' => $field['marking'],
       ];
     }
+    $storedFiles = [];
     foreach ($files as $file) {
       if (!$file instanceof ProtectedFileRef) {
         throw new Refusal('invalid');
       }
+      $storedFiles[] = $file;
     }
     $this->audience = $audience;
     $this->fields = $normalized;
-    $this->files = array_values($files);
+    $this->files = $storedFiles;
   }
 
   /**

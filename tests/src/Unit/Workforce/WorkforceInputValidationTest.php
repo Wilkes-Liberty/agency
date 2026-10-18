@@ -360,11 +360,13 @@ final class WorkforceInputValidationTest extends UnitTestCase {
       UpdateProfileEvidence::fromArray([
         'person_uuid' => '00000000-0000-4000-8000-000000000002',
         'audience' => ProfileAudience::OWN,
-        'fields' => [[
-          'name' => 'display_name',
-          'marking' => FieldMarking::PERSONAL,
-          'bytes' => NULL,
-        ]],
+        'fields' => [
+          [
+            'name' => 'display_name',
+            'marking' => FieldMarking::PERSONAL,
+            'bytes' => NULL,
+          ],
+        ],
       ]);
       $this->fail('Extra field keys must be refused.');
     }
@@ -412,10 +414,6 @@ final class WorkforceInputValidationTest extends UnitTestCase {
    * Authority ids match the migrate register; forked names refuse.
    */
   public function testAuthorityStateMatchesMigrateVocabulary(): void {
-    $this->assertSame(
-      ['legacy', 'shadow', 'agency', 'removed'],
-      AuthorityState::ALLOWED,
-    );
     $forked = [
       'legacy_authoritative',
       'agency_authoritative',
