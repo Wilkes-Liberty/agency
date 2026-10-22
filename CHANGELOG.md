@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `agency_host` throttles forced JWKS refetches for an unknown `kid` to a
+  configurable per-issuer interval (default 60 seconds). The last forced
+  refresh is stored in the existing JWKS cache bin and serialized with a lock
+  so concurrent requests cannot each trigger discovery. One refresh after the
+  window still picks up a rotated key. See
+  [GitHub #31](https://github.com/Wilkes-Liberty/agency/issues/31) and
+  [DEV-1099](https://wilkesliberty.atlassian.net/browse/DEV-1099).
+
 ## [1.0.0-alpha3] - 2026-10-18
 
 Prepared prerelease; publication requires maintainer approval. See the

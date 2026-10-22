@@ -47,6 +47,9 @@ The host supplies:
 - Config `agency_host.identity_tokens` for the dedicated participant issuer and
   audience. Historical `paladin_issuer` / `paladin_audience` keys remain so
   already-qualified binding fingerprints do not change.
+  `jwks_forced_refresh_interval` is the minimum seconds between forced JWKS
+  refetches for an unknown `kid` (default 60). Binding fingerprints do not
+  include this interval.
 - Invitation custody in `$settings['agency_host_invitation_delivery']` (not
   config). The AES associated data stays `agency-delivery:1:`.
 - Optional plugins: replace `agency_host.contact_policy` for CRM resolution,

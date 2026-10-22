@@ -4,6 +4,10 @@ These failure cases precede implementation. Exercise them through synthetic
 host requests and IdP HTTP responses, not real identities or invitations.
 
 - Valid JWT with missing/disabled/rebound subject: no authority.
+- Unknown `kid` inside the per-issuer forced JWKS refresh window: reject
+  without another discovery or JWKS fetch. After the window, one refetch is
+  enough to accept a rotated key. Concurrent unknown-kid requests share that
+  one refetch.
 - No Drupal account: no client, partner, staff or Profile provisioning needed.
 - Wrong issuer, invalid proof and failed readback: refuse before writes.
 - Contact address: never discovers a subject; explicit subject readback only.

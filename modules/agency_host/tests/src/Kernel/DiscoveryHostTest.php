@@ -957,7 +957,8 @@ final class DiscoveryHostTest extends KernelTestBase {
     ]);
     $make = fn(string $name) => new JwksAccessTokenValidator(
       $http, $this->container->get('cache.default'), $this->container->get('datetime.time'),
-      new NullLogger(), $this->container->get('config.factory'), $name,
+      new NullLogger(), $this->container->get('config.factory'),
+      $this->container->get('lock'), $name,
     );
     $ordinary = $make('agency_host.ordinary_tokens');
     $dedicated = $make('agency_host.identity_tokens');
@@ -1068,7 +1069,8 @@ final class DiscoveryHostTest extends KernelTestBase {
     $ordinary = new JwksAccessTokenValidator(
       $this->container->get('http_client'), $this->container->get('cache.default'),
       $this->container->get('datetime.time'), new NullLogger(),
-      $this->container->get('config.factory'), 'agency_host.ordinary_tokens',
+      $this->container->get('config.factory'), $this->container->get('lock'),
+      'agency_host.ordinary_tokens',
     );
     $dedicated = $this->container->get('agency_host.access_token_validator');
     $this->assertInstanceOf(JwksAccessTokenValidator::class, $dedicated);

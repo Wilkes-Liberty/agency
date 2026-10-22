@@ -65,6 +65,9 @@ agency_host.identity_tokens:
     paladin_audience:
       type: string
       label: 'Historical audience key retained for qualified binding fingerprints'
+    jwks_forced_refresh_interval:
+      type: integer
+      label: 'Minimum seconds between forced JWKS refetches for an unknown kid'
 
 agency_host.ordinary_tokens:
   type: config_object
@@ -82,3 +85,6 @@ agency_host.ordinary_tokens:
     paladin_audience:
       type: string
       label: 'Historical ordinary audience key'
+    jwks_forced_refresh_interval:
+      type: integer
+      label: 'Minimum seconds between forced JWKS refetches for an unknown kid'
