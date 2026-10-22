@@ -87,7 +87,7 @@ services:
 
   agency_host.access_token_validator:
     class: Drupal\agency_host\Identity\JwksAccessTokenValidator
-    arguments: ['@http_client', '@cache.default', '@datetime.time', '@logger.channel.agency_host', '@config.factory', 'agency_host.identity_tokens']
+    arguments: ['@http_client', '@cache.default', '@datetime.time', '@logger.channel.agency_host', '@config.factory', '@lock', 'agency_host.identity_tokens']
 
   agency_host.identity_authority:
     class: Drupal\agency_host\Identity\IdentityAuthority

@@ -7,6 +7,7 @@ namespace Drupal\agency_host\Identity;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
+use Drupal\Core\Lock\LockBackendInterface;
 use Firebase\JWT\BeforeValidException;
 use Firebase\JWT\ExpiredException;
 use Firebase\JWT\JWK;
@@ -22,6 +23,21 @@ use Psr\Log\LoggerInterface;
  * fetched from the configured issuer, never from the token's iss.
  */
 final class JwksAccessTokenValidator implements AccessTokenValidatorInterface {
+
+  /**
+   * Default seconds between forced JWKS refetches for one issuer.
+   */
+  private const DEFAULT_FORCED_REFRESH_INTERVAL = 60;
+
+  /**
+   * Lease long enough for discovery plus JWKS at the 8s HTTP timeout.
+   */
+  private const REFRESH_LOCK_TIMEOUT = 20.0;
+
+  /**
+   * How long a racing request waits for the in-flight refresh.
+   */
+  private const REFRESH_LOCK_WAIT = 2;
 
   /**
    * Asymmetric algorithms accepted for participant access tokens.
@@ -46,6 +62,7 @@ final class JwksAccessTokenValidator implements AccessTokenValidatorInterface {
     private readonly TimeInterface $time,
     private readonly LoggerInterface $logger,
     private readonly ConfigFactoryInterface $configFactory,
+    private readonly LockBackendInterface $lock,
     private readonly string $configurationName = 'agency_host.identity_tokens',
   ) {}
 
@@ -85,13 +102,17 @@ final class JwksAccessTokenValidator implements AccessTokenValidatorInterface {
     $error = NULL;
     $claims = $this->decodeToken($jwt, $jwks, $alg, $error);
     if ($claims === NULL) {
-      // Only drop the cached JWKS when the failure looks like key rotation.
-      // Expired, nbf, and malformed tokens must not force outbound discovery.
+      // Only refetch when the failure looks like key rotation. Expired, nbf,
+      // and malformed tokens must not force outbound discovery.
       if ($error === NULL || !$this->isKeyRotationFailure($error)) {
         return NULL;
       }
-      $this->cache->delete($this->jwksCacheId($issuer));
-      $jwks = $this->loadJwks($issuer);
+      // Unknown kids are cheap for an unauthenticated caller. Stay inside the
+      // per-issuer window instead of refetching discovery on every miss.
+      if (!$this->shouldForceRefresh($issuer)) {
+        return NULL;
+      }
+      $jwks = $this->refreshJwksForUnknownKid($issuer);
       if ($jwks === NULL) {
         return NULL;
       }
@@ -141,12 +162,17 @@ final class JwksAccessTokenValidator implements AccessTokenValidatorInterface {
   /**
    * Loads and caches the issuer JWKS via OIDC discovery.
    *
+   * @param string $issuer
+   *   The configured participant issuer.
+   * @param bool $force
+   *   When TRUE, skip the cached document and fetch again.
+   *
    * @return array<string, mixed>|null
    *   The JWKS document, or NULL on failure.
    */
-  private function loadJwks(string $issuer): ?array {
+  private function loadJwks(string $issuer, bool $force = FALSE): ?array {
     $cid = $this->jwksCacheId($issuer);
-    if ($cached = $this->cache->get($cid)) {
+    if (!$force && ($cached = $this->cache->get($cid))) {
       return is_array($cached->data) ? $cached->data : NULL;
     }
     $discovery_url = $issuer . '/.well-known/openid-configuration';
@@ -242,10 +268,94 @@ final class JwksAccessTokenValidator implements AccessTokenValidatorInterface {
   }
 
   /**
+   * Whether an unknown kid may force another discovery plus JWKS fetch.
+   *
+   * The window is the last forced refresh for this issuer. A JWKS document
+   * fetched inside the same interval is treated the same way, so a cache miss
+   * does not immediately spend a second outbound pair.
+   */
+  private function shouldForceRefresh(string $issuer): bool {
+    $interval = $this->forcedRefreshInterval();
+    $now = $this->time->getRequestTime();
+    $forced = $this->cache->get($this->forcedRefreshCacheId($issuer));
+    if (is_object($forced) && ($now - (int) $forced->data) < $interval) {
+      return FALSE;
+    }
+    $jwks = $this->cache->get($this->jwksCacheId($issuer));
+    if (is_object($jwks) && ($now - (int) $jwks->created) < $interval) {
+      return FALSE;
+    }
+    return TRUE;
+  }
+
+  /**
+   * Refetches JWKS once for this issuer, serialized across racing requests.
+   *
+   * The timestamp is written before the HTTP calls so later requests see the
+   * window even while discovery is still in flight.
+   *
+   * @return array<string, mixed>|null
+   *   The JWKS document after the refresh attempt, or NULL on failure.
+   */
+  private function refreshJwksForUnknownKid(string $issuer): ?array {
+    $lock_name = $this->refreshLockName($issuer);
+    if (!$this->lock->acquire($lock_name, self::REFRESH_LOCK_TIMEOUT)) {
+      $this->lock->wait($lock_name, self::REFRESH_LOCK_WAIT);
+      return $this->loadJwks($issuer);
+    }
+    try {
+      if (!$this->shouldForceRefresh($issuer)) {
+        return $this->loadJwks($issuer);
+      }
+      $this->recordForcedRefresh($issuer);
+      return $this->loadJwks($issuer, TRUE);
+    }
+    finally {
+      $this->lock->release($lock_name);
+    }
+  }
+
+  /**
+   * Stores the last forced-refresh time for this issuer.
+   */
+  private function recordForcedRefresh(string $issuer): void {
+    $now = $this->time->getRequestTime();
+    $this->cache->set(
+      $this->forcedRefreshCacheId($issuer),
+      $now,
+      $now + $this->forcedRefreshInterval(),
+    );
+  }
+
+  /**
+   * Minimum seconds between forced refetches; non-positive values use 60.
+   */
+  private function forcedRefreshInterval(): int {
+    $configured = $this->configFactory->get($this->configurationName)
+      ->get('jwks_forced_refresh_interval');
+    $interval = is_numeric($configured) ? (int) $configured : 0;
+    return $interval > 0 ? $interval : self::DEFAULT_FORCED_REFRESH_INTERVAL;
+  }
+
+  /**
    * Cache id for an issuer's JWKS.
    */
   private function jwksCacheId(string $issuer): string {
     return 'agency_host:jwks:' . hash('sha256', $issuer);
+  }
+
+  /**
+   * Cache id for the last forced-refresh timestamp of an issuer.
+   */
+  private function forcedRefreshCacheId(string $issuer): string {
+    return 'agency_host:jwks:forced:' . hash('sha256', $issuer);
+  }
+
+  /**
+   * Lock name that serializes forced refreshes for one issuer.
+   */
+  private function refreshLockName(string $issuer): string {
+    return 'agency_host.jwks_refresh:' . hash('sha256', $issuer);
   }
 
   /**
