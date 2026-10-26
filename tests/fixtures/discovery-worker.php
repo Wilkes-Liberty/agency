@@ -170,7 +170,7 @@ $builder = new class('discoveryWorker') extends TestCase {
     $chain = new AuditChainLogger(
       $database, $account, new RequestStack(), $factory, $time, $keys,
       new NullLogger(), $this->createMock(EncryptServiceInterface::class),
-      $entities, $this->createMock(StateInterface::class),
+      $entities, $this->createMock(StateInterface::class), new NullLogger(),
     );
     $logger = $this->createMock(AuditChainLoggerInterface::class);
     $logger->method('logKeyed')->willReturnCallback(static function (string $channel, string $operation, array $metadata) use ($chain, $checkpoint, $input): void {
