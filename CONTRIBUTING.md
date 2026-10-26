@@ -20,7 +20,7 @@ tracking belongs outside public project history.
 2. Use an isolated worktree and a focused branch, such as `feature/ISSUE-topic` or `chore/ISSUE-topic`.
 3. Describe the user outcome and failure cases before implementation.
 4. Run the [development checks](docs/DEVELOPMENT.md).
-5. Update the relevant documentation and the Unreleased changelog.
+5. Update the relevant documentation and a unique `changelog.d/<issue>-<slug>.md` fragment.
 6. Open a pull request with its canonical issue, validation and remaining limitations.
 7. Resolve review findings and failing checks. A maintainer decides when to merge and release.
 
@@ -50,3 +50,8 @@ claim provider support before the integration is implemented and verified.
 ## Maintainers
 
 Jeremy Michael Cerda and Wilkes & Liberty, LLC maintain Agency.
+
+## Changelog fragments
+
+Follow [the changelog workflow](.github/CHANGELOG.md) for independent PR notes
+and lossless release compilation. Existing opt-in entry policy is unchanged.

@@ -19,7 +19,7 @@ Read README.md, CONTRIBUTING.md, docs/ARCHITECTURE.md and docs/NORTH_STAR.md bef
 - Run Composer validation, Drupal/DrupalPractice PHPCS and the applicable Drupal tests. Test the oldest supported branch as well as the current branch.
 - A workflow file or a collected test is not proof of execution. Check actual CI results and skipped tests.
 - Use synthetic records and fixtures. Product documentation contains reusable guidance, not private operational evidence.
-- Update relevant documentation and the Unreleased changelog. Distinguish proposed design from observed behavior.
+- Update relevant documentation and a unique `changelog.d/<issue>-<slug>.md` fragment. Distinguish proposed design from observed behavior.
 - Maintain operator authorship and maintainer attribution. Do not add automated authorship credits to code, commits or pull requests.
 - Pull requests are reviewable delivery units. Do not merge, tag, publish releases or deploy without maintainer authorization.
 - Write PR descriptions and issue text for the operator who reviews and merges: why, what changed, how it was verified. Do not restate these agent rules in PR or issue text.
