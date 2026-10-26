@@ -13,4 +13,4 @@ Record the checks that ran, supported versions exercised, and anything still unv
 ## Review notes
 
 Explain relevant access, data, dependency, migration or compatibility effects.
-Keep examples synthetic. Update documentation and the Unreleased changelog where applicable.
+Keep examples synthetic. Update documentation and a unique `changelog.d/<issue>-<slug>.md` fragment where applicable.
