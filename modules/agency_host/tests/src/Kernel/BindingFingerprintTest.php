@@ -6,6 +6,7 @@ namespace Drupal\Tests\agency_host\Kernel;
 
 use Composer\InstalledVersions;
 use Drupal\agency_host\Identity\BindingHistory;
+use Drupal\agency_host\Identity\IdentityDirectoryUnavailable;
 use Drupal\Core\Site\Settings;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\openid_connect\Entity\OpenIDConnectClientEntity;
@@ -67,7 +68,20 @@ final class BindingFingerprintTest extends KernelTestBase {
    * The reviewed 2.0.13 install still produces a stable, mapping-sensitive digest.
    */
   public function testFingerprintStableAcrossReviewedTwoOhWriters(): void {
+    $this->assertTrue(InstalledVersions::isInstalled('drupal/externalauth'));
     $this->assertSame('2.0.13', InstalledVersions::getReference('drupal/externalauth'));
+    $root = InstalledVersions::getInstallPath('drupal/externalauth');
+    $writers = (new \ReflectionClass(BindingHistory::class))->getConstant('REVIEWED_WRITERS');
+    $this->assertIsArray($writers);
+    foreach ($writers as $row) {
+      [$package, $file, $expected] = $row;
+      if ($package !== 'drupal/externalauth') {
+        continue;
+      }
+      $actual = hash_file('sha256', $root . '/' . $file);
+      $this->assertIsString($actual);
+      $this->assertTrue(hash_equals($expected, $actual), $file);
+    }
     $history = $this->history();
     $full = $history->fingerprint();
     $authority = $history->fingerprint(FALSE);
@@ -83,6 +97,16 @@ final class BindingFingerprintTest extends KernelTestBase {
     ])->execute();
     $this->assertNotSame($full, $history->fingerprint());
     $this->assertSame($authority, $history->fingerprint(FALSE));
+  }
+
+  /**
+   * Enabled Externalauth below schema 8104 cannot qualify on a live host.
+   */
+  public function testPendingExternalauthSchemaIsRefused(): void {
+    $this->container->get('update.update_hook_registry')->setInstalledVersion('externalauth', 8103);
+    $this->expectException(IdentityDirectoryUnavailable::class);
+    $this->expectExceptionMessage('Binding writer schema update is pending.');
+    $this->history()->fingerprint();
   }
 
   /**

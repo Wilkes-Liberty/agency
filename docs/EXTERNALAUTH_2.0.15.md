@@ -83,5 +83,15 @@ Keep the reviewed reference, `REVIEWED_WRITERS` hashes, CI pin
 operator choice because it would change the fingerprint digest and require
 fresh qualification.
 
-`BindingHistoryFingerprintTest` and `BindingFingerprintTest` pin that
-behavior so a silent pin move or writer-hash drift fails CI.
+`BindingHistoryFingerprintTest` pins the reviewed source string and installed
+writer bytes (that hash assertion is not skippable). `BindingFingerprintTest`
+proves a live 2.0.13 digest. `BindingHistoryFingerprintDenyTest` executes the
+fail-closed throws: unreviewed `InstalledVersions::getReference()` (including
+`2.0.15`), a writer file that does not match `REVIEWED_WRITERS`, and enabled
+Externalauth below schema `8104`. Removing the unreviewed-reference throw
+while leaving `'drupal/externalauth' => '2.0.13'` in the reviewed array makes
+that deny test fail.
+
+Fingerprint hashing stays PHP `hash()` / `hash_hmac()` / `hash_file()`
+SHA-256, not the OpenSSL FIPS provider. That is pre-existing; this review
+does not change the digest. DEV-1024's lock-bump acceptance stays open.

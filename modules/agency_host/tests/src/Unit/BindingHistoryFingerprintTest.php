@@ -68,11 +68,16 @@ final class BindingHistoryFingerprintTest extends UnitTestCase {
 
   /**
    * The installed 2.0.13 writers still match the hashes bound into coverage.
+   *
+   * CI always installs Externalauth 2.0.13 on agency_host unit and kernel
+   * lanes. This assertion must not skip.
    */
   public function testInstalledWritersMatchReviewedHashes(): void {
-    if (!class_exists(InstalledVersions::class) || !InstalledVersions::isInstalled('drupal/externalauth')) {
-      $this->markTestSkipped('Reviewed Externalauth is not installed on this host.');
-    }
+    $this->assertTrue(class_exists(InstalledVersions::class));
+    $this->assertTrue(
+      InstalledVersions::isInstalled('drupal/externalauth'),
+      'Reviewed Externalauth must be installed; this assertion is not skippable.',
+    );
     $this->assertSame('2.0.13', InstalledVersions::getReference('drupal/externalauth'));
     $root = InstalledVersions::getInstallPath('drupal/externalauth');
     foreach (self::WRITER_HASHES as $file => $expected) {
