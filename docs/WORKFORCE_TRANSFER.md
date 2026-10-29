@@ -3,10 +3,12 @@
 Status: **proposed design ready for operator gate G1**. This is not an
 implementation contract and does not register Slice 2 record types.
 Package 01 published the caller ledger as draft
-[webcms#1900](https://github.com/Wilkes-Liberty/webcms/pull/1900)
-(`docs/agency-extraction/ledger.json` at
-`2216df30c3af736bd7f8b47832c2ea8572c1fd2b`). Ontology draft v0.1.1 in
-this change adds the recruiting relationship kind and proposed S2
+[webcms#1900](https://github.com/Wilkes-Liberty/webcms/pull/1900). Slice 2
+citations below pin webcms `master` at
+[`be5a1962`](https://github.com/Wilkes-Liberty/webcms/commit/be5a1962)
+(2026-10-29 sweep of `docs/agency-extraction/ledger.json` / `LEDGER.md`).
+Ontology draft v0.1.1 in this change adds the recruiting relationship
+kind, a proposed `agency_recruiting` boundary, and proposed S2
 application, posting, profile-evidence, staff-invitation and
 staff-onboard types. Package 05 shipped the authority register in
 [agency#27](https://github.com/Wilkes-Liberty/agency/pull/27) with
@@ -17,7 +19,8 @@ on an explicit operator G1 GO.
 
 The document distinguishes **observed** Agency Discovery behavior in this
 package from **proposed** Slice 2 transfer. Slice 2 ledger rows below
-cite that `ledger.json`. Draft ontology names are in
+cite that `be5a1962` ledger, including tokens/locks, services, routes,
+queues and test classes. Draft ontology names are in
 `ontology/ontology.yml`; they are not an implementation contract until
 G1. Host-tree class names that the ledger inventories but this checkout
 still cannot open remain **unverified** for expand.
@@ -53,10 +56,12 @@ Approve all of the following for G1 GO:
    timestamps and authorship; refuse collisions; do not move host-named
    providers into this package.
 3. [ ] Authority register: keep one `workforce` row for staff invite,
-   staff onboard and profile evidence, and a separate `recruiting` row
-   for career postings, applications and résumé File Gate references
-   (recommended, so posting close and staff cutover can move
-   independently). Alternative: one shared `workforce` row. Machine
+   staff onboard, `chronicle_personnel` and profile evidence, and a
+   separate `recruiting` row for career postings, applications and
+   résumé File Gate references (recommended, so posting close and staff
+   cutover can move independently). Posting and application types are
+   owned by proposed `agency_recruiting`; staff types stay on proposed
+   `agency_workforce`. Alternative: one shared `workforce` row. Machine
    names stay `legacy` / `shadow` / `agency` / `removed`.
 4. [ ] Classification allowlist stays `employee` and `contractor` only.
    Scaffolding already refuses Discovery, client, partner and supplier
@@ -98,9 +103,26 @@ G-ONT.
 
 ## 1. Responsibilities in scope
 
-Slice 2 rows from `docs/agency-extraction/ledger.json` at webcms#1900
-(`2216df30c3af736bd7f8b47832c2ea8572c1fd2b`). Row ids S2-L1–L5 are this
-design's labels, not ontology machine names.
+Slice 2 rows from `docs/agency-extraction/ledger.json` at webcms `master`
+`be5a1962`. The 2026-10-29 sweep of that pin reported **580** Slice 2
+responsibilities still `legacy`, **677** leftover host callers and
+**27** test classes to port, across `chronicle_staff_invite`,
+`chronicle_personnel`, dormant `chronicle_client_access`, the person
+side of `chronicle_api`, the `career` node bundle, and the
+`career_application` / `staff_onboard` webforms. **0** rows were
+`shadow`, `agency` or `removed`. Row ids S2-L1–L5 are this design's
+labels, not ontology machine names.
+
+Ledger categories at that pin (host PHP remains **unverified** from this
+checkout; expand re-reads the ledger rather than this table):
+
+| Category | Cited at `be5a1962` | Slice 2 disposition |
+| --- | --- | --- |
+| Tokens / locks | Staff-invite bearer hashes and generation row locks; `/invite` inspect door; career-upload claim tokens | Copy staff-invite hashes onto `agency_staff_invitation` (plaintext never copied). Career-upload tokens are File Gate carry-over. |
+| Services | `chronicle_staff_invite`, `chronicle_personnel`, person/profile projections on `chronicle_api`, `CareerResumeUploadService`, career validators | Copy/adapt into `agency_workforce` and `agency_recruiting` after G1. Scan job store stays File Gate. |
+| Routes | `/invite`, own-profile, account-summary, `/careers`, `/careers/{slug}`, `/careers/apply` | Host transport retained. Agency owns the records after `agency` authority. |
+| Queues | Staff-invite delivery; résumé quarantine/scan jobs | Invite capture is Agency after cutover. Scan jobs stay File Gate. |
+| Test classes | 27 S2 classes in the ledger | Port map in §11. |
 
 | Proposed row | Current authority (ledger) | Target | Notes |
 | --- | --- | --- | --- |
@@ -139,10 +161,10 @@ or recruiting paths.
 | Relationship (recruiting) | none | Proposed kind `recruiting` (`agency_recruiting`). Not a Discovery or workforce state. Application and posting records may link to it. |
 | Invitation (staff) | Internal `agency_invitation` (Discovery generations) | New staff invitation type `agency_staff_invitation`. Never share the Discovery generation table or command class. |
 | Entitlement (workforce) | Internal `agency_entitlement` (Discovery grants) | New workforce entitlement. Never share the Discovery grant table or command class. |
-| Profile evidence | none | `agency_profile_evidence`. Marked fields plus File Gate references. Not a public Profile entity. Sources are profile bundles `employee` and `contractor`. |
+| Profile evidence | none | `agency_profile_evidence` under proposed `agency_workforce`. Marked fields plus File Gate references. Not a public Profile entity. Copy sources are profile bundles `employee` and `contractor` and `chronicle_personnel` evidence. Client profile bundles are host-stay with fail-closed collision preflight. |
 | Staff onboard | none | `agency_staff_onboard`. ID-preserving copy of the `staff_onboard` webform submission. Classification is issuer-supplied. |
-| Career posting | none | `agency_career_posting`. ID-preserving copy of the `career` node. Host adapter renders the public list and detail. |
-| Application | none | `agency_application`. ID-preserving copy of the `career_application` webform. Résumé bytes stay in File Gate; the row stores the File Gate UUID. Distinct from Slice 3 `agency_intake_submission`. |
+| Career posting | none | `agency_career_posting` under proposed `agency_recruiting`. ID-preserving copy of the `career` node. Host adapter renders the public list and detail. |
+| Application | none | `agency_application` under proposed `agency_recruiting`. ID-preserving copy of the `career_application` webform. Résumé bytes stay in File Gate; the row stores the File Gate UUID. Distinct from Slice 3 `agency_intake_submission`. |
 
 Proposed actions (input schemas in scaffolding or ontology; no service
 yet):
@@ -187,9 +209,13 @@ do not acquire Discovery authority through role names.
 Slice 2 adds the converse:
 
 - `inviteStaff` / `acceptStaffInvitation` / `revokeStaffInvitation` live
-  under `Drupal\agency_staff\Workforce\` and must not call
+  under `Drupal\agency_staff\Workforce\` (proposed `agency_workforce`
+  submodule) and must not call
   `RelationshipCommands`, `InvitationCommands`, `RelationshipReads` or
   write `agency_discovery` / `agency_invitation` / `agency_entitlement`.
+- `createCareerPosting` / `publishCareerPosting` / `closeCareerPosting` /
+  `submitApplication` live under `Drupal\agency_recruiting\` and must not
+  call Workforce or Discovery command classes.
 - Discovery commands must not call workforce or recruiting interfaces or
   write those types.
 - A workforce entitlement never authorizes a Discovery workspace,
@@ -293,27 +319,31 @@ Lineage, copy and reconciliation tooling belong to `agency_migrate`
 plugin ids below are the host-adapter names expand will register; this
 package does not ship those plugins.
 
-| Source | Source kind | Target `agency_*` | Copier plugin | Field Guard marking | Authority domain |
+| Source | Disposition | Target `agency_*` | Copier plugin | Field Guard marking | Authority domain |
 | --- | --- | --- | --- | --- | --- |
-| Profile bundle `employee` | profile bundle | `agency_profile_evidence` | `profile_employee` | `personal` on evidence fields; `internal` on classification and lineage | workforce |
-| Profile bundle `contractor` | profile bundle | `agency_profile_evidence` | `profile_contractor` | `personal` on evidence fields; `internal` on classification and lineage | workforce |
-| Staff invite state (`chronicle_staff_invite`) | invitation / generation rows | `agency_staff_invitation` | `staff_invite_state` | `personal` on contact routes; `confidential` on token hash | workforce |
-| `staff_onboard` webform | webform submission | `agency_staff_onboard` | `staff_onboard` | `personal` on payload; `internal` on issuer classification | workforce |
-| `career` node | content type | `agency_career_posting` | `career_node` | `public` on title, hiring status, valid-through and body; `internal` on eligibility/clearance/engagement flags | recruiting |
-| `career_application` webform | webform submission | `agency_application` | `career_application` | `personal` on applicant payload and geo; `internal` on posting binding and status | recruiting |
-| Résumé private files | File Gate object | File Gate UUID on `agency_application` (`resume_file_uuid`) | `career_resume_file` | `personal` (or `confidential` when the field map says so) | recruiting |
+| Profile bundle `employee` | copy | `agency_profile_evidence` | `profile_employee` | `personal` on evidence fields; `internal` on classification and lineage | workforce |
+| Profile bundle `contractor` | copy | `agency_profile_evidence` | `profile_contractor` | `personal` on evidence fields; `internal` on classification and lineage | workforce |
+| `chronicle_personnel` person rows | copy | `agency_person` | `chronicle_personnel` | `personal` on display/contact; `internal` on lineage | workforce |
+| `chronicle_personnel` evidence fields | copy | `agency_profile_evidence` | `chronicle_personnel_evidence` | `personal` on evidence; `internal` on classification | workforce |
+| Profile bundle `client` | host-stay | none | none | n/a | n/a; collision preflight `fail_closed` and must not skip these rows |
+| Staff invite state (`chronicle_staff_invite`) | copy | `agency_staff_invitation` | `staff_invite_state` | `personal` on contact routes; `confidential` on token hash | workforce |
+| `staff_onboard` webform | copy | `agency_staff_onboard` | `staff_onboard` | `personal` on payload; `internal` on issuer classification | workforce |
+| `career` node | copy | `agency_career_posting` | `career_node` | `public` on title, hiring status, valid-through and body; `internal` on eligibility/clearance/engagement flags | recruiting |
+| `career_application` webform | copy | `agency_application` | `career_application` | `personal` on applicant payload and geo; `internal` on posting binding and status | recruiting |
+| Résumé private files | copy (UUID only) | File Gate UUID on `agency_application` (`resume_file_uuid`) | `career_resume_file` | `personal` (or `confidential` when the field map says so) | recruiting |
+| Career-upload tokens | File Gate carry-over | none | none | n/a | recruiting files stay on File Gate |
+| `CareerResumeUploadService` job store | File Gate carry-over | none | none | n/a | quarantine/scan jobs stay on File Gate |
+| Claim-scoped résumé access | File Gate carry-over | none | none | n/a | File Gate remains the delivery authority |
+| Geo handlers (`CountryResolver`, `UsGeoRestrictWebformHandler`) | host-stay | none | none | n/a | Host form mechanics. Applicant geo payload copies with `career_application`. |
 
 The same map is machine-readable as `s2_transfer_map` in
-`ontology/ontology.yml`. Ontology contract tests fail when a required
-source is missing.
+`ontology/ontology.yml` and is schema-checked. Ontology contract tests
+fail when a required source, 10/22 pipeline row, or client-profile
+exclusion is missing.
 
-Additional preservation rows that are not separate copiers:
-
-| Legacy store (plan) | Proposed Agency type | Preservation | Marking default until field map exists |
-| --- | --- | --- | --- |
-| Host uid, role, Profile bundle | Host adapter binding, not an Agency user entity | uid remains host-owned; lineage maps person UUID ↔ host uid | `internal` |
-| `chronicle_personnel` personnel rows | Person plus profile evidence | id, UUID, revision ids, revision authorship, created/changed | Field-level; unmapped field fails the batch |
-| Person/profile API consumers | Host transport over Agency projection | Response contracts unchanged | Per property |
+Host uid, role and the Drupal account remain host-owned adapter
+bindings, not Agency user entities. Person/profile API consumers stay
+host transport over an Agency projection. Those are not copy sources.
 
 Rules:
 
@@ -333,8 +363,8 @@ Rules:
 - Slice 3 `agency_intake_submission` is business intake. It does not
   own `career_application`.
 
-Exact table, field, route, service and test inventory is
-`docs/agency-extraction/ledger.json` at webcms#1900 (`2216df30`). Host
+Exact table, field, route, service, queue and test inventory is
+`docs/agency-extraction/ledger.json` at webcms `master` `be5a1962`. Host
 PHP class files remain **unverified** from this checkout; expand reads
 the ledger rather than re-inventorying. Host copier plugins and
 `agency_migrate` enablement are webcms work after G1.
@@ -342,17 +372,32 @@ the ledger rather than re-inventorying. Host copier plugins and
 ## 7. DEV-992 Option A conditions per S2 entity
 
 [DEV-992](https://wilkesliberty.atlassian.net/browse/DEV-992) Option A
-(approved 2026-10-26) applies to every row in §6. Preserving numbers
-alone does not preserve references. Each copier must satisfy all five
-conditions before that source may leave `legacy`.
+(approved 2026-10-26) applies to every **copy** row in §6. Host-stay and
+File Gate carry-over rows are not copiers. Preserving numbers alone does
+not preserve references. Each copier must satisfy all five conditions
+before that source may leave `legacy`. Client profile bundles
+(`profile_client`) are host-stay: collision preflight is `fail_closed`
+and must not skip those rows.
 
-| Condition | `profile_employee` / `profile_contractor` | `staff_invite_state` | `staff_onboard` | `career_node` | `career_application` | `career_resume_file` |
-| --- | --- | --- | --- | --- | --- | --- |
-| Collision-free preflight | Fail closed if `agency_profile_evidence` already holds the source integer id, UUID or revision id for a different UUID. Do not renumber. | Same on `agency_staff_invitation`. Pending token hashes compared by hash, never plaintext. | Same on `agency_staff_onboard` webform submission ids/UUIDs. | Same on `agency_career_posting` (node nid/uuid/vid). | Same on `agency_application` (webform submission id/UUID). | Same File Gate UUID must not bind to a different application row. Occupied destination file UUID with a different source is a refusal. |
-| Reference retargeting | Retarget profile → user/person and file-field references. Serialized profile ids in own-profile and account-summary routes become Agency type + same number. | Retarget generation → relationship/person/principal. `/invite` and `wlInviteStatus` keep host routes; inspect reads Agency after `agency`. Serialized class names in queues/state are listed and remapped. | Retarget submission → invitation and classification. Staff onboard confirmation routes resolve through lineage. | Retarget node → application, menu, path alias `/careers/{slug}`, JSON-LD JobPosting id, and ui career queries. Host renderer keeps the public path. | Retarget submission → posting (including null/general door), person, and résumé File Gate UUID. `/careers/apply` stays a host door. | Retarget file UUID, access flags and claim tokens. Quarantine and scan records keep File Gate ids. No new public URL. Serialized `private://` URIs that embed the file id are remapped by the host adapter. |
-| History and access reconciliation | Count parity for employee vs contractor bundles; per-field digests for marked evidence; own-profile and account-summary allow/deny parity; revisions and authorship match. Historical Audit Chain rows untouched. | Count parity for generations; token ceremony parity (GET inspect does not consume; POST accept consumes once); access-decision parity for wrong subject. | Count parity for onboard submissions; classification digest; invitation → onboard integrity. | Count parity for postings; valid-through and hiring-status digests; public list membership vs closed roles. | Count parity for applications; payload digests without logging PII; posting and person integrity; access-decision parity (applicant cannot read another applicant). | Count parity for résumé File Gate refs; access-decision parity (claim-scoped read only); no public URL appears on either side. |
-| Resumable, idempotent copy | Resume from last committed source id. Second complete run is a no-op. Retry must not duplicate or overwrite a divergent Agency row. | Same. Consumed/revoked status is not reset by resume. | Same. | Same. Editorial edits during a run are a reconciliation exception, not a silent overwrite. | Same. In-flight submissions after the watermark wait for the next batch. | Same. Scan-state changes during the run are exceptions. Bytes are never copied, so resume cannot create a second file body. |
-| Authority cutover and rollback | Domain `workforce`. Shadow writes after legacy profile commits. Rollback replays Agency evidence onto the profile bundle through lineage. Host uid already minted is not deleted. | Domain `workforce`. Shadow after legacy invite commit. Rollback restores legacy generation as reader; a sent message is not unsent. | Domain `workforce`. Tied to invitation cutover. Rollback replays onboard answers onto the webform submission. | Domain `recruiting`. Shadow after legacy node commit. Rollback replays Agency posting fields onto the `career` node. Public renderer flips with the flag. | Domain `recruiting`. Shadow after legacy submit. Rollback replays onto the webform submission. Applicant-visible status follows the flag. | Domain `recruiting`. File Gate remains the file authority in every state. Rollback unlinks the Agency UUID binding; it does not delete the private file. |
+Workforce copy copiers:
+
+| Condition | `profile_employee` / `profile_contractor` | `chronicle_personnel` | `chronicle_personnel_evidence` | `staff_invite_state` | `staff_onboard` |
+| --- | --- | --- | --- | --- | --- |
+| Collision-free preflight | Fail closed if `agency_profile_evidence` already holds the source integer id, UUID or revision id for a different UUID. Do not renumber. | Fail closed if `agency_person` already holds that integer id or UUID for a different UUID. Do not merge into a Discovery resolver by guessing. | Fail closed on `agency_profile_evidence` id/UUID/revision collisions from personnel evidence rows. | Same on `agency_staff_invitation`. Pending token hashes compared by hash, never plaintext. | Same on `agency_staff_onboard` webform submission ids/UUIDs. |
+| Reference retargeting | Retarget profile → user/person and file-field references. Serialized profile ids in own-profile and account-summary routes become Agency type + same number. | Retarget personnel → person UUID, membership, and profile evidence. Own-profile routes resolve the Agency person. Serialized class names in queues/state are listed and remapped. | Retarget evidence → person and File Gate refs. Unmapped personnel fields fail the batch. | Retarget generation → relationship/person/principal. `/invite` and `wlInviteStatus` keep host routes; inspect reads Agency after `agency`. | Retarget submission → invitation and classification. Staff onboard confirmation routes resolve through lineage. |
+| History and access reconciliation | Count parity for employee vs contractor bundles; per-field digests for marked evidence; own-profile and account-summary allow/deny parity; revisions and authorship match. Historical Audit Chain rows untouched. | Count parity for personnel rows vs `agency_person`; access-decision parity (personnel read is not a Discovery workspace). | Per-field digests for marked personnel evidence; evidence → person integrity. | Count parity for generations; token ceremony parity (GET inspect does not consume; POST accept consumes once); access-decision parity for wrong subject. | Count parity for onboard submissions; classification digest; invitation → onboard integrity. |
+| Resumable, idempotent copy | Resume from last committed source id. Second complete run is a no-op. Retry must not duplicate or overwrite a divergent Agency row. | Same. A later Discovery resolver row with a different UUID is a collision, not an overwrite. | Same. | Same. Consumed/revoked status is not reset by resume. | Same. |
+| Authority cutover and rollback | Domain `workforce`. Shadow writes after legacy profile commits. Rollback replays Agency evidence onto the profile bundle through lineage. Host uid already minted is not deleted. | Domain `workforce`. Shadow after legacy personnel commits. Rollback replays onto personnel tables through lineage. Discovery person rows that existed before copy stay. | Domain `workforce`. Tied to personnel cutover. | Domain `workforce`. Shadow after legacy invite commit. Rollback restores legacy generation as reader; a sent message is not unsent. | Domain `workforce`. Tied to invitation cutover. Rollback replays onboard answers onto the webform submission. |
+
+Recruiting copy copiers:
+
+| Condition | `career_node` | `career_application` | `career_resume_file` |
+| --- | --- | --- | --- |
+| Collision-free preflight | Fail closed on `agency_career_posting` (node nid/uuid/vid). | Fail closed on `agency_application` (webform submission id/UUID). | Same File Gate UUID must not bind to a different application row. Occupied destination file UUID with a different source is a refusal. |
+| Reference retargeting | Retarget node → application, menu, path alias `/careers/{slug}`, JSON-LD JobPosting id, and ui career queries. Host renderer keeps the public path. | Retarget submission → posting (including null/general door), person, and résumé File Gate UUID. `/careers/apply` stays a host door. Geo handler classes stay host; geo payload is a field on the application. | Retarget file UUID and access flags. Quarantine, scan jobs, upload tokens and claim-scoped access stay File Gate ids. No new public URL. |
+| History and access reconciliation | Count parity for postings; valid-through and hiring-status digests; public list membership vs closed roles. | Count parity for applications; payload digests without logging PII; posting and person integrity; access-decision parity (applicant cannot read another applicant). | Count parity for résumé File Gate refs; access-decision parity (claim-scoped read only); no public URL appears on either side. |
+| Resumable, idempotent copy | Resume from last committed source id. Editorial edits during a run are a reconciliation exception, not a silent overwrite. | In-flight submissions after the watermark wait for the next batch. | Scan-state changes during the run are exceptions. Bytes are never copied, so resume cannot create a second file body. |
+| Authority cutover and rollback | Domain `recruiting`. Shadow after legacy node commit. Rollback replays Agency posting fields onto the `career` node. Public renderer flips with the flag. | Domain `recruiting`. Shadow after legacy submit. Rollback replays onto the webform submission. Applicant-visible status follows the flag. | Domain `recruiting`. File Gate remains the file authority in every state. Rollback unlinks the Agency UUID binding; it does not delete the private file. |
 
 Shared Option A rules for every copier:
 
@@ -502,11 +547,13 @@ keep that adapter).
 
 ## 11. Test-parity list
 
-Test classes per module are inventoried in `ledger.json` at webcms#1900
-(`2216df30`). The class-level port map is the assurance kit (package 08,
-webcms#1897). Removal of a legacy module is blocked by any unmapped test
-without a reviewed reason. Names below are ledger module scopes and
-behavioral cases; this checkout still cannot open the host PHP files.
+Test classes per module are inventoried in `ledger.json` at webcms `master`
+[`be5a1962`](https://github.com/Wilkes-Liberty/webcms/commit/be5a1962)
+(27 Slice 2 classes; category counts in §1). The class-level port map is
+the assurance kit (package 08, webcms#1897). Removal of a legacy module
+is blocked by any unmapped test without a reviewed reason. Names below
+are ledger module scopes and behavioral cases; this checkout still cannot
+open the host PHP files.
 
 | Legacy scope | Behavioral cases to port | Agency or host-adapter destination |
 | --- | --- | --- |
@@ -558,7 +605,8 @@ keeps the narrative form.
 ## Scaffolding in this change
 
 Unregistered, tenant-neutral PHP under
-`modules/agency_staff/src/Workforce/`:
+`modules/agency_staff/src/Workforce/` for staff invitation and profile
+evidence (proposed `agency_workforce` submodule after G1):
 
 - `WorkforceCommandsInterface` and `WorkforceReadsInterface`
 - `WorkforceHostAdapterInterface` for authority, post-accept host
@@ -572,7 +620,11 @@ Unregistered, tenant-neutral PHP under
 - `updateProfileEvidence` writes `own` only and applies a server
   marking map (`display_name` is `personal`)
 
-Tests instantiate value objects directly. There is no service
+Posting and application types are owned by proposed `agency_recruiting`
+(`Drupal\agency_recruiting\`). That namespace is not registered in this
+change. Do not hang those types on `agency_workforce`.
+
+Tests instantiate workforce value objects directly. There is no service
 registration, no schema change and no Discovery behavior change.
 Expand implements the interfaces after G1. This G1-ready update does
 not register Slice 2 record types.

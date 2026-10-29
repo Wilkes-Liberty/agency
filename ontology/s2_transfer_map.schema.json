@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://www.drupal.org/project/agency/ontology/s2_transfer_map.schema.json",
+  "title": "Slice 2 source transfer map",
+  "description": "G1 source rows: copy, host-stay, or File Gate carry-over.",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "source",
+      "disposition"
+    ],
+    "properties": {
+      "source": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "source_kind": {
+        "type": "string",
+        "minLength": 1
+      },
+      "disposition": {
+        "type": "string",
+        "enum": [
+          "copy",
+          "host_stay",
+          "file_gate_carry_over"
+        ]
+      },
+      "target": {
+        "type": "string",
+        "pattern": "^agency_[a-z0-9_]+$"
+      },
+      "target_property": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "copier": {
+        "type": "string",
+        "minLength": 1
+      },
+      "field_guard_marking": {
+        "type": "string",
+        "enum": [
+          "public",
+          "internal",
+          "confidential",
+          "personal",
+          "financial"
+        ]
+      },
+      "authority_domain": {
+        "type": "string",
+        "enum": [
+          "workforce",
+          "recruiting"
+        ]
+      },
+      "collision_preflight": {
+        "type": "string",
+        "enum": [
+          "fail_closed"
+        ]
+      },
+      "notes": {
+        "type": "string"
+      }
+    }
+  }
+}
