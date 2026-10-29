@@ -347,7 +347,9 @@ scaffolding must not change their outcomes.
 4. Recruiting: host editorial content stays host; Agency recruiting rules
    wait for Slice 3 versus a later Slice 2 expand.
 5. Client membership and eligibility policy: remain a later slice, or
-   move after the Slice 2 threat-model review.
+   move after the Slice 2 threat-model review. The proposed later-slice
+   design is [Time transfer](TIME_TRANSFER.md) (Slice 4); that document
+   is not a G1 approval.
 6. Own-profile writes during overlap: host Profile entity remains the
    writer until `agency`, with Agency shadow writes, versus an earlier
    Agency-authoritative evidence path.
