@@ -17,6 +17,7 @@ its [service contract](DISCOVERY_CONTRACT.md) through explicit adapters.
 | `ontology/` | Draft object, link and action contract |
 | `tests/src/Functional` | Installed-host package verification |
 | `tests/src/Kernel`, `tests/fixtures` | Domain authorization, rollback and independent database writers |
+| `tests/src/Unit` | Ontology contract and tenant-string guard |
 | `docs` | Product direction, boundaries and development guidance |
 
 The four product loops are journeys across domains. Final package boundaries should
