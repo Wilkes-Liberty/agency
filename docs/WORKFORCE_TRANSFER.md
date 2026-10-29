@@ -345,7 +345,8 @@ scaffolding must not change their outcomes.
    add further kinds by operator decision. Scaffolding currently
    allowlists those two and refuses Discovery/client kinds.
 4. Recruiting: host editorial content stays host; Agency recruiting rules
-   wait for Slice 3 versus a later Slice 2 expand.
+   wait for Slice 3 versus a later Slice 2 expand. The proposed Slice 3
+   design is [CRM transfer](CRM_TRANSFER.md) §10.6.
 5. Client membership and eligibility policy: remain a later slice, or
    move after the Slice 2 threat-model review.
 6. Own-profile writes during overlap: host Profile entity remains the

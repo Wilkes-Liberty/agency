@@ -27,8 +27,9 @@ invitation issue/resend/accept/revoke/inspect, and expired-record removal.
 Expense, Credential, Availability and Campaign stay proposed for slice 5.
 Agreement is also proposed for that slice. Organization and Membership are
 proposed for slice 2. Opportunity, Activity and IntakeSubmission are
-proposed for slice 3. Engagement, assignment, time and statement types are
-proposed for slice 4.
+proposed for slice 3. The proposed transfer design is
+[CRM transfer](CRM_TRANSFER.md). Engagement, assignment, time and
+statement types are proposed for slice 4.
 
 ## Model
 
