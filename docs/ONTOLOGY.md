@@ -1,13 +1,15 @@
 # Agency ontology contract
 
-Status: draft v0.1.0. This is the canonical, tenant-neutral model Agency
+Status: draft v0.1.1. This is the canonical, tenant-neutral model Agency
 owns. Later slices implement a subset. It is not evidence that a proposed
-type, submodule or action exists in code.
+type, submodule or action exists in code. Slice 2 recruiting and
+application types stay proposed until operator gate G1.
 
 The machine-readable contract is [`ontology/ontology.yml`](../ontology/ontology.yml).
 JSON Schemas in `ontology/` validate object, link and action lists.
 [`OntologyContractTest`](../tests/src/Unit/OntologyContractTest.php) checks
-those schemas, the markings and permission rules, and the genericity rule.
+those schemas, the markings and permission rules, the genericity rule,
+the Slice 2 recruiting kind, and the Slice 2 source-to-target map.
 
 This document does not replace the implemented Discovery service contract.
 Where a fact is already specified for Discovery, that contract wins.
@@ -25,10 +27,12 @@ and `agency_entitlement`. Implemented actions are the Discovery commands,
 invitation issue/resend/accept/revoke/inspect, and expired-record removal.
 
 Expense, Credential, Availability and Campaign stay proposed for slice 5.
-Agreement is also proposed for that slice. Organization and Membership are
-proposed for slice 2. Opportunity, Activity and IntakeSubmission are
-proposed for slice 3. Engagement, assignment, time and statement types are
-proposed for slice 4.
+Agreement is also proposed for that slice. Organization, Membership,
+ProfileEvidence, StaffInvitation, StaffOnboard, CareerPosting and
+Application are proposed for slice 2. Opportunity, Activity and
+IntakeSubmission are proposed for slice 3. Engagement, assignment, time
+and statement types are proposed for slice 4. Career applications are
+Slice 2 Application records, not Slice 3 intake.
 
 ## Model
 
@@ -51,13 +55,14 @@ are lineage, not Agency type ids.
 ### Relationship kinds
 
 Relationship is one conceptual type with kinds: discovery, workforce,
-client, partner and supplier. Discovery is implemented today as
-`agency_discovery`. Other kinds have proposed machine names. Workspace
-projections emit `kind: discovery` only.
+recruiting, client, partner and supplier. Discovery is implemented today
+as `agency_discovery`. Other kinds have proposed machine names.
+Workspace projections emit `kind: discovery` only.
 
 Invitation lifecycle is separate from relationship state. Entitlement
 status is separate from both. Application and recruiting labels are not
-Discovery states.
+Discovery states. They use the proposed `recruiting` kind
+(`agency_recruiting`) plus the Application and CareerPosting objects.
 
 ### Markings
 
@@ -139,6 +144,7 @@ model as frozen.
    a Drupal permission.
 6. Approve the draft as ontology v0 for the ontology approval gate, with
    slice-five types remaining proposed until that slice is designed.
+   Slice 2 recruiting and application types stay proposed until G1.
 
 ## What this version does not do
 

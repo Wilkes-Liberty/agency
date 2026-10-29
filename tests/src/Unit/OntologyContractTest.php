@@ -116,6 +116,29 @@ final class OntologyContractTest extends TestCase {
   ];
 
   /**
+   * Legacy sources that Slice 2 must map before gate G1.
+   */
+  private const SLICE_TWO_SOURCES = [
+    'profile_employee',
+    'profile_contractor',
+    'chronicle_staff_invite',
+    'staff_onboard',
+    'career',
+    'career_application',
+  ];
+
+  /**
+   * Allowed Field Guard markings on the Slice 2 transfer map.
+   */
+  private const SLICE_TWO_MARKINGS = [
+    'public',
+    'internal',
+    'confidential',
+    'personal',
+    'financial',
+  ];
+
+  /**
    * The published contract passes schema validation and every rule.
    */
   public function testPublishedContractPasses(): void {
@@ -173,6 +196,93 @@ final class OntologyContractTest extends TestCase {
     $this->assertSame(
       'agency_discovery',
       $kinds['discovery']['machine_name'] ?? NULL,
+    );
+  }
+
+  /**
+   * Slice 2 declares a proposed recruiting relationship kind.
+   */
+  public function testRecruitingKindIsProposedForSliceTwo(): void {
+    $relationship = $this->objectsByMachineName(
+      $this->loadYaml('ontology/ontology.yml'),
+    )['agency_discovery'];
+    $kinds = [];
+    foreach ($relationship['kinds'] ?? [] as $kind) {
+      $kinds[$kind['id']] = $kind;
+    }
+    $this->assertSame('proposed', $kinds['recruiting']['status'] ?? NULL);
+    $this->assertSame('S2', $kinds['recruiting']['slice'] ?? NULL);
+    $this->assertSame(
+      'agency_recruiting',
+      $kinds['recruiting']['machine_name'] ?? NULL,
+    );
+  }
+
+  /**
+   * Every required Slice 2 source maps to a proposed agency type.
+   */
+  public function testSliceTwoSourcesAreMapped(): void {
+    $contract = $this->loadYaml('ontology/ontology.yml');
+    $map = $contract['s2_transfer_map'] ?? [];
+    $this->assertIsArray($map);
+    $by_source = [];
+    foreach ($map as $row) {
+      $this->assertIsArray($row);
+      $this->assertArrayHasKey('source', $row);
+      $by_source[(string) $row['source']] = $row;
+    }
+    foreach (self::SLICE_TWO_SOURCES as $source) {
+      $this->assertArrayHasKey($source, $by_source, $source);
+      $row = $by_source[$source];
+      $this->assertTrue(
+        $this->machineNamePrefixed($row['target'] ?? NULL),
+        $source,
+      );
+      $this->assertNotSame('', $row['copier'] ?? '', $source);
+      $this->assertContains(
+        $row['field_guard_marking'] ?? NULL,
+        self::SLICE_TWO_MARKINGS,
+        $source,
+      );
+    }
+    $this->assertSame(
+      'career_resume_file',
+      $by_source['career_resume']['copier'] ?? NULL,
+    );
+    $this->assertSame(
+      'resume_file_uuid',
+      $by_source['career_resume']['target_property'] ?? NULL,
+    );
+    $this->assertSame(
+      'agency_application',
+      $by_source['career_resume']['target'] ?? NULL,
+    );
+
+    $by_name = $this->objectsByMachineName($contract);
+    foreach ($map as $row) {
+      $target = (string) $row['target'];
+      $this->assertArrayHasKey($target, $by_name, $target);
+      $this->assertSame('S2', $by_name[$target]['slice'] ?? NULL, $target);
+      $this->assertSame(
+        'proposed',
+        $by_name[$target]['status'] ?? NULL,
+        $target,
+      );
+    }
+
+    $intake_sources = $by_name['agency_intake_submission']['legacy_sources'] ?? [];
+    $this->assertIsArray($intake_sources);
+    $this->assertNotContains('career_application', $intake_sources);
+    $this->assertContains(
+      'resume_file_uuid',
+      $this->propertyNames($by_name['agency_application']),
+    );
+    $invitation_sources = $by_name['agency_invitation']['legacy_sources'] ?? [];
+    $this->assertIsArray($invitation_sources);
+    $this->assertNotContains('chronicle_staff_invite', $invitation_sources);
+    $this->assertContains(
+      'chronicle_staff_invite',
+      $by_name['agency_staff_invitation']['legacy_sources'] ?? [],
     );
   }
 
@@ -289,6 +399,9 @@ final class OntologyContractTest extends TestCase {
     }
     if (!$this->discoveryCommandsRegistered($actions)) {
       $violations[] = 'implemented_actions_are_discovery_commands';
+    }
+    if (!$this->recruitingKindDeclared($objects)) {
+      $violations[] = 's2_recruiting_application_kind';
     }
     if ($this->tenantStringFound($contract, $scan_files)) {
       $violations[] = 'no_tenant_specific_strings';
@@ -682,6 +795,33 @@ final class OntologyContractTest extends TestCase {
       && ($compatibility['breaking_change'] ?? NULL) === 'deprecation_cycle'
       && is_string($contract['version'] ?? NULL)
       && preg_match('/^\d+\.\d+\.\d+$/', $contract['version']) === 1;
+  }
+
+  /**
+   * Checks that Relationship declares a proposed recruiting kind.
+   *
+   * @param array $objects
+   *   Object type definitions.
+   *
+   * @return bool
+   *   TRUE when the Slice 2 recruiting kind is present.
+   */
+  private function recruitingKindDeclared(array $objects): bool {
+    foreach ($objects as $object) {
+      if (!is_array($object) || ($object['id'] ?? NULL) !== 'Relationship') {
+        continue;
+      }
+      foreach ($object['kinds'] ?? [] as $kind) {
+        if (is_array($kind)
+          && ($kind['id'] ?? NULL) === 'recruiting'
+          && ($kind['machine_name'] ?? NULL) === 'agency_recruiting'
+          && ($kind['status'] ?? NULL) === 'proposed'
+          && ($kind['slice'] ?? NULL) === 'S2') {
+          return TRUE;
+        }
+      }
+    }
+    return FALSE;
   }
 
   /**
