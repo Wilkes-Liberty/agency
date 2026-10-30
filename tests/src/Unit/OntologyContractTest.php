@@ -116,6 +116,68 @@ final class OntologyContractTest extends TestCase {
   ];
 
   /**
+   * Legacy sources that Slice 2 must map before gate G1.
+   */
+  private const SLICE_TWO_SOURCES = [
+    'profile_employee',
+    'profile_contractor',
+    'chronicle_personnel',
+    'chronicle_staff_invite',
+    'staff_onboard',
+    'career',
+    'career_application',
+  ];
+
+  /**
+   * Named 10/22 career pipeline sources that are not Agency copy rows.
+   */
+  private const SLICE_TWO_CAREER_PIPELINE = [
+    'career_upload_token' => 'file_gate_carry_over',
+    'career_resume_job_store' => 'file_gate_carry_over',
+    'career_resume_claim_access' => 'file_gate_carry_over',
+    'career_application_geo_handlers' => 'host_stay',
+  ];
+
+  /**
+   * Posting and application types owned by the recruiting boundary.
+   */
+  private const SLICE_TWO_RECRUITING_TYPES = [
+    'agency_career_posting',
+    'agency_application',
+  ];
+
+  /**
+   * Staff actions that must use the workforce evidence shape.
+   */
+  private const WORKFORCE_EVIDENCE_ACTIONS = [
+    'inviteStaff',
+    'acceptStaffInvitation',
+    'revokeStaffInvitation',
+    'updateProfileEvidence',
+  ];
+
+  /**
+   * Recruiting actions that must use the recruiting evidence shape.
+   */
+  private const RECRUITING_EVIDENCE_ACTIONS = [
+    'createCareerPosting',
+    'publishCareerPosting',
+    'closeCareerPosting',
+    'submitApplication',
+  ];
+
+  /**
+   * Allowed Field Guard markings on the Slice 2 transfer map.
+   */
+  private const SLICE_TWO_MARKINGS = [
+    'public',
+    'internal',
+    'confidential',
+    'personal',
+    'financial',
+  ];
+
+  /**
    * The published contract passes schema validation and every rule.
    */
   public function testPublishedContractPasses(): void {
@@ -177,6 +239,246 @@ final class OntologyContractTest extends TestCase {
   }
 
   /**
+   * Slice 2 declares a proposed recruiting relationship kind.
+   */
+  public function testRecruitingKindIsProposedForSliceTwo(): void {
+    $relationship = $this->objectsByMachineName(
+      $this->loadYaml('ontology/ontology.yml'),
+    )['agency_discovery'];
+    $kinds = [];
+    foreach ($relationship['kinds'] ?? [] as $kind) {
+      $kinds[$kind['id']] = $kind;
+    }
+    $this->assertSame('proposed', $kinds['recruiting']['status'] ?? NULL);
+    $this->assertSame('S2', $kinds['recruiting']['slice'] ?? NULL);
+    $this->assertSame(
+      'agency_recruiting',
+      $kinds['recruiting']['machine_name'] ?? NULL,
+    );
+  }
+
+  /**
+   * Every required Slice 2 source maps to an agency type.
+   */
+  public function testSliceTwoSourcesAreMapped(): void {
+    $contract = $this->loadYaml('ontology/ontology.yml');
+    $this->assertSame(
+      [],
+      $this->validateSchema(
+        $contract['s2_transfer_map'] ?? NULL,
+        's2_transfer_map',
+      ),
+    );
+    $map = $contract['s2_transfer_map'] ?? [];
+    $this->assertIsArray($map);
+    $by_source = $this->transferRowsBySource($map);
+    foreach (self::SLICE_TWO_SOURCES as $source) {
+      $this->assertArrayHasKey($source, $by_source, $source);
+      $copy_rows = $this->copyRows($by_source[$source]);
+      $this->assertNotSame([], $copy_rows, $source);
+      foreach ($copy_rows as $row) {
+        $this->assertTrue(
+          $this->machineNamePrefixed($row['target'] ?? NULL),
+          $source,
+        );
+        $this->assertNotSame('', $row['copier'] ?? '', $source);
+        $this->assertContains(
+          $row['field_guard_marking'] ?? NULL,
+          self::SLICE_TWO_MARKINGS,
+          $source,
+        );
+        $this->assertContains(
+          $row['authority_domain'] ?? NULL,
+          ['workforce', 'recruiting'],
+          $source,
+        );
+      }
+    }
+    $resume_rows = $this->copyRows($by_source['career_resume'] ?? []);
+    $this->assertCount(1, $resume_rows);
+    $this->assertSame(
+      'career_resume_file',
+      $resume_rows[0]['copier'] ?? NULL,
+    );
+    $this->assertSame(
+      'resume_file_uuid',
+      $resume_rows[0]['target_property'] ?? NULL,
+    );
+    $this->assertSame(
+      'agency_application',
+      $resume_rows[0]['target'] ?? NULL,
+    );
+    $this->assertSame(
+      'recruiting',
+      $resume_rows[0]['authority_domain'] ?? NULL,
+    );
+
+    $by_name = $this->objectsByMachineName($contract);
+    foreach ($map as $row) {
+      if (($row['disposition'] ?? '') !== 'copy') {
+        continue;
+      }
+      $target = (string) ($row['target'] ?? '');
+      $this->assertArrayHasKey($target, $by_name, $target);
+      if ($target === 'agency_person') {
+        $this->assertSame('S1', $by_name[$target]['slice'] ?? NULL, $target);
+        $this->assertSame(
+          'implemented',
+          $by_name[$target]['status'] ?? NULL,
+          $target,
+        );
+        continue;
+      }
+      $this->assertSame('S2', $by_name[$target]['slice'] ?? NULL, $target);
+      $this->assertSame(
+        'proposed',
+        $by_name[$target]['status'] ?? NULL,
+        $target,
+      );
+    }
+
+    $intake_sources = $by_name['agency_intake_submission']['legacy_sources'] ?? [];
+    $this->assertIsArray($intake_sources);
+    $this->assertNotContains('career_application', $intake_sources);
+    $this->assertContains(
+      'resume_file_uuid',
+      $this->propertyNames($by_name['agency_application']),
+    );
+    $invitation_sources = $by_name['agency_invitation']['legacy_sources'] ?? [];
+    $this->assertIsArray($invitation_sources);
+    $this->assertNotContains('chronicle_staff_invite', $invitation_sources);
+    $this->assertContains(
+      'chronicle_staff_invite',
+      $by_name['agency_staff_invitation']['legacy_sources'] ?? [],
+    );
+
+    $client_rows = $by_source['profile_client'] ?? [];
+    $this->assertCount(1, $client_rows);
+    $this->assertSame('host_stay', $client_rows[0]['disposition'] ?? NULL);
+    $this->assertSame(
+      'fail_closed',
+      $client_rows[0]['collision_preflight'] ?? NULL,
+    );
+    $this->assertSame([], $this->copyRows($client_rows));
+  }
+
+  /**
+   * Personnel source copies onto person and profile evidence.
+   */
+  public function testSliceTwoPersonnelSourceIsMapped(): void {
+    $rows = $this->copyRows(
+      $this->transferRowsBySource(
+        $this->loadYaml('ontology/ontology.yml')['s2_transfer_map'] ?? [],
+      )['chronicle_personnel'] ?? [],
+    );
+    $targets = [];
+    $copiers = [];
+    foreach ($rows as $row) {
+      $targets[] = (string) ($row['target'] ?? '');
+      $copiers[] = (string) ($row['copier'] ?? '');
+      $this->assertSame('workforce', $row['authority_domain'] ?? NULL);
+    }
+    $this->assertCount(2, $rows);
+    $this->assertContains('agency_person', $targets);
+    $this->assertContains('agency_profile_evidence', $targets);
+    $this->assertContains('chronicle_personnel', $copiers);
+    $this->assertContains('chronicle_personnel_evidence', $copiers);
+  }
+
+  /**
+   * Named 10/22 upload, scan, claim and geo sources have a disposition.
+   */
+  public function testSliceTwoCareerPipelineSourcesAreNamed(): void {
+    $by_source = $this->transferRowsBySource(
+      $this->loadYaml('ontology/ontology.yml')['s2_transfer_map'] ?? [],
+    );
+    foreach (self::SLICE_TWO_CAREER_PIPELINE as $source => $disposition) {
+      $this->assertArrayHasKey($source, $by_source, $source);
+      $this->assertCount(1, $by_source[$source], $source);
+      $this->assertSame(
+        $disposition,
+        $by_source[$source][0]['disposition'] ?? NULL,
+        $source,
+      );
+      $this->assertSame([], $this->copyRows($by_source[$source]), $source);
+    }
+  }
+
+  /**
+   * Posting and application types use the recruiting submodule boundary.
+   */
+  public function testSliceTwoRecruitingTypesUseRecruitingBoundary(): void {
+    $by_name = $this->objectsByMachineName(
+      $this->loadYaml('ontology/ontology.yml'),
+    );
+    foreach (self::SLICE_TWO_RECRUITING_TYPES as $machine_name) {
+      $this->assertArrayHasKey($machine_name, $by_name, $machine_name);
+      $owner = $by_name[$machine_name]['owning_submodule'] ?? [];
+      $this->assertSame(
+        'agency_recruiting',
+        $owner['name'] ?? NULL,
+        $machine_name,
+      );
+      $this->assertSame('proposed', $owner['status'] ?? NULL, $machine_name);
+      $this->assertSame('S2', $by_name[$machine_name]['slice'] ?? NULL);
+      $this->assertNotSame(
+        'agency_workforce',
+        $owner['name'] ?? NULL,
+        $machine_name,
+      );
+    }
+    foreach ([
+      'agency_profile_evidence',
+      'agency_staff_invitation',
+      'agency_staff_onboard',
+    ] as $machine_name) {
+      $this->assertSame(
+        'agency_workforce',
+        $by_name[$machine_name]['owning_submodule']['name'] ?? NULL,
+        $machine_name,
+      );
+    }
+  }
+
+  /**
+   * Staff and recruiting writes do not reuse Discovery evidence fields.
+   */
+  public function testSliceTwoEvidenceShapesAreNotDiscovery(): void {
+    $by_id = [];
+    foreach ($this->loadYaml('ontology/ontology.yml')['actions'] ?? [] as $action) {
+      if (is_array($action) && isset($action['id'])) {
+        $by_id[(string) $action['id']] = $action;
+      }
+    }
+    $forbidden = ['contact', 'note', 'token', 'credential', 'file'];
+    foreach (self::WORKFORCE_EVIDENCE_ACTIONS as $id) {
+      $fields = $by_id[$id]['evidence']['fields'] ?? [];
+      $this->assertContains('classification_hash', $fields, $id);
+      $this->assertNotContains('waiting_on', $fields, $id);
+      foreach ($forbidden as $item) {
+        $this->assertContains(
+          $item,
+          $by_id[$id]['evidence']['forbidden'] ?? [],
+          $id,
+        );
+      }
+    }
+    foreach (self::RECRUITING_EVIDENCE_ACTIONS as $id) {
+      $fields = $by_id[$id]['evidence']['fields'] ?? [];
+      $this->assertContains('posting_id', $fields, $id);
+      $this->assertContains('application_id', $fields, $id);
+      $this->assertNotContains('waiting_on', $fields, $id);
+      foreach ($forbidden as $item) {
+        $this->assertContains(
+          $item,
+          $by_id[$id]['evidence']['forbidden'] ?? [],
+          $id,
+        );
+      }
+    }
+  }
+
+  /**
    * Implemented actions include every current Discovery command.
    */
   public function testImplementedActionsCoverDiscoveryCommands(): void {
@@ -209,6 +511,15 @@ final class OntologyContractTest extends TestCase {
       $this->validateSchema($contract['links'] ?? NULL, 'links'),
       $this->validateSchema($contract['actions'] ?? NULL, 'actions'),
     );
+    if (array_key_exists('s2_transfer_map', $contract)) {
+      $schema_errors = array_merge(
+        $schema_errors,
+        $this->validateSchema(
+          $contract['s2_transfer_map'],
+          's2_transfer_map',
+        ),
+      );
+    }
     if ($schema_errors !== []) {
       $violations[] = 'schema_valid';
     }
@@ -290,6 +601,9 @@ final class OntologyContractTest extends TestCase {
     if (!$this->discoveryCommandsRegistered($actions)) {
       $violations[] = 'implemented_actions_are_discovery_commands';
     }
+    if (!$this->recruitingKindDeclared($objects)) {
+      $violations[] = 's2_recruiting_application_kind';
+    }
     if ($this->tenantStringFound($contract, $scan_files)) {
       $violations[] = 'no_tenant_specific_strings';
     }
@@ -332,7 +646,47 @@ final class OntologyContractTest extends TestCase {
       $this->path('ontology/objects.schema.json'),
       $this->path('ontology/actions.schema.json'),
       $this->path('ontology/links.schema.json'),
+      $this->path('ontology/s2_transfer_map.schema.json'),
     ];
+  }
+
+  /**
+   * Groups transfer-map rows by source id.
+   *
+   * @param array $map
+   *   Slice 2 transfer map.
+   *
+   * @return array
+   *   Rows keyed by source, each a list of row arrays.
+   */
+  private function transferRowsBySource(array $map): array {
+    $index = [];
+    foreach ($map as $row) {
+      if (!is_array($row) || !isset($row['source'])) {
+        continue;
+      }
+      $index[(string) $row['source']][] = $row;
+    }
+    return $index;
+  }
+
+  /**
+   * Returns copy-disposition rows from a source's transfer rows.
+   *
+   * @param array $rows
+   *   Transfer-map rows for one source.
+   *
+   * @return array
+   *   Rows whose disposition is copy.
+   */
+  private function copyRows(array $rows): array {
+    $copy = [];
+    foreach ($rows as $row) {
+      if (is_array($row) && ($row['disposition'] ?? '') === 'copy') {
+        $copy[] = $row;
+      }
+    }
+    return $copy;
   }
 
   /**
@@ -682,6 +1036,33 @@ final class OntologyContractTest extends TestCase {
       && ($compatibility['breaking_change'] ?? NULL) === 'deprecation_cycle'
       && is_string($contract['version'] ?? NULL)
       && preg_match('/^\d+\.\d+\.\d+$/', $contract['version']) === 1;
+  }
+
+  /**
+   * Checks that Relationship declares a proposed recruiting kind.
+   *
+   * @param array $objects
+   *   Object type definitions.
+   *
+   * @return bool
+   *   TRUE when the Slice 2 recruiting kind is present.
+   */
+  private function recruitingKindDeclared(array $objects): bool {
+    foreach ($objects as $object) {
+      if (!is_array($object) || ($object['id'] ?? NULL) !== 'Relationship') {
+        continue;
+      }
+      foreach ($object['kinds'] ?? [] as $kind) {
+        if (is_array($kind)
+          && ($kind['id'] ?? NULL) === 'recruiting'
+          && ($kind['machine_name'] ?? NULL) === 'agency_recruiting'
+          && ($kind['status'] ?? NULL) === 'proposed'
+          && ($kind['slice'] ?? NULL) === 'S2') {
+          return TRUE;
+        }
+      }
+    }
+    return FALSE;
   }
 
   /**
