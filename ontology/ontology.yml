@@ -1,4 +1,4 @@
-version: "0.1.0"
+version: "0.1.1"
 status: draft
 title: Agency ontology contract
 ships_tenant_defaults: false
@@ -49,6 +49,95 @@ rules:
     statement: Tenant names, policy periods and copy are host configuration.
   - id: implemented_actions_are_discovery_commands
     statement: Implemented actions include the current Discovery commands.
+  - id: s2_recruiting_application_kind
+    statement: Relationship declares a proposed recruiting kind for Slice 2.
+s2_transfer_map:
+  - source: profile_employee
+    source_kind: profile_bundle
+    disposition: copy
+    target: agency_profile_evidence
+    copier: profile_employee
+    field_guard_marking: personal
+    authority_domain: workforce
+  - source: profile_contractor
+    source_kind: profile_bundle
+    disposition: copy
+    target: agency_profile_evidence
+    copier: profile_contractor
+    field_guard_marking: personal
+    authority_domain: workforce
+  - source: chronicle_personnel
+    source_kind: personnel_person
+    disposition: copy
+    target: agency_person
+    copier: chronicle_personnel
+    field_guard_marking: personal
+    authority_domain: workforce
+  - source: chronicle_personnel
+    source_kind: personnel_evidence
+    disposition: copy
+    target: agency_profile_evidence
+    copier: chronicle_personnel_evidence
+    field_guard_marking: personal
+    authority_domain: workforce
+  - source: profile_client
+    source_kind: profile_bundle
+    disposition: host_stay
+    collision_preflight: fail_closed
+    notes: Client profile bundles are out of Slice 2. Preflight refuses a workforce or recruiting copier that would skip these rows.
+  - source: chronicle_staff_invite
+    source_kind: invitation_state
+    disposition: copy
+    target: agency_staff_invitation
+    copier: staff_invite_state
+    field_guard_marking: personal
+    authority_domain: workforce
+  - source: staff_onboard
+    source_kind: webform_submission
+    disposition: copy
+    target: agency_staff_onboard
+    copier: staff_onboard
+    field_guard_marking: personal
+    authority_domain: workforce
+  - source: career
+    source_kind: node_bundle
+    disposition: copy
+    target: agency_career_posting
+    copier: career_node
+    field_guard_marking: public
+    authority_domain: recruiting
+  - source: career_application
+    source_kind: webform_submission
+    disposition: copy
+    target: agency_application
+    copier: career_application
+    field_guard_marking: personal
+    authority_domain: recruiting
+  - source: career_resume
+    source_kind: file_gate_object
+    disposition: copy
+    target: agency_application
+    copier: career_resume_file
+    field_guard_marking: personal
+    authority_domain: recruiting
+    target_property: resume_file_uuid
+  - source: career_upload_token
+    source_kind: upload_token
+    disposition: file_gate_carry_over
+    collision_preflight: fail_closed
+    notes: Career-upload claim tokens stay on File Gate. Plaintext is never copied.
+  - source: career_resume_job_store
+    source_kind: scan_job
+    disposition: file_gate_carry_over
+    notes: CareerResumeUploadService quarantine and scan job store stays on File Gate.
+  - source: career_resume_claim_access
+    source_kind: file_gate_claim
+    disposition: file_gate_carry_over
+    notes: Claim-scoped résumé access stays on File Gate. No public URL.
+  - source: career_application_geo_handlers
+    source_kind: webform_handler
+    disposition: host_stay
+    notes: CountryResolver and UsGeoRestrictWebformHandler stay host form mechanics. Applicant geo payload copies with career_application onto Application.geo.
 x-tenant: &tenant_scope
   isolation: tenant
   cross_tenant_reads: denied
@@ -64,6 +153,40 @@ x-evidence: &discovery_evidence
     - subject_hash
     - state
     - waiting_on
+    - effective_at
+  forbidden:
+    - contact
+    - note
+    - token
+    - credential
+    - file
+    - guessed_identifier
+x-workforce-evidence: &workforce_evidence
+  emitted: true
+  when: Co-transactional outbox insert on the local workforce write.
+  fields:
+    - event_id
+    - relationship_id
+    - subject_hash
+    - classification_hash
+    - state
+    - effective_at
+  forbidden:
+    - contact
+    - note
+    - token
+    - credential
+    - file
+    - guessed_identifier
+x-recruiting-evidence: &recruiting_evidence
+  emitted: true
+  when: Co-transactional outbox insert on the local recruiting write.
+  fields:
+    - event_id
+    - posting_id
+    - application_id
+    - subject_hash
+    - state
     - effective_at
   forbidden:
     - contact
@@ -133,7 +256,7 @@ objects:
     legacy_sources:
       - crm_contact
       - chronicle_personnel
-    notes: Discovery stores a thin resolver only. Workforce profile fields are proposed later.
+    notes: Discovery stores a thin resolver only. Slice 2 copies chronicle_personnel person rows here and evidence onto agency_profile_evidence.
   - id: PrincipalBinding
     machine_name: agency_principal
     label: Principal binding
@@ -327,6 +450,10 @@ objects:
         slice: S1
       - id: workforce
         machine_name: agency_workforce
+        status: proposed
+        slice: S2
+      - id: recruiting
+        machine_name: agency_recruiting
         status: proposed
         slice: S2
       - id: client
@@ -536,7 +663,7 @@ objects:
         marking: public
     tenant_scope: *tenant_scope
     legacy_sources: []
-    notes: Discovery is implemented as agency_discovery. Other kinds are proposed storage ids.
+    notes: Discovery is implemented as agency_discovery. Workforce and recruiting kinds are proposed storage ids and are not Discovery states.
   - id: Invitation
     machine_name: agency_invitation
     label: Invitation
@@ -608,9 +735,8 @@ objects:
         type: string
         marking: internal
     tenant_scope: *tenant_scope
-    legacy_sources:
-      - chronicle_staff_invite
-    notes: Bearer token is returned once. Capture is not sending.
+    legacy_sources: []
+    notes: Discovery generations only. Staff invite state copies onto agency_staff_invitation.
   - id: Entitlement
     machine_name: agency_entitlement
     label: Entitlement
@@ -703,6 +829,345 @@ objects:
     tenant_scope: *tenant_scope
     legacy_sources: []
     notes: Workspace and summary authority are separate entitlement statuses.
+  - id: ProfileEvidence
+    machine_name: agency_profile_evidence
+    label: Profile evidence
+    status: proposed
+    slice: S2
+    owning_submodule:
+      name: agency_workforce
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: recorded
+          terminal: false
+      transitions:
+        - from: none
+          to: recorded
+          action: updateProfileEvidence
+        - from: recorded
+          to: recorded
+          action: updateProfileEvidence
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: person_uuid
+        type: uuid
+        marking: internal
+      - name: classification
+        type: string
+        marking: internal
+      - name: status
+        type: string
+        marking: internal
+      - name: display_name
+        type: string
+        marking: personal
+      - name: evidence
+        type: json
+        marking: personal
+      - name: file_ref_uuid
+        type: uuid
+        marking: personal
+    tenant_scope: *tenant_scope
+    legacy_sources:
+      - profile_employee
+      - profile_contractor
+      - chronicle_personnel
+    notes: Audience projection, not identity. File bytes stay in File Gate. Employee and contractor profile bundles plus chronicle_personnel evidence copy here. Client profile bundles are host-stay; collision preflight is fail_closed and must not skip those rows.
+  - id: StaffInvitation
+    machine_name: agency_staff_invitation
+    label: Staff invitation
+    status: proposed
+    slice: S2
+    owning_submodule:
+      name: agency_workforce
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: false
+    revisionable: false
+    lifecycle:
+      states:
+        - id: active
+          terminal: false
+        - id: consumed
+          terminal: true
+        - id: revoked
+          terminal: true
+      transitions:
+        - from: none
+          to: active
+          action: inviteStaff
+        - from: active
+          to: consumed
+          action: acceptStaffInvitation
+        - from: active
+          to: revoked
+          action: revokeStaffInvitation
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: relationship_uuid
+        type: uuid
+        marking: internal
+      - name: principal_uuid
+        type: uuid
+        marking: confidential
+      - name: person_uuid
+        type: uuid
+        marking: internal
+      - name: token_hash
+        type: string
+        marking: confidential
+      - name: classification
+        type: string
+        marking: internal
+      - name: status
+        type: string
+        marking: internal
+      - name: expires
+        type: timestamp
+        marking: internal
+      - name: contact_kind
+        type: string
+        marking: personal
+      - name: contact_value
+        type: string
+        marking: personal
+    tenant_scope: *tenant_scope
+    legacy_sources:
+      - chronicle_staff_invite
+    notes: Never shares the Discovery generation table. Bearer plaintext is never stored or copied.
+  - id: StaffOnboard
+    machine_name: agency_staff_onboard
+    label: Staff onboard
+    status: proposed
+    slice: S2
+    owning_submodule:
+      name: agency_workforce
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: received
+          terminal: false
+        - id: completed
+          terminal: true
+        - id: withdrawn
+          terminal: true
+      transitions:
+        - from: none
+          to: received
+          action: inviteStaff
+        - from: received
+          to: completed
+          action: acceptStaffInvitation
+        - from: received
+          to: withdrawn
+          action: revokeStaffInvitation
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: invitation_uuid
+        type: uuid
+        marking: internal
+      - name: person_uuid
+        type: uuid
+        marking: internal
+      - name: classification
+        type: string
+        marking: internal
+      - name: status
+        type: string
+        marking: internal
+      - name: payload
+        type: json
+        marking: personal
+    tenant_scope: *tenant_scope
+    legacy_sources:
+      - staff_onboard
+    notes: Webform submission copy. Invitee does not choose classification.
+  - id: CareerPosting
+    machine_name: agency_career_posting
+    label: Career posting
+    status: proposed
+    slice: S2
+    owning_submodule:
+      name: agency_recruiting
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: draft
+          terminal: false
+        - id: published
+          terminal: false
+        - id: closed
+          terminal: true
+      transitions:
+        - from: none
+          to: draft
+          action: createCareerPosting
+        - from: draft
+          to: published
+          action: publishCareerPosting
+        - from: published
+          to: closed
+          action: closeCareerPosting
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: public
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: title
+        type: string
+        marking: public
+      - name: hiring_status
+        type: string
+        marking: public
+      - name: valid_through
+        type: timestamp
+        marking: public
+      - name: body
+        type: string_long
+        marking: public
+      - name: eligibility
+        type: json
+        marking: internal
+      - name: status
+        type: string
+        marking: public
+    tenant_scope: *tenant_scope
+    legacy_sources:
+      - career
+    notes: Host adapter renders the public list and detail. Publish refuses an open role with no close date or a past one.
+  - id: Application
+    machine_name: agency_application
+    label: Application
+    status: proposed
+    slice: S2
+    owning_submodule:
+      name: agency_recruiting
+      status: proposed
+    identifiers:
+      integer_id: true
+      uuid: true
+      revision_id: true
+    revisionable: true
+    lifecycle:
+      states:
+        - id: received
+          terminal: false
+        - id: withdrawn
+          terminal: true
+        - id: accepted
+          terminal: true
+        - id: declined
+          terminal: true
+      transitions:
+        - from: none
+          to: received
+          action: submitApplication
+    properties:
+      - name: id
+        type: integer
+        marking: internal
+      - name: uuid
+        type: uuid
+        marking: internal
+      - name: created
+        type: timestamp
+        marking: internal
+      - name: changed
+        type: timestamp
+        marking: internal
+      - name: revision_id
+        type: integer
+        marking: internal
+      - name: posting_uuid
+        type: uuid
+        marking: internal
+      - name: person_uuid
+        type: uuid
+        marking: internal
+      - name: status
+        type: string
+        marking: internal
+      - name: payload
+        type: json
+        marking: personal
+      - name: resume_file_uuid
+        type: uuid
+        marking: personal
+      - name: geo
+        type: json
+        marking: personal
+    tenant_scope: *tenant_scope
+    legacy_sources:
+      - career_application
+    notes: Distinct from Slice 3 intake. Résumé bytes stay in File Gate. An application is not a workforce classification.
   - id: Opportunity
     machine_name: agency_opportunity
     label: Opportunity
@@ -875,9 +1340,8 @@ objects:
         type: string
         marking: internal
     tenant_scope: *tenant_scope
-    legacy_sources:
-      - career_application
-    notes: Generic form mechanics stay with the host. This type owns business intake.
+    legacy_sources: []
+    notes: Generic form mechanics stay with the host. This type owns business intake, not recruiting. Career applications copy onto agency_application.
   - id: Agreement
     machine_name: agency_agreement
     label: Agreement
@@ -1555,6 +2019,55 @@ links:
     reference_property: organization_uuid
     status: proposed
     slice: S2
+  - id: profile_evidence_person
+    from: ProfileEvidence
+    to: Person
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: person_uuid
+    status: proposed
+    slice: S2
+  - id: staff_invitation_person
+    from: StaffInvitation
+    to: Person
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: person_uuid
+    status: proposed
+    slice: S2
+  - id: staff_onboard_invitation
+    from: StaffOnboard
+    to: StaffInvitation
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: invitation_uuid
+    status: proposed
+    slice: S2
+  - id: staff_onboard_person
+    from: StaffOnboard
+    to: Person
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: person_uuid
+    status: proposed
+    slice: S2
+  - id: application_posting
+    from: Application
+    to: CareerPosting
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: posting_uuid
+    status: proposed
+    slice: S2
+    notes: Posting is optional for the general no-role application door.
+  - id: application_person
+    from: Application
+    to: Person
+    cardinality: "N:1"
+    reference_owner: from
+    reference_property: person_uuid
+    status: proposed
+    slice: S2
   - id: relationship_organization
     from: Relationship
     to: Organization
@@ -2036,6 +2549,139 @@ actions:
       kind: drupal_permission
     approval_rule: null
     evidence: *discovery_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: inviteStaff
+    target_type: StaffInvitation
+    status: proposed
+    slice: S2
+    input_schema:
+      type: object
+    validation_rules:
+      - Classification is employee or contractor and is supplied by the issuer.
+      - Contact data never selects or merges a principal.
+      - Capture is not sending.
+    permission:
+      id: agency_workforce.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *workforce_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: acceptStaffInvitation
+    target_type: StaffInvitation
+    status: proposed
+    slice: S2
+    input_schema:
+      type: object
+      required:
+        - token
+    validation_rules:
+      - POST only.
+      - Current authenticated issuer and subject must match the intended pair.
+      - Used token cannot bind again.
+      - Host uid mint happens after the Agency commit.
+    permission:
+      id: agency_staff.entitled_principal
+      kind: entitled_principal
+    approval_rule: null
+    evidence: *workforce_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: revokeStaffInvitation
+    target_type: StaffInvitation
+    status: proposed
+    slice: S2
+    input_schema:
+      type: object
+    validation_rules:
+      - Revokes generations and workforce entitlement despite a stale version.
+      - Discovery state is not reopened.
+    permission:
+      id: agency_workforce.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *workforce_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: true
+  - id: updateProfileEvidence
+    target_type: ProfileEvidence
+    status: proposed
+    slice: S2
+    input_schema:
+      type: object
+    validation_rules:
+      - Field names must match the server marking map.
+      - File bytes, data URIs and remote bodies are refused.
+    permission:
+      id: agency_staff.entitled_principal
+      kind: entitled_principal
+      notes: Coordinator writes use agency_workforce.coordinate.
+    approval_rule: null
+    evidence: *workforce_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: createCareerPosting
+    target_type: CareerPosting
+    status: proposed
+    slice: S2
+    input_schema:
+      type: object
+    validation_rules:
+      - Create writes draft only. Publish is a separate action.
+    permission:
+      id: agency_recruiting.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *recruiting_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: publishCareerPosting
+    target_type: CareerPosting
+    status: proposed
+    slice: S2
+    input_schema:
+      type: object
+    validation_rules:
+      - An open role with no close date or a past close date cannot publish.
+    permission:
+      id: agency_recruiting.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *recruiting_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: closeCareerPosting
+    target_type: CareerPosting
+    status: proposed
+    slice: S2
+    input_schema:
+      type: object
+    validation_rules:
+      - Closed roles refuse role-bound submit. The general application door stays available.
+    permission:
+      id: agency_recruiting.coordinate
+      kind: drupal_permission
+    approval_rule: null
+    evidence: *recruiting_evidence
+    idempotency_key: *discovery_idempotency
+    reduces_access: false
+  - id: submitApplication
+    target_type: Application
+    status: proposed
+    slice: S2
+    input_schema:
+      type: object
+    validation_rules:
+      - Stores File Gate résumé references only.
+      - Does not mint a principal, uid or workforce classification.
+      - Role-bound submit is refused when the posting is closed.
+    permission:
+      id: agency_recruiting.submit
+      kind: entitled_principal
+      notes: Anonymous submit is host-mediated and does not mint a principal.
+    approval_rule: null
+    evidence: *recruiting_evidence
     idempotency_key: *discovery_idempotency
     reduces_access: false
   - id: createOpportunity

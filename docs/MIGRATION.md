@@ -58,6 +58,9 @@ and annotation (Drupal 10). Declare `source_type` and `target_type`. Provide:
 
 The runner does not infer types from the ontology document. When ontology v0
 lists Agency object types, each listed legacy source gets its own plugin.
+Proposed Slice 2 copier plugin ids and Field Guard markings are named in
+[Workforce transfer](WORKFORCE_TRANSFER.md); those plugins are not shipped
+until the operator approves G1.
 
 A synthetic copier (`synthetic_item`) lives in
 `modules/agency_migrate/tests/modules/agency_migrate_test` and is not a
