@@ -81,7 +81,10 @@ vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
 
 The GitHub matrix installs the host identity/OAuth stack and Drush so
 `modules/agency_host` unit tests run on every Drupal/PHP lane. Kernel tests
-run on the 11.x lanes, including PostgreSQL 16. Invitation smtp and
+run on the 11.x lanes, including PostgreSQL 16. Binding-fingerprint pins for
+the reviewed Externalauth 2.0.13 writers run as a unit test on every lane and
+as a live kernel proof on 11.x; see
+[EXTERNALAUTH_2.0.15.md](EXTERNALAUTH_2.0.15.md). Invitation smtp and
 postmark_webhooks cases skip when those modules are not on the test host.
 Clean-origin, evidence-lock and other PostgreSQL-only proofs skip on MySQL. See
 [.github/workflows/ci.yml](../.github/workflows/ci.yml) for the complete

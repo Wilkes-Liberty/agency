@@ -61,7 +61,10 @@ that array. Enabling `agency_host` copies former `chronicle_agency` tables,
 config, state, key/value collections and queue items; it never drops the
 source, so a code rollback can still read custody. Uninstall
 `chronicle_agency` only after `agency_host` is enabled and copies succeed.
-Clean-origin qualification stays pinned to schema 10003.
+Clean-origin qualification stays pinned to schema 10003. The reviewed
+Externalauth writer reference stays `2.0.13`; 2.0.14 and 2.0.15 keep the same
+writer bytes, but moving the pin would change the digest. See the
+[2.0.15 review](docs/EXTERNALAUTH_2.0.15.md).
 
 ## Configuration boundary
 
