@@ -133,6 +133,7 @@ Actual passing results, not the presence of a workflow, establish compatibility.
 - [Ontology](docs/ONTOLOGY.md): draft tenant-neutral object, link and action contract.
 - [Migration](docs/MIGRATION.md): identity-preserving copy, reconciliation and rollback.
 - [Workforce transfer](docs/WORKFORCE_TRANSFER.md): Slice 2 design and unregistered scaffolding.
+- [Time transfer](docs/TIME_TRANSFER.md): proposed Slice 4 engagement, time, client-membership and feed design. No record types.
 - [Maintaining](docs/MAINTAINING.md): development line, remotes and release verification.
 - [Security](SECURITY.md): private vulnerability reporting and coverage status.
 
