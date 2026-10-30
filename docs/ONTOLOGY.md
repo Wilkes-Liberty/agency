@@ -32,7 +32,8 @@ Agreement is also proposed for that slice. Organization, Membership,
 ProfileEvidence, StaffInvitation and StaffOnboard are proposed for
 slice 2 under `agency_workforce`. CareerPosting and Application are
 proposed for slice 2 under `agency_recruiting`. Opportunity, Activity and
-IntakeSubmission are proposed for slice 3. Engagement, assignment, time
+IntakeSubmission are proposed for slice 3. The proposed Slice 3 transfer
+design is [CRM transfer](CRM_TRANSFER.md). Engagement, assignment, time
 and statement types are proposed for slice 4. The proposed transfer design is
 [Time transfer](TIME_TRANSFER.md); it does not implement those types.
 Career applications are Slice 2 Application records, not Slice 3 intake.

@@ -590,7 +590,8 @@ keeps the narrative form.
 4. **Resolved 2026-10-22.** Career postings and the résumé/application
    workflow both move to Agency in Slice 2. Remaining choices are G1
    items 5, 11 and 12 (placement confirmation, close-date extension,
-   host-rendered body).
+   host-rendered body). Slice 3 does not reopen this split; see
+   [CRM transfer](CRM_TRANSFER.md) §10.6.
 5. Client membership and eligibility policy: remain a later slice, or
    move after the Slice 2 threat-model review. The proposed later-slice
    design is [Time transfer](TIME_TRANSFER.md) (Slice 4); that document
