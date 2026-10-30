@@ -35,6 +35,46 @@ jobs:
       - name: Check coding standards
         run: phpcs --standard=phpcs.xml.dist .
 
+  tenant-strings:
+    name: No tenant strings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: yaml
+          coverage: none
+          tools: phpunit:10.5
+      - name: Run tenant-string unit check
+        run: |
+          phpunit --log-junit tenant-strings-junit.xml \
+            tests/src/Unit/TenantStringGuardTest.php
+          php -r '
+            $xml = simplexml_load_file("tenant-strings-junit.xml");
+            if ($xml === false) { exit(1); }
+            $executed = 0;
+            $names = [];
+            foreach ($xml->xpath("//testcase") as $case) {
+              $name = (string) $case["name"];
+              $names[] = $name;
+              if (isset($case->failure) || isset($case->error)) { exit(1); }
+              if (isset($case->skipped)) { exit(1); }
+              $executed++;
+            }
+            echo "Executed tenant-string tests: $executed\n";
+            if ($executed < 2) { exit(1); }
+            if (!in_array("testSeededFixtureFails", $names, TRUE)) { exit(1); }
+            if (!in_array("testPublishedPackagePasses", $names, TRUE)) { exit(1); }
+          '
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: agency-tenant-strings
+          path: tenant-strings-junit.xml
+
   phpstan:
     name: PHPStan (PHP 8.3)
     runs-on: ubuntu-latest
@@ -210,6 +250,33 @@ jobs:
             "$EXPECTED_MINOR".*) ;;
             *) echo '::error::Resolved core does not match the matrix leg'; exit 1 ;;
           esac
+      - name: Run tenant-string unit check
+        working-directory: drupal
+        env:
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/tenant-strings-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/TenantStringGuardTest.php"
+          # PHP expressions are intentionally passed literally to PHP.
+          # shellcheck disable=SC2016
+          php -r '
+            $xml = simplexml_load_file("tenant-strings-junit.xml");
+            if ($xml === false) { exit(1); }
+            $executed = 0;
+            $names = [];
+            foreach ($xml->xpath("//testcase") as $case) {
+              $name = (string) $case["name"];
+              $names[] = $name;
+              if (isset($case->failure) || isset($case->error)) { exit(1); }
+              if (isset($case->skipped)) { exit(1); }
+              $executed++;
+            }
+            echo "Executed tenant-string tests: $executed\n";
+            if ($executed < 2) { exit(1); }
+            if (!in_array("testSeededFixtureFails", $names, TRUE)) { exit(1); }
+            if (!in_array("testPublishedPackagePasses", $names, TRUE)) { exit(1); }
+          '
       - name: Start test server
         working-directory: drupal
         run: |
@@ -355,5 +422,6 @@ jobs:
             drupal/junit.xml
             drupal/domain-junit.xml
             drupal/agency-host-junit.xml
+            drupal/tenant-strings-junit.xml
             drupal/composer.lock
             drupal/server.log

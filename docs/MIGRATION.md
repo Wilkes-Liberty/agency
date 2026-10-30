@@ -11,6 +11,8 @@ names, policy values or host type identifiers. Production source types arrive
 as copier plugins implemented by the host or by a later Agency capability
 module once the ontology contract lists them. Proposed Slice 3 sources and
 DEV-992 conditions per type are in [CRM transfer](CRM_TRANSFER.md).
+Proposed Slice 4 source mappings live in [Time transfer](TIME_TRANSFER.md);
+that design does not register copiers or record types.
 
 ## What this module does
 
@@ -57,6 +59,9 @@ and annotation (Drupal 10). Declare `source_type` and `target_type`. Provide:
 
 The runner does not infer types from the ontology document. When ontology v0
 lists Agency object types, each listed legacy source gets its own plugin.
+Proposed Slice 2 copier plugin ids and Field Guard markings are named in
+[Workforce transfer](WORKFORCE_TRANSFER.md); those plugins are not shipped
+until the operator approves G1.
 
 A synthetic copier (`synthetic_item`) lives in
 `modules/agency_migrate/tests/modules/agency_migrate_test` and is not a

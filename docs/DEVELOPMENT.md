@@ -28,6 +28,28 @@ vendor/bin/phpstan analyze web/modules/contrib/agency \
   --autoload-file=vendor/autoload.php --no-progress --memory-limit=2G
 ```
 
+## Tenant-string guard
+
+Package code, configuration and shipped defaults must not contain tenant
+names or host-product strings: Wilkes, W&L, wilkesliberty, or chronicle.
+Declared legacy-compat keys such as `chronicle-agency-history-key-v1`,
+the `chronicle_agency` schema slot and historical `paladin_*` token keys
+live in `tests/fixtures/tenant-strings/allowlist.yml` with a reason for
+each exception. `composer.json` is path-allowlisted for maintainer
+attribution only. A seeded fixture proves the check fails.
+
+From the module checkout, with PHPUnit and a YAML parser available:
+
+```sh
+phpunit tests/src/Unit/TenantStringGuardTest.php
+```
+
+GitHub CI runs this as a dedicated PHP 8.2 job and again on every
+supported-core lane. Drupal.org PHPUnit uses the `agency` group, which
+includes the same test. A collected test is not proof of execution: read
+the job result and confirm `testSeededFixtureFails` and
+`testPublishedPackagePasses` both ran without skips.
+
 ## Install the candidate into a test host
 
 Create a Drupal recommended-project test site using the supported minor you intend to
@@ -89,7 +111,7 @@ evidence. Do not drop or rewrite outbox rows as a rollback procedure.
 ## Supported-core verification
 
 The GitHub matrix pins Drupal 10.6 and 11.3 separately and tests the current supported
-11.4 minor. The Drupal 10.6 leg runs on the package's PHP 8.2 floor. The functional
+11.4 minor. Each functional lane also runs the tenant-string unit check. The Drupal 10.6 leg runs on the package's PHP 8.2 floor. The functional
 job runs on the GitHub-hosted Ubuntu 24.04 runner and starts that image's MySQL 8.0
 or PostgreSQL 16 server for the leg under test, then checks the server version.
 MySQL covers 10.6, 11.3 and 11.4. One more leg repeats Drupal 11.3 on PostgreSQL 16

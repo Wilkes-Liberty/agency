@@ -1,0 +1,118 @@
+version: 0.1.0
+status: draft
+ships_tenant_defaults: false
+compatibility:
+  scheme: semver
+  beta_freezes_released_types: true
+  breaking_change: deprecation_cycle
+objects:
+- id: Person
+  machine_name: agency_person
+  label: Person
+  status: implemented
+  slice: S1
+  owning_submodule:
+    name: agency_staff
+    status: existing
+  identifiers:
+    integer_id: true
+    uuid: true
+    revision_id: false
+  revisionable: false
+  lifecycle:
+    states:
+    - id: recorded
+      terminal: false
+    transitions: []
+  properties:
+  - name: id
+    type: integer
+    marking: internal
+  - name: uuid
+    type: uuid
+    marking: internal
+  - name: created
+    type: timestamp
+    marking: internal
+  - name: changed
+    type: timestamp
+    marking: internal
+  - name: display_name
+    type: string
+    marking: personal
+  tenant_scope:
+    isolation: shared_within_tenant
+    cross_tenant_reads: denied
+  legacy_sources: []
+- id: Relationship
+  machine_name: agency_discovery
+  label: Relationship
+  status: implemented
+  slice: S1
+  owning_submodule:
+    name: agency_staff
+    status: existing
+  kinds:
+  - id: discovery
+    machine_name: agency_discovery
+    status: implemented
+    slice: S1
+  - id: workforce
+    machine_name: agency_workforce
+    status: proposed
+    slice: S2
+  identifiers:
+    integer_id: true
+    uuid: true
+    revision_id: true
+  revisionable: true
+  lifecycle:
+    states:
+    - id: invited
+      terminal: false
+    transitions: []
+  properties:
+  - name: id
+    type: integer
+    marking: internal
+  - name: uuid
+    type: uuid
+    marking: public
+  tenant_scope:
+    isolation: tenant
+    cross_tenant_reads: denied
+  legacy_sources: []
+links:
+- id: relationship_person
+  from: Relationship
+  to: Person
+  cardinality: N:1
+  reference_owner: from
+  status: implemented
+actions:
+- id: startDiscovery
+  target_type: Relationship
+  status: implemented
+  input_schema:
+    type: object
+  validation_rules:
+  - Requires a valid intended principal.
+  permission:
+    id: coordinate agency discovery
+    kind: drupal_permission
+  evidence:
+    emitted: true
+    fields:
+    - event_id
+    forbidden:
+    - contact
+    - token
+  idempotency_key:
+    required: true
+    pattern: ^[A-Za-z0-9_.:-]{8,128}$
+  reduces_access: false
+projections:
+- audience: coordinator_queue
+  object: Person
+  fields:
+  - display_name

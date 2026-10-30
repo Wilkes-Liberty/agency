@@ -1,13 +1,16 @@
 # Agency ontology contract
 
-Status: draft v0.1.0. This is the canonical, tenant-neutral model Agency
+Status: draft v0.1.1. This is the canonical, tenant-neutral model Agency
 owns. Later slices implement a subset. It is not evidence that a proposed
-type, submodule or action exists in code.
+type, submodule or action exists in code. Slice 2 recruiting and
+application types stay proposed until operator gate G1.
 
 The machine-readable contract is [`ontology/ontology.yml`](../ontology/ontology.yml).
-JSON Schemas in `ontology/` validate object, link and action lists.
+JSON Schemas in `ontology/` validate object, link, action and Slice 2
+transfer-map lists.
 [`OntologyContractTest`](../tests/src/Unit/OntologyContractTest.php) checks
-those schemas, the markings and permission rules, and the genericity rule.
+those schemas, the markings and permission rules, the genericity rule,
+the Slice 2 recruiting kind, and the Slice 2 source-to-target map.
 
 This document does not replace the implemented Discovery service contract.
 Where a fact is already specified for Discovery, that contract wins.
@@ -25,11 +28,15 @@ and `agency_entitlement`. Implemented actions are the Discovery commands,
 invitation issue/resend/accept/revoke/inspect, and expired-record removal.
 
 Expense, Credential, Availability and Campaign stay proposed for slice 5.
-Agreement is also proposed for that slice. Organization and Membership are
-proposed for slice 2. Opportunity, Activity and IntakeSubmission are
-proposed for slice 3. The proposed transfer design is
-[CRM transfer](CRM_TRANSFER.md). Engagement, assignment, time and
-statement types are proposed for slice 4.
+Agreement is also proposed for that slice. Organization, Membership,
+ProfileEvidence, StaffInvitation and StaffOnboard are proposed for
+slice 2 under `agency_workforce`. CareerPosting and Application are
+proposed for slice 2 under `agency_recruiting`. Opportunity, Activity and
+IntakeSubmission are proposed for slice 3. The proposed Slice 3 transfer
+design is [CRM transfer](CRM_TRANSFER.md). Engagement, assignment, time
+and statement types are proposed for slice 4. The proposed transfer design is
+[Time transfer](TIME_TRANSFER.md); it does not implement those types.
+Career applications are Slice 2 Application records, not Slice 3 intake.
 
 ## Model
 
@@ -52,13 +59,14 @@ are lineage, not Agency type ids.
 ### Relationship kinds
 
 Relationship is one conceptual type with kinds: discovery, workforce,
-client, partner and supplier. Discovery is implemented today as
-`agency_discovery`. Other kinds have proposed machine names. Workspace
-projections emit `kind: discovery` only.
+recruiting, client, partner and supplier. Discovery is implemented today
+as `agency_discovery`. Other kinds have proposed machine names.
+Workspace projections emit `kind: discovery` only.
 
 Invitation lifecycle is separate from relationship state. Entitlement
 status is separate from both. Application and recruiting labels are not
-Discovery states.
+Discovery states. They use the proposed `recruiting` kind
+(`agency_recruiting`) plus the Application and CareerPosting objects.
 
 ### Markings
 
@@ -101,7 +109,10 @@ A write is a named action. Positive Discovery writes share a transaction
 with the required outbox insert. Access-reducing actions
 (`withdrawRelationship`, `revokeInvitation`, `suspendAccess`) commit denial
 and immutable local intent together before drain. A failed drain never
-reopens access.
+reopens access. Staff writes use a workforce evidence shape
+(relationship id, classification hash). Recruiting writes use a
+recruiting evidence shape (posting id, application id). Both keep the
+forbidden contact, note, token, credential and file list.
 
 Idempotency keys are one user intent. The published pattern is
 `^[A-Za-z0-9_.:-]{8,128}$`. The same key and payload replay the original
@@ -132,14 +143,17 @@ model as frozen.
 2. Keep Discovery on `agency_discovery` and give other relationship kinds
    their own machine names, or later unify kinds under one type id.
 3. Approve the proposed submodule names: `agency_workforce`,
-   `agency_commercial`, `agency_intake`, `agency_engagement`,
-   `agency_agreement`, `agency_expense` and `agency_campaign`.
+   `agency_recruiting`, `agency_commercial`, `agency_intake`,
+   `agency_engagement`, `agency_agreement`, `agency_expense` and
+   `agency_campaign`. Posting and application types belong to
+   `agency_recruiting`.
 4. Approve the marking vocabulary and the rule that an unmapped property
    stops migration.
 5. Approve participant authorization as an entitled principal rather than
    a Drupal permission.
 6. Approve the draft as ontology v0 for the ontology approval gate, with
    slice-five types remaining proposed until that slice is designed.
+   Slice 2 recruiting and application types stay proposed until G1.
 
 ## What this version does not do
 

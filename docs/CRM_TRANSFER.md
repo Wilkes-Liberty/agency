@@ -45,7 +45,7 @@ live in that ledger; this checkout cannot open the host PHP.
 | S3-L2 CRM opportunity | Host `chronicle_crm` entity `crm_opportunity` | Agency Opportunity (`agency_opportunity`) | Proposed commercial record. Host originally shipped no public canonical route, JSON:API or GraphQL dump; commercial scalars still ride host `clientProfile` / `clientDeliverables` / `clientInvoices` transport ([webcms#1900](https://github.com/Wilkes-Liberty/webcms/pull/1900)). |
 | S3-L3 CRM activity | Host `chronicle_crm` entity `crm_activity` | Agency Activity (`agency_activity`) | Proposed activity log linked to an opportunity. Ontology draft is not revisionable; host revision shape is **unverified** from this checkout (§10.2). |
 | S3-L4 Business intake | Host `chronicle_forms` (business policy and outbox) plus `chronicle_service_intake` (routing, mapping, queue/retry) | Agency Intake (`agency_intake_submission` plus intake orchestration) | Generic form validation and provenance stay on the host. Tenant field mappings stay in the host overlay ([webcms#1623](https://github.com/Wilkes-Liberty/webcms/issues/1623)). Vendor JSM (`wl_service_intake.gateway`) stays host. |
-| S3-L5 Intake webform submissions | Host Webform submissions used as business intake | Agency IntakeSubmission | Bytes and generic Webform mechanics stay host. Agency owns the business payload, dispatch key and accept/decline/withdrawn states. Recruiting `career_application` is the Slice 2/3 boundary (§10.6), not assumed here. |
+| S3-L5 Intake webform submissions | Host Webform submissions used as business intake | Agency IntakeSubmission | Bytes and generic Webform mechanics stay host. Agency owns the business payload, dispatch key and accept/decline/withdrawn states. Recruiting `career_application` copies onto Slice 2 `agency_application`, not IntakeSubmission (§10.6). |
 | S3-L6 Slice 1 contact-lookup port | Host `chronicle_agency` CRM contact policy (depends on `chronicle_crm`) | Existing `agency_host.contact_policy` port, later backed by Agency CRM | Observed Discovery already has a replaceable policy. S1 cannot reach authority `removed` while this leftover CRM dependency keeps `chronicle_agency` installed. See §4. |
 
 Out of Slice 3: Discovery relationships (already Agency), workforce
@@ -76,7 +76,7 @@ commercial write paths.
 | Organization | none in this package | Proposed in Slice 2 for workforce; commercial reuse is the same type. A CRM organization-contact copies here, not into Person. |
 | Opportunity | none | Proposed `agency_opportunity` under proposed `agency_commercial`. Lifecycle `open` → `won` / `lost`. |
 | Activity | none | Proposed `agency_activity` under proposed `agency_commercial`. Lifecycle `recorded` (cancel is terminal). |
-| IntakeSubmission | none | Proposed `agency_intake_submission` under proposed `agency_intake`. Lifecycle `received` → `accepted` / `declined` / `withdrawn`. Ontology draft currently lists only `career_application` as a legacy source; business intake sources are a proposed addition (§10.6). |
+| IntakeSubmission | none | Proposed `agency_intake_submission` under proposed `agency_intake`. Lifecycle `received` → `accepted` / `declined` / `withdrawn`. The ontology draft leaves IntakeSubmission `legacy_sources` empty. Career applications copy onto `agency_application`. Business intake sources remain a proposed addition (§10.6). |
 
 Proposed actions (ontology placeholders; no service in this change):
 
@@ -208,7 +208,7 @@ and staff-notification language (webcms#1900 closures).
 | Accept / decline / withdraw | Agency named actions | Editorial confirmation copy |
 | Tenant field map | Host overlay configuration | The map values themselves |
 | Vendor JSM gateway | Host `wl_service_intake.gateway` | Agency keeps a vendor-neutral gateway interface only |
-| Recruiting application | §10.6 | Career editorial content stays host |
+| Recruiting application | Slice 2 `agency_application` | Career editorial content stays host |
 
 Rules:
 
@@ -423,14 +423,15 @@ record answers and is not that gate.
 5. Confirm whether the `chronicle_agency` delivery-audit bridge still
    depends on `chronicle_crm`. If it does not, it leaves with Slice 1
    residue rather than this slice.
-6. Recruiting: host editorial content stays host; Agency recruiting
-   rules wait for Slice 3 versus a later Slice 2 expand
-   ([DEV-987](https://wilkesliberty.atlassian.net/browse/DEV-987)
-   comment 16035, WORKFORCE_TRANSFER §10.4). If recruiting lands here,
-   File Gate (private résumés), Field Guard and Audit Chain carry over,
-   and `career_application` becomes an IntakeSubmission source. Live
-   postings were scheduled to close 2026-10-31; extending them is a
-   separate operator decision.
+6. **Resolved by the Slice 2 design
+   ([DEV-987](https://wilkesliberty.atlassian.net/browse/DEV-987)).**
+   Career postings and the résumé/application workflow move to Agency
+   in Slice 2 under proposed `agency_recruiting`. `career_application`
+   copies onto `agency_application`, not `agency_intake_submission`.
+   File Gate, Field Guard and Audit Chain carry over on that Slice 2
+   path. Host editorial rendering stays host. Close-date extension
+   stays a Slice 2 G1 item in
+   [Workforce transfer](WORKFORCE_TRANSFER.md), not a Slice 3 decision.
 7. Public commercial projections: keep host `clientProfile` /
    `clientDeliverables` / `clientInvoices` transport, or add Agency
    allowlists in this slice.
