@@ -1,0 +1,6 @@
+# Seeded fixture for TenantStringGuardTest. These values must fail the
+# package tenant-string check. Do not copy them into shipped defaults.
+display_name: 'Wilkes & Liberty'
+abbreviation: 'W&L'
+homepage: 'https://wilkesliberty.com'
+legacy_host: chronicle

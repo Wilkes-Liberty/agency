@@ -1,0 +1,17 @@
+# Exceptions to the package tenant-string guard. Each token or path must
+# have a reason. Bare words Wilkes, W&L, wilkesliberty and chronicle cannot
+# be listed; declare the specific legacy-compat key instead.
+
+tokens:
+  - token: chronicle-agency-history-key-v1
+    reason: HMAC associated-data label for already-qualified binding fingerprints. Changing it would invalidate existing coverage.
+  - token: chronicle_agency
+    reason: Former module name, table prefix, config/state/queue names, form IDs, mail interface and digest schema slot. Adoption copies these without dropping the source so a code rollback can still read custody.
+  - token: paladin_issuer
+    reason: Historical identity-token key included in qualified binding fingerprints.
+  - token: paladin_audience
+    reason: Historical identity-token key included in qualified binding fingerprints.
+
+paths:
+  - path: composer.json
+    reason: Maintainer and sponsor attribution on the public package. These values are not tenant defaults or operating records.
