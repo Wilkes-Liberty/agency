@@ -8,6 +8,8 @@ use Drupal\agency_staff\Exception\Refusal;
 use Drupal\agency_host\TransactionSupport;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Database\Connection;
+use Drupal\Core\Database\StatementInterface;
+use Drupal\Core\Database\Statement\FetchAs;
 
 /**
  * Host-owned custody and attempt fences, never Agency-owned persistence.
@@ -73,9 +75,10 @@ final class DeliveryLedger {
    * Lists minimized delivery records after the caller checks assignment.
    */
   public function listing(string $relationship): array {
-    return $this->database->select('agency_host_delivery', 'd')->fields('d', ['id', 'state', 'created'])
+    return $this->fetchAssociative($this->database->select('agency_host_delivery', 'd')
+      ->fields('d', ['id', 'state', 'created'])
       ->condition('kind', 'invitation')->condition('relationship_id', $relationship)
-      ->orderBy('created', 'DESC')->range(0, 50)->execute()->fetchAll(\PDO::FETCH_ASSOC);
+      ->orderBy('created', 'DESC')->range(0, 50)->execute());
   }
 
   /**
@@ -165,6 +168,16 @@ final class DeliveryLedger {
       $transaction?->rollBack();
       throw $error;
     }
+  }
+
+  /**
+   * Returns associative rows on Drupal 10 PDO modes and Drupal 11 FetchAs.
+   */
+  private function fetchAssociative(StatementInterface $statement): array {
+    if (class_exists(FetchAs::class)) {
+      return $statement->fetchAll(FetchAs::Associative);
+    }
+    return $statement->fetchAll(\PDO::FETCH_ASSOC);
   }
 
 }
