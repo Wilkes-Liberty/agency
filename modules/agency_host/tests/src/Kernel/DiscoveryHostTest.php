@@ -2090,6 +2090,32 @@ final class DiscoveryHostTest extends KernelTestBase {
   }
 
   /**
+   * Delivery listing stays an array of column maps, never row objects.
+   */
+  public function testInvitationDeliveryListingReturnsAssociativeRows(): void {
+    [$delivery, $request, $mail, $selection] = $this->deliveryFixture();
+    $prepared = $delivery->prepare($request, $selection, $this->input(), 'listing-prepare');
+    $this->assertSame('committed', $prepared['outcome'], json_encode($prepared));
+    $relationship = $prepared['receipt']['relationship_id'];
+    $empty = $delivery->listing($request, $relationship);
+    $this->assertSame(['outcome' => 'available', 'deliveries' => []], $empty);
+    $this->assertCount(0, $mail->messages);
+
+    $captured = $delivery->capture($request, $relationship, 'issue', 'listing-issue', 1);
+    $this->assertSame('committed', $captured['outcome'], json_encode($captured));
+    $listed = $delivery->listing($request, $relationship);
+    $this->assertSame('available', $listed['outcome'], json_encode($listed));
+    $this->assertCount(1, $listed['deliveries']);
+    $row = $listed['deliveries'][0];
+    $this->assertIsArray($row);
+    $this->assertSame(['id', 'state', 'created'], array_keys($row));
+    $this->assertSame($captured['delivery_id'], $row['id']);
+    $this->assertSame('captured', $row['state']);
+    $this->assertGreaterThan(0, (int) $row['created']);
+    $this->assertCount(0, $mail->messages);
+  }
+
+  /**
    * Supplies isolated capture I/O; no SMTP connection or live secret exists.
    */
   private function deliveryFixture(): array {
