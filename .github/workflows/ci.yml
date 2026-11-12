@@ -347,6 +347,22 @@ jobs:
               "testInventoryDiscardsUnsavedEntityCacheChanges",
               "testInventoryReadsPersistedChangesBehindCache",
             ]);
+            $required = array_merge($required, [
+              "testLegacyJournalRefusesPreviewAndExecution",
+              "testQualifiedZeroJournalRollbackSucceeds",
+              "testPassingSampleCannotQualifyRollback",
+              "testWrongJournalUuidRefuses",
+              "testReplacedTargetCannotConsumeEarlierJournalRecord",
+              "testCompletePreflightPreventsPrefixMutation",
+              "testMissingDomainRegistryRefuses",
+              "testMissingExpectedCopierRefuses",
+              "testCopierOutsideRequestedDomainRefuses",
+              "testAmbiguousDomainTargetRefuses",
+              "testEveryDomainCopierMustPassFullReconciliation",
+              "testExecutionRechecksJournalInsideFence",
+              "testTargetLookupRequiresExplicitQualifiedDomain",
+              "testJournalTargetTypeOutsideDomainRefuses",
+            ]);
             $executed = [];
             $batchRequired = [
               "testFailedBatchIsAtomic with data set \"target before cursor\"",

@@ -4,3 +4,21 @@
  * @file
  * Synthetic types used only by agency_migrate kernel tests.
  */
+
+/**
+ * Implements hook_agency_migrate_copier_info_alter().
+ */
+function agency_migrate_test_agency_migrate_copier_info_alter(array &$definitions): void {
+  $state = \Drupal::state();
+  $domains = $state->get('agency_migrate_test.copier_domains');
+  if (is_array($domains)) {
+    $definitions['synthetic_item']['domains'] = $domains;
+  }
+  $extra_target = $state->get('agency_migrate_test.extra_domain_copier');
+  if (is_string($extra_target)) {
+    $definitions['synthetic_item']['domains'] = ['synthetic'];
+    $definitions['extra_domain'] = $definitions['synthetic_item'];
+    $definitions['extra_domain']['id'] = 'extra_domain';
+    $definitions['extra_domain']['target_type'] = $extra_target;
+  }
+}

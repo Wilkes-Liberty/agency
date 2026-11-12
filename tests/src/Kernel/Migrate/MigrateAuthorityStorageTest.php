@@ -212,6 +212,7 @@ final class MigrateAuthorityStorageTest extends MigrateKernelTestBase {
       $this->container->get('agency_migrate.writes'),
       $authority,
       $this->container->get('current_user'),
+      $this->container->get('agency_migrate.reconciler'),
     );
     $before = $authority->status();
     $database->schema()->renameTable('agency_migrate_write_log', 'agency_migrate_write_log_unavailable');

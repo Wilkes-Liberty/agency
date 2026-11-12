@@ -47,6 +47,7 @@ services:
       - '@agency_migrate.writes'
       - '@agency_migrate.authority'
       - '@current_user'
+      - '@agency_migrate.reconciler'
   agency_migrate.commands:
     class: Drupal\agency_migrate\Drush\Commands\AgencyMigrateCommands
     arguments:

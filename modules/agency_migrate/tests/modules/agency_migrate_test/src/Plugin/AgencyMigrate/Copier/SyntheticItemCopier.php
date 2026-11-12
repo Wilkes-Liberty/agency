@@ -21,7 +21,8 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *   id = "synthetic_item",
  *   label = @Translation("Synthetic item"),
  *   source_type = "agency_migrate_legacy_item",
- *   target_type = "agency_migrate_agency_item"
+ *   target_type = "agency_migrate_agency_item",
+ *   domains = {"synthetic"}
  * )
  */
 #[MigrateCopier(
@@ -29,6 +30,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
   label: new TranslatableMarkup('Synthetic item'),
   source_type: 'agency_migrate_legacy_item',
   target_type: 'agency_migrate_agency_item',
+  domains: ['synthetic'],
 )]
 final class SyntheticItemCopier extends EntityCopierBase implements ContainerFactoryPluginInterface {
 

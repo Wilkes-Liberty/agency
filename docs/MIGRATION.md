@@ -51,9 +51,9 @@ Observed in the kernel suite against synthetic entity types:
 - Changes involving Agency authority require verified host writer coverage. The
   shipped adapter refuses with `writer_fence_unavailable`; no production writer
   barrier or cutover qualification is supplied by this framework.
-- Rollback replays Agency writes recorded after cutover onto legacy through the
-  plugin writer and then sets authority to `legacy`. It is not a database
-  restore.
+- Rollback contains unqualified legacy journal replay. A declared domain with
+  no pending journal writes can return to legacy authority only after every
+  domain copier passes full reconciliation under the host writer fence.
 
 Rollback preview and execution both require `run agency migrate` and
 `administer agency migrate authority`, a valid registered domain currently at
@@ -261,28 +261,44 @@ this upgrade. The retained configuration becomes stale as operational authority
 changes; downgrading to such code is not an authority rollback. Use the verified
 rollback service and a reviewed code/data recovery procedure instead.
 
-## Rollback limits
+## Rollback containment and remaining limits
 
-- Replay writes current Agency field values onto legacy. It does not rebuild
-  intermediate Agency revisions that existed only after cutover. Current
-  translations are replayed, including addition and removal, with all field
-  deltas and stored item properties.
-- New Agency records without a lineage row are inserted onto legacy with the
-  same integer id, UUID and complete target revision history. This insertion
-  has its own atomic writer transaction. If an entity or revision identifier
-  is already occupied, rollback refuses.
-- Uncovered legacy or Agency writers make cutover and replay unsupported. The
-  host must exclude them and enforce the recorded side; the default writer-fence
-  service refuses these operations.
-- Historical evidence is not rewound. Lineage events remain so either
-  reference can be resolved.
-- Authority `removed` has no rollback edge. Restoring from `removed` is out of
-  scope.
-- Host adapters must record post-cutover Agency writes through
-  `agency_migrate.writes`. Unrecorded writes are not replayed.
+The rollback service currently supports a verified **zero-journal** return to
+legacy authority. Full operation replay is not implemented. The existing
+four-argument `PostCutoverWriteLog::record()` remains callable, and recorded rows
+remain readable, but they lack operation kinds, authority generations and durable
+before/after history snapshots. Pending legacy records refuse with
+`rollback_unqualified`; no envelope or backfill is inferred, and rows are not
+consumed or rewritten.
 
-Rehearse rollback on a staging clone before any production cutover. That
-rehearsal is an operator procedure, not a function of this module.
+The host must explicitly list every expected copier id for a domain in the
+nonsecret Settings key `agency_migrate_copier_domains`. Each copier also declares
+that domain in its optional `domains` annotation/attribute metadata. Both lists
+must agree exactly. Missing registries, missing or unexpected copiers and empty
+metadata remain unqualified. Two copiers for the same target within the domain
+refuse with `rollback_ambiguous`; discovery order never selects authority.
+`copierForTarget()` remains callable but now requires an explicit domain for a
+qualified result. No domain membership is inferred from entity-type names.
+
+Both preview and execution validate the entire known pending set's entity type,
+integer id and UUID against the current target before any replay effects. A
+missing or replaced target refuses with `rollback_conflict`. Even matching
+identities cannot qualify the old journal format. A clean sample also cannot
+qualify a return: an empty journal still requires `fullPassed()` for **every**
+registered domain copier. Execution repeats preflight inside the authority SQL
+transaction and host writer fence before changing authority. Preview performs
+only the read-only preflight and does not acquire that fence.
+
+The future complete replay contract needs append-only mutations and a versioned
+journal with generations, idempotency, durable revision/translation snapshots
+and explicit delete tombstones. Replay must merge complete histories from those
+snapshots, preserve original lineage provenance, qualify every domain population
+including proved deletions, and commit replay markers with authority. The current
+content-overwrite helper is not that history-merge contract. This containment
+change does not make a nonempty replay safe or establish host writer coverage.
+
+Authority `removed` has no rollback edge. Real transfer and rollback acceptance
+still require a qualified host boundary and an operator-controlled rehearsal.
 
 ## Commands
 
