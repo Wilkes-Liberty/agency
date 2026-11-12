@@ -177,7 +177,10 @@ jobs:
               8.0.*) ;;
               *) echo "::error::Expected MySQL 8.0, found ${version}"; exit 1 ;;
             esac
+            # Synthetic fault proofs create triggers with the database-scoped
+            # test role. Permit that on this isolated runner's binary log.
             mysql -uroot -proot <<'SQL'
+          SET GLOBAL log_bin_trust_function_creators = 1;
           CREATE DATABASE IF NOT EXISTS agency_test;
           CREATE USER IF NOT EXISTS 'agency_test'@'%' IDENTIFIED BY 'test_only';
           GRANT ALL PRIVILEGES ON agency_test.* TO 'agency_test'@'%';
