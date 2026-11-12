@@ -104,3 +104,7 @@ Removal follows verified cutover, not an assumed rename.
 
 Do not add empty future modules, speculative public APIs or tenant-specific defaults
 to reserve a name. The contribution should demonstrate one useful outcome and its failure paths.
+
+Staff onboarding extraction follows the [compatibility contract](WORKFORCE_INVITATION_CONTRACT.md):
+existing anonymous invitations remain distinct from Discovery authentication, and
+local account/profile provisioning shares the invitation-consumption transaction.

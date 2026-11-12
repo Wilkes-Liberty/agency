@@ -18,9 +18,7 @@ Publication, host cutover and invitation remain separate decisions.
   `chronicle_agency`. Contact policy and delivery audit are replaceable ports.
   Historical `paladin_issuer` / `paladin_audience` token keys remain readable
   so already-qualified coverage does not change
-  ([DEV-1008](https://wilkesliberty.atlassian.net/browse/DEV-1008),
-  [webcms#1899](https://github.com/Wilkes-Liberty/webcms/pull/1899),
-  [GitHub #28](https://github.com/Wilkes-Liberty/agency/pull/28)).
+  ([GitHub #28](https://github.com/Wilkes-Liberty/agency/pull/28)).
 - Draft ontology contract v0.1.0 for tenant-neutral object, link and action
   types, with YAML, JSON Schemas and failing-fixture tests. Discovery storage
   stays the implemented subset
@@ -70,10 +68,9 @@ migration of Discovery records. Retention, invitation, evidence and summary
 contracts in `agency_staff` are the same as alpha2; the new tests and
 documents describe that existing behavior.
 
-The WebCMS companion that switches off `chronicle_agency`
-([webcms#1899](https://github.com/Wilkes-Liberty/webcms/pull/1899)) requires
-Composer `drupal/agency:1.0.0-alpha3` (constraint `^1.0.0-alpha3` also
-resolves this tag) and must wait for this tag and an installable package.
+A host adopting `agency_host` must enable it and verify the compatibility
+copy before disabling the former implementation. It requires Composer
+`drupal/agency:1.0.0-alpha3` (constraint `^1.0.0-alpha3` also resolves this tag) and must wait for this tag and an installable package.
 
 Preview pages remain advisory. Changing policy, history, references or identity
 bindings still invalidates a prepared removal plan. An uncertain result must be

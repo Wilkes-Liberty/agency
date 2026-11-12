@@ -24,7 +24,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Ready the Slice 2 workforce transfer design for operator gate G1: career
   postings and the résumé/application workflow move to Agency, every S2
   source maps to an `agency_*` type, copier plugin and Field Guard
-  marking, and DEV-992 Option A conditions are listed per entity. Ontology
+  marking, with identity-preservation conditions listed per entity. Ontology
   draft v0.1.1 adds a recruiting relationship kind, a proposed
   `agency_recruiting` boundary, and proposed application, posting,
   profile-evidence, staff-invitation and staff-onboard types.
@@ -33,10 +33,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   claim-scoped access are File Gate carry-over; geo handlers are host-stay;
   client profile bundles are host-stay with fail-closed collision
   preflight. Staff and recruiting writes use their own evidence shapes.
-  Ledger citations pin webcms `be5a1962`. Slice 2 record types are not
-  registered.
+  Slice 2 record types are not registered.
 
-  See [DEV-987](https://wilkesliberty.atlassian.net/browse/DEV-987).
+  See the [workforce transfer design](docs/WORKFORCE_TRANSFER.md).
 
 ### Fixed
 - `agency_host` throttles forced JWKS refetches for an unknown `kid` to a
@@ -44,14 +43,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   refresh is stored in the existing JWKS cache bin and serialized with a lock
   so concurrent requests cannot each trigger discovery. One refresh after the
   window still picks up a rotated key. See
-  [GitHub #31](https://github.com/Wilkes-Liberty/agency/issues/31) and
-  [DEV-1099](https://wilkesliberty.atlassian.net/browse/DEV-1099).
+  [GitHub #31](https://github.com/Wilkes-Liberty/agency/issues/31).
 
 ### Docs
 - Propose the Slice 3 CRM and intake transfer design, including the Slice 1
   contact-lookup port that must leave `chronicle_agency` before Discovery
   authority can reach `removed`.
-- Propose the Slice 4 engagement, time, client-membership and commercial-feed transfer. The design applies DEV-992 Option A per source type and adds no record types.
+- Propose the Slice 4 engagement, time, client-membership and commercial-feed transfer. The design applies identity preservation per source type and adds no record types.
 
 ### Documentation
 - Record the Externalauth 2.0.15 binding-writer review and pin fingerprint behavior on the reviewed 2.0.13 release without changing the digest. Deny-path tests execute the unreviewed-reference, writer-hash and schema-floor throws.
@@ -80,9 +78,7 @@ Prepared prerelease; publication requires maintainer approval. See the
   digest schema slot keyed `chronicle_agency`. Contact policy and delivery
   audit are replaceable ports. Historical `paladin_issuer` / `paladin_audience`
   token keys remain readable so already-qualified coverage does not change.
-  Ships in this tag so [webcms#1899](https://github.com/Wilkes-Liberty/webcms/pull/1899)
-  can require `^1.0.0-alpha3`. See
-  [DEV-1008](https://wilkesliberty.atlassian.net/browse/DEV-1008).
+  Installing hosts can require `^1.0.0-alpha3`.
 
 - Draft ontology contract v0.1.0: tenant-neutral object, link and action
   types with machine-readable YAML, JSON Schemas and failing-fixture

@@ -5,8 +5,8 @@ binding fingerprint stays on Externalauth **2.0.13**. This record does not
 approve moving that pin, requalifying coverage, or changing host Composer
 constraints.
 
-Tracked as [agency#30](https://github.com/Wilkes-Liberty/agency/issues/30)
-and [DEV-1024](https://wilkesliberty.atlassian.net/browse/DEV-1024).
+Source review: [agency#30](https://github.com/Wilkes-Liberty/agency/issues/30).
+Host dependency qualification is separate.
 
 ## What the fingerprint binds
 
@@ -94,4 +94,4 @@ that deny test fail.
 
 Fingerprint hashing stays PHP `hash()` / `hash_hmac()` / `hash_file()`
 SHA-256, not the OpenSSL FIPS provider. That is pre-existing; this review
-does not change the digest. DEV-1024's lock-bump acceptance stays open.
+does not change the digest. Host dependency upgrades still require separate acceptance.

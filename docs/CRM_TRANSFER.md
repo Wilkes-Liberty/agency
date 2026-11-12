@@ -1,26 +1,21 @@
 # CRM transfer (Slice 3)
 
 Status: **proposed design**. This is not an implementation contract, not a
-Slice 3 G-gate, and not operator approval. Package 01 published the caller
-ledger as draft [webcms#1900](https://github.com/Wilkes-Liberty/webcms/pull/1900)
-(`docs/agency-extraction/ledger.json` at
-`2216df30c3af736bd7f8b47832c2ea8572c1fd2b`). The citations below use the
-live host ledger on webcms `master` at
-[`be5a1962`](https://github.com/Wilkes-Liberty/webcms/commit/be5a1962)
-(2026-10-29 operator sweep: `scripts/agency-ledger/generate.py --check`
-passed). Ontology draft v0.1.0 landed in
-[agency#25](https://github.com/Wilkes-Liberty/agency/pull/25). DEV-992
+Slice 3 G-gate, and not operator approval. The source inventory and its
+verification receipts belong to the installing host's migration record.
+See the [draft ontology](ONTOLOGY.md) for proposed object and action names.
+ID-preserving transfer
 Option A (ID-preserving copy plus lineage) is recorded as decided; it
 does not approve this slice. Slice 3 expand still waits on a later
 operator G1 after Slice 2.
 
 The document distinguishes **observed** Agency Discovery and host-adapter
 behavior in this package from **proposed** Slice 3 transfer. Slice 3
-ledger rows below cite that `be5a1962` ledger. Row ids S3-L1–L6 are this
-design's labels, not ontology machine names. Draft ontology names are in
+rows below describe proposed transfer responsibilities. Row ids S3-L1–L6 are
+this design's labels, not ontology machine names. Draft ontology names are in
 `ontology/ontology.yml`; they are not an implementation contract until a
-Slice 3 G1. Host-tree class names that the ledger inventories but this
-checkout still cannot open remain **unverified** for expand.
+Slice 3 G1. Host source and runtime consumers remain **unverified** until the installing
+host completes their qualification.
 
 No tenant name, policy period, operating record or credential belongs in
 this package. Host identity, File Gate, Field Guard and Audit Chain remain
@@ -30,31 +25,26 @@ change adds no entity type, service, schema or copier.
 
 ## 1. Responsibilities in scope
 
-Slice 3 rows from `docs/agency-extraction/ledger.json` at webcms `master`
-`be5a1962`. The 2026-10-29 sweep of that pin reported 350 S3
-responsibilities still `legacy`, 510 leftover host callers, and 29 test
-classes to port, across `chronicle_crm`, `chronicle_forms` and
-`chronicle_service_intake`. Slice 1 still lists `chronicle_agency` as
-`record_only` (20 items, 8 leftover callers) because its contact policy
-depends on `chronicle_crm`. Exact table, service, route and test rows
-live in that ledger; this checkout cannot open the host PHP.
+Inventory CRM, business form policy and service-intake responsibilities,
+callers and tests before expansion. Keep the host contact-policy dependency
+explicit until its replacement is verified. Static source inventory does not
+establish runtime authority or consumer drain.
 
 | Proposed row | Current authority (ledger) | Target | Notes |
 | --- | --- | --- | --- |
 | S3-L1 CRM contact | Host `chronicle_crm` entity `crm_contact` | Agency Person and Organization | Ledger stored type, not a User and not a Discovery grant. Ontology draft lists `crm_contact` as a legacy source on both `agency_person` and `agency_organization`. Split rule is §6 and §10.1. |
-| S3-L2 CRM opportunity | Host `chronicle_crm` entity `crm_opportunity` | Agency Opportunity (`agency_opportunity`) | Proposed commercial record. Host originally shipped no public canonical route, JSON:API or GraphQL dump; commercial scalars still ride host `clientProfile` / `clientDeliverables` / `clientInvoices` transport ([webcms#1900](https://github.com/Wilkes-Liberty/webcms/pull/1900)). |
+| S3-L2 CRM opportunity | Host `chronicle_crm` entity `crm_opportunity` | Agency Opportunity (`agency_opportunity`) | Proposed commercial record. Host originally shipped no public canonical route, JSON:API or GraphQL dump; commercial scalars still ride host `clientProfile` / `clientDeliverables` / `clientInvoices` transport. |
 | S3-L3 CRM activity | Host `chronicle_crm` entity `crm_activity` | Agency Activity (`agency_activity`) | Proposed activity log linked to an opportunity. Ontology draft is not revisionable; host revision shape is **unverified** from this checkout (§10.2). |
-| S3-L4 Business intake | Host `chronicle_forms` (business policy and outbox) plus `chronicle_service_intake` (routing, mapping, queue/retry) | Agency Intake (`agency_intake_submission` plus intake orchestration) | Generic form validation and provenance stay on the host. Tenant field mappings stay in the host overlay ([webcms#1623](https://github.com/Wilkes-Liberty/webcms/issues/1623)). Vendor JSM (`wl_service_intake.gateway`) stays host. |
+| S3-L4 Business intake | Host `chronicle_forms` (business policy and outbox) plus `chronicle_service_intake` (routing, mapping, queue/retry) | Agency Intake (`agency_intake_submission` plus intake orchestration) | Generic form validation and provenance stay on the host. Tenant field mappings stay in the host overlay. Vendor JSM (`wl_service_intake.gateway`) stays host. |
 | S3-L5 Intake webform submissions | Host Webform submissions used as business intake | Agency IntakeSubmission | Bytes and generic Webform mechanics stay host. Agency owns the business payload, dispatch key and accept/decline/withdrawn states. Recruiting `career_application` copies onto Slice 2 `agency_application`, not IntakeSubmission (§10.6). |
 | S3-L6 Slice 1 contact-lookup port | Host `chronicle_agency` CRM contact policy (depends on `chronicle_crm`) | Existing `agency_host.contact_policy` port, later backed by Agency CRM | Observed Discovery already has a replaceable policy. S1 cannot reach authority `removed` while this leftover CRM dependency keeps `chronicle_agency` installed. See §4. |
 
 Out of Slice 3: Discovery relationships (already Agency), workforce
 provisioning (Slice 2), engagement/time and client membership (Slice 4),
 marketing campaigns (Slice 5), payment rails, and the disabled `wl_*`
-twins ([DEV-801](https://wilkesliberty.atlassian.net/browse/DEV-801) /
-[webcms#1681](https://github.com/Wilkes-Liberty/webcms/issues/1681)).
+twins (legacy namespace retirement).
 `crm_client` / `wl_crm_client_profile` are host selection plugins, not
-stored entity types (webcms#1900); they are not copy sources.
+stored entity types; they are not copy sources.
 
 Observed: `agency_staff` already owns invitation-only Discovery.
 Discovery commands do not create a CRM contact, opportunity, activity or
@@ -155,13 +145,10 @@ Observed in this package:
   (`agency_host.delivery_audit`) with a database default. It is not
   this contact-lookup port.
 
-Observed on the host (ledger `be5a1962`, unverified class files from
-this checkout):
+Host integration responsibilities to verify before expansion:
 
-- `chronicle_agency` remains a W&L adapter after
-  [webcms#1899](https://github.com/Wilkes-Liberty/webcms/pull/1899)
-  enabled `agency_host`. The 2026-10-29 sweep still records it as
-  `record_only` (20 items) with 8 leftover callers.
+- `chronicle_agency` may remain as an installation adapter after enabling
+  `agency_host`. Inventory its remaining services and callers in the host.
 - The remaining adapter still depends on `chronicle_crm` for contact
   policy. That is why Slice 1 Discovery authority cannot drain to
   `removed` until Slice 3 ports the policy.
@@ -199,7 +186,7 @@ dependency.
 Ledger S3 split: Agency owns business intake policy, mapping,
 orchestration and dispatch. The host keeps generic Webform mechanics,
 validation widgets, provenance, authored locale, mail-subject strings
-and staff-notification language (webcms#1900 closures).
+and staff-notification language.
 
 | Concern | Writer after cutover | Stays host |
 | --- | --- | --- |
@@ -227,7 +214,7 @@ Rules:
 
 Lineage, copy and reconciliation tooling belong to `agency_migrate`
 ([Migration](MIGRATION.md)). Slice 3 specifies what that tool must
-preserve. DEV-992 Option A is decided: copy into tenant-neutral
+preserve. ID-preserving transfer is decided: copy into tenant-neutral
 `agency_*` types with the same integer id, UUID, revision ids,
 timestamps and revision authorship, plus a lineage map. The five
 approval conditions apply per type below.
@@ -246,7 +233,7 @@ approval conditions apply per type below.
 before the batch starts (§10.1). A row that matches both targets, or
 neither, fails preflight.
 
-### DEV-992 conditions per type
+### Identity-preservation conditions per type
 
 Every copier below is proposed. None exists in this package. Host
 adapters will supply `EntityCopierBase` subclasses after G1.
@@ -263,7 +250,7 @@ Shared copy rules (observed `agency_migrate` behavior, proposed here as
 the Slice 3 contract):
 
 - Agency defines `agency_*` types. Moving a host-named entity provider
-  into this package is rejected (DEV-992 Option B).
+  into this package is rejected (provider reassignment).
 - Historical Audit Chain events that name a legacy type stay untouched.
   One minimized lineage event per migrated batch links legacy
   references to Agency references.
@@ -272,10 +259,9 @@ the Slice 3 contract):
 - Synthetic fixtures only. No live contacts, tax identifiers, intake
   payloads or credentials in this repository.
 
-Exact table, field, route, service and test inventory is
-`docs/agency-extraction/ledger.json` at webcms `be5a1962`. Host PHP
-class files remain **unverified** from this checkout; expand reads the
-ledger rather than re-inventorying.
+Record the exact table, field, route, service and test inventory in the host
+migration record. Verify that inventory against current source and runtime
+consumers before expansion; this package does not certify a host installation.
 
 ## 7. Authority, shadow-write, reconciliation and rollback
 
@@ -328,16 +314,19 @@ cutover):
   window.
 - No unexplained drift over the rehearsal window.
 
-Proposed SLOs (from [DEV-988](https://wilkesliberty.atlassian.net/browse/DEV-988),
-not approved by this document): 99.5% monthly API availability, p95
+Proposed SLOs (not approved by this document): 99.5% monthly API availability, p95
 read under 300 ms, outbox age under 150 s, zero unexplained
 reconciliation drift, batch restart within 5 minutes.
 
 Rollback:
 
-- Flip the CRM (and intake, if separate) flag to `legacy`.
-- Replay Agency writes to legacy through the lineage map. Do not
-  restore a database backup as the rollback procedure.
+- Validate rollback permission and current authority before effects. Acquire
+  verified source/target writer exclusion and establish a stable replay boundary.
+- Replay Agency changes through lineage, including newly created records and
+  deletions supported by the domain. Reconcile complete data, history, references
+  and access before atomically restoring legacy authority. Keep exclusion through
+  commit and persist rejection of writes on the non-authoritative side. A flag
+  change or database restore alone is not this rollback procedure.
 - Limits: an external intake dispatch already sent is not unsent;
   capture versus send stay distinct. A Discovery person that existed
   before the copy is not deleted. Historical evidence is never
@@ -375,22 +364,16 @@ that adapter).
 
 ## 9. Test-parity list
 
-Test classes per module are inventoried in `ledger.json` at webcms
-`be5a1962`. The 2026-10-29 sweep counted 29 S3 classes to port. The
-assurance kit ([webcms#1897](https://github.com/Wilkes-Liberty/webcms/pull/1897))
-scanned 19 `chronicle_crm`, 10 `chronicle_forms` and 6
-`chronicle_service_intake` classes at an earlier pin; some are
-`host-stays`. [webcms#1937](https://github.com/Wilkes-Liberty/webcms/pull/1937)
-mapped `CrmBreadcrumbTest` `to-port` on S3. Removal of a legacy module
-is blocked by any unmapped test without a reviewed reason. Names below
-are ledger module scopes and behavioral cases; this checkout still
-cannot open the host PHP files.
+Maintain a class-level test-parity map in the host migration record, including
+CRM breadcrumbs and retained generic-form behavior. Removal is blocked by any
+unmapped test without a reviewed reason. The table below identifies behavioral
+cases and their proposed destination; it is not a host acceptance receipt.
 
 | Legacy scope | Behavioral cases to port | Agency or host-adapter destination |
 | --- | --- | --- |
 | `chronicle_crm` | Private contact/opportunity/activity access; query filtering; no public canonical dump; stage constraints; email as duplicate hint not identity; breadcrumb; tax-id field permission; unmarked field refused | Commercial actions + migrate reconciliation + Field Guard |
 | `chronicle_forms` (business) | Intake policy; outbox dispatch; idempotent dispatch_key; uncertain delivery; remapped dispatcher IDs | Intake actions + host dispatcher adapter |
-| `chronicle_forms` (generic) | GraphQL checkbox, mail-subject, authored-locale, staff-notification language | Host-stays (webcms#1900) |
+| `chronicle_forms` (generic) | GraphQL checkbox, mail-subject, authored-locale, staff-notification language | Host-stays |
 | `chronicle_service_intake` | Routing, mapping, queue/retry; vendor-neutral gateway | Intake orchestration; JSM gateway stays host |
 | `chronicle_agency` contact policy | `mayContact` allow/deny against CRM; Discovery still starts only after policy and IdP subject checks; no CRM write on lookup | `agency_host.contact_policy` replacement + existing DiscoveryHostTest contact-policy cases |
 | Host identity / private files | Identity deactivation denies CRM reads; File Gate UUID still authorizes intake/résumé delivery | Existing identity adapter + File Gate, not copied |
@@ -424,7 +407,7 @@ record answers and is not that gate.
    depends on `chronicle_crm`. If it does not, it leaves with Slice 1
    residue rather than this slice.
 6. **Resolved by the Slice 2 design
-   ([DEV-987](https://wilkesliberty.atlassian.net/browse/DEV-987)).**
+   (the workforce proposal).**
    Career postings and the résumé/application workflow move to Agency
    in Slice 2 under proposed `agency_recruiting`. `career_application`
    copies onto `agency_application`, not `agency_intake_submission`.

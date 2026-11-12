@@ -1,25 +1,25 @@
 # Workforce transfer (Slice 2)
 
-Status: **proposed design ready for operator gate G1**. This is not an
-implementation contract and does not register Slice 2 record types.
-Package 01 published the caller ledger as draft
-[webcms#1900](https://github.com/Wilkes-Liberty/webcms/pull/1900). Slice 2
-citations below pin webcms `master` at
-[`be5a1962`](https://github.com/Wilkes-Liberty/webcms/commit/be5a1962)
-(2026-10-29 sweep of `docs/agency-extraction/ledger.json` / `LEDGER.md`).
+Status: **proposed broader Slice 2 design**. The
+[staff onboarding compatibility contract](WORKFORCE_INVITATION_CONTRACT.md)
+supersedes this draft wherever invitation format, anonymous acceptance, source
+identity or provisioning order conflicts. This document does not register
+Slice 2 record types or establish host cutover readiness.
+The source inventory and its verification receipts belong to the installing
+host's migration record. Verify current source and consumers before expansion.
 Ontology draft v0.1.1 in this change adds the recruiting relationship
 kind, a proposed `agency_recruiting` boundary, and proposed S2
 application, posting, profile-evidence, staff-invitation and
 staff-onboard types. Package 05 shipped the authority register in
 [agency#27](https://github.com/Wilkes-Liberty/agency/pull/27) with
 machine names `legacy`, `shadow`, `agency` and `removed` (see
-[Migration](MIGRATION.md)). [DEV-992](https://wilkesliberty.atlassian.net/browse/DEV-992)
-Option A (2026-10-26) is incorporated below. Slice 2 expand still waits
+[Migration](MIGRATION.md)). ID-preserving transfer
+conditions are incorporated below. Slice 2 expand still waits
 on an explicit operator G1 GO.
 
 The document distinguishes **observed** Agency Discovery behavior in this
 package from **proposed** Slice 2 transfer. Slice 2 ledger rows below
-cite that `be5a1962` ledger, including tokens/locks, services, routes,
+describe required inventory, including tokens/locks, services, routes,
 queues and test classes. Draft ontology names are in
 `ontology/ontology.yml`; they are not an implementation contract until
 G1. Host-tree class names that the ledger inventories but this checkout
@@ -39,11 +39,11 @@ the same questions with context.
 
 Already recorded (design incorporates; do not re-decide unless reversing):
 
-- 2026-10-26 [DEV-992](https://wilkesliberty.atlassian.net/browse/DEV-992)
+- 2026-10-26 ID-preserving transfer
   Option A: ID-preserving copy into tenant-neutral `agency_*` types plus
   a lineage map, with the five conditions in §7.
 - 2026-10-22 operator direction on
-  [DEV-987](https://wilkesliberty.atlassian.net/browse/DEV-987): career
+  the recruiting transfer: career
   postings **and** the résumé/application workflow move to Agency. That
   closes the former §10.4 split (host editorial / Agency rules only).
 
@@ -51,7 +51,7 @@ Approve all of the following for G1 GO:
 
 1. [ ] This document and ontology draft v0.1.1 are the Slice 2 design.
    Expand, entity registration and host copiers stay blocked until GO.
-2. [ ] Confirm DEV-992 Option A for every S2 source in §6: copy into the
+2. [ ] Confirm ID-preserving transfer for every S2 source in §6: copy into the
    named `agency_*` type with the same integer id, UUID, revision ids,
    timestamps and authorship; refuse collisions; do not move host-named
    providers into this package.
@@ -85,10 +85,9 @@ Approve all of the following for G1 GO:
     `revoked`, `suspended`, `ended`. Those states are not Discovery
     states. Application and posting use the recruiting kind and the
     Application / CareerPosting objects.
-11. [ ] Career posting close dates: extend `valid_through` past
-    2026-10-31 until migration, or let the 13 postings close and keep
-    the general (no-role) application. That is an editorial host edit,
-    not a package change.
+11. [ ] Preserve posting close dates and the general (no-role) application
+    behavior. Any editorial date extension belongs to the host; extraction
+    does not authorize changing published hiring windows.
 12. [ ] Posting editorial body stays host-rendered through a host
     adapter while Agency owns the posting record and rules
     (recommended), versus Agency-rendered body in this slice.
@@ -97,36 +96,29 @@ Approve all of the following for G1 GO:
 14. [ ] Network and coordinator profile audiences stay out of this
     expand. Slice 2 audiences remain `own` and `account_summary`.
 
-G-ONT (ontology v0, [DEV-1000](https://wilkesliberty.atlassian.net/browse/DEV-1000))
+G-ONT (ontology v0)
 is a separate operator gate. Approving G1 on this design does not close
 G-ONT.
 
 ## 1. Responsibilities in scope
 
-Slice 2 rows from `docs/agency-extraction/ledger.json` at webcms `master`
-`be5a1962`. The 2026-10-29 sweep of that pin reported **580** Slice 2
-responsibilities still `legacy`, **677** leftover host callers and
-**27** test classes to port, across `chronicle_staff_invite`,
-`chronicle_personnel`, dormant `chronicle_client_access`, the person
-side of `chronicle_api`, the `career` node bundle, and the
-`career_application` / `staff_onboard` webforms. **0** rows were
-`shadow`, `agency` or `removed`. Row ids S2-L1–L5 are this design's
-labels, not ontology machine names.
+Inventory staff invitations, personnel, dormant client-access code, profile
+projections, postings and application/onboarding forms with their callers and
+tests. Row ids S2-L1–L5 are design labels, not ontology machine names or proof
+of runtime authority. The categories below guide the host inventory; the staff
+invitation compatibility contract governs the first workflow extraction.
 
-Ledger categories at that pin (host PHP remains **unverified** from this
-checkout; expand re-reads the ledger rather than this table):
-
-| Category | Cited at `be5a1962` | Slice 2 disposition |
+| Category | Source responsibilities | Slice 2 disposition |
 | --- | --- | --- |
 | Tokens / locks | Staff-invite bearer hashes and generation row locks; `/invite` inspect door; career-upload claim tokens | Copy staff-invite hashes onto `agency_staff_invitation` (plaintext never copied). Career-upload tokens are File Gate carry-over. |
 | Services | `chronicle_staff_invite`, `chronicle_personnel`, person/profile projections on `chronicle_api`, `CareerResumeUploadService`, career validators | Copy/adapt into `agency_workforce` and `agency_recruiting` after G1. Scan job store stays File Gate. |
 | Routes | `/invite`, own-profile, account-summary, `/careers`, `/careers/{slug}`, `/careers/apply` | Host transport retained. Agency owns the records after `agency` authority. |
 | Queues | Staff-invite delivery; résumé quarantine/scan jobs | Invite capture is Agency after cutover. Scan jobs stay File Gate. |
-| Test classes | 27 S2 classes in the ledger | Port map in §11. |
+| Test classes | Host workforce and recruiting test inventory | Port map in §11. |
 
 | Proposed row | Current authority (ledger) | Target | Notes |
 | --- | --- | --- | --- |
-| S2-L1 Staff invitation and onboarding | Host `chronicle_staff_invite` | Agency Staff | Ledger: staff onboard Webform. Issuer-minted single-use token; the invitee does not choose classification. After Agency commits acceptance, the host adapter mints uid, fail-closed role and matching Profile. Keycloak remains the IdP; not a password signup. |
+| S2-L1 Staff invitation and onboarding | Host `chronicle_staff_invite` | Agency Staff | Ledger: staff onboard Webform. Issuer-minted single-use token; the invitee does not choose classification. For existing anonymous onboarding, the host adapter creates uid, fail-closed role and matching Profile in the same transaction as invitation consumption and required evidence. Keycloak remains the IdP; not a password signup. |
 | S2-L2 Invitation protocol and `/invite` door | Host `chronicle_client_access` (not enabled) plus host `Query.wlInviteStatus` | Agency Staff, adapted | Ledger: Keycloak invitation protocol adapts into Agency Staff (issuer/subject, POST-only accept, per-read entitlement). Do not enable the dormant module. Host inspect door is `wlInviteStatus` on `/invite`; GET never consumes. |
 | S2-L3 Personnel and profile evidence | Host `chronicle_personnel` plus profile configuration | Agency workforce | Ledger person/account/profile split: Profile holds marked evidence, not identity. Private files stay under File Gate. |
 | S2-L4 Person / account / profile projection | Host `chronicle_api` person, account and profile projections | Agency projection; host keeps transport | Ledger S2 split: person (IdP), account (host uid/role), profile (evidence projection). Own-profile and account-summary contracts stay unchanged. |
@@ -172,7 +164,7 @@ yet):
 | Action | Actor | Effect |
 | --- | --- | --- |
 | `inviteStaff` | Eligible coordinator | Creates a workforce relationship in an invited state, pending workforce entitlement and a captured staff invitation. Classification is an input from the issuer. No uid, role, Profile or message send. |
-| `acceptStaffInvitation` | Authenticated intended principal, POST only | Consumes one generation under a row lock, activates workforce entitlement, then asks the host adapter to mint the host account/role/profile bundle. Wrong account, reused token and GET are refusals. |
+| `acceptStaffInvitation` | Anonymous holder of a valid existing staff bearer, POST only | The compatibility contract governs local account/profile provisioning, single-use consumption and required evidence in one transaction. Authenticated accounts, reused tokens and GET are refused. Proposed relationship/entitlement records are not prerequisites invented for old invitations. |
 | `revokeStaffInvitation` | Assigned coordinator | Revokes generations and workforce entitlement. Stale expected version still applies, matching Discovery denial. Does not reopen Discovery state. |
 | `updateProfileEvidence` | Authorized coordinator or the entitled person for own-profile fields | Writes own-profile evidence. Field names must match the server marking map; caller-chosen markings that disagree are refused. Account-summary is a read projection, not a write audience. File bytes are not accepted; only File Gate references. |
 | `createCareerPosting` / `publishCareerPosting` / `closeCareerPosting` | Eligible coordinator | Writes posting records. Publish still refuses an open role with no close date or a past one. |
@@ -242,8 +234,8 @@ The dormant host client-access module is not a dependency and must not
 be enabled by this transfer. Slice 2 adapts the protocol into Agency
 Staff.
 
-Observed Discovery ceremony that Slice 2 reuses as rules, not as
-classes:
+Observed Discovery ceremony, retained for Discovery only. Its exact
+issuer/subject and entitlement rules do not replace anonymous staff onboarding:
 
 - Intended identity is an exact issuer/subject pair from the host
   identity provider. Contact data never selects or merges a principal.
@@ -266,12 +258,10 @@ Adaptations for staff, distinct from Discovery:
   workforce kind. The ledger's staff onboard Webform records employee
   and contractor provisioning; scaffolding allowlists those two and
   refuses Discovery/client kinds unless G1 adds further kinds.
-- Acceptance may trigger host-side uid/role/profile provisioning through
-  the host adapter **after** the Agency workforce commit. Agency does
-  not mint a user. That is the ledger's account side of the
-  person/account/profile split. Host provisioning failure must not be
-  repaired by silently creating a second Agency relationship; it is an
-  `uncertain` host follow-up against the committed receipt.
+- Existing staff acceptance provisions the host uid/role/profile in the same
+  transaction as consumption and required evidence. Post-commit remote
+  provisioning remains a separate future integration, not the compatibility
+  behavior. See the staff onboarding contract for uncertain commit recovery.
 - Staff invitation copy and languages stay in the host catalog. This
   package ships no invitation wording.
 - Host inspect for invitation doors is `Query.wlInviteStatus` on
@@ -351,7 +341,10 @@ Rules:
   numeric id, UUID, revision ids, timestamps and revision authorship, and
   writes a lineage map. Moving a host-named entity provider into this
   package is rejected.
-- Token plaintext is never copied; re-hash if a hash already exists.
+- Token plaintext is never copied. Preserve an existing SHA-256 digest
+  byte-for-byte; hashing it again invalidates existing invitation links. Preserve
+  absolute expiry. Key/value invitation sources have no original integer ID or
+  UUID and require the dedicated lineage contract linked above.
 - File bytes are never copied. Résumé quarantine, scan and claim-scoped
   access stay on File Gate. No public or derivative URLs are created.
 - Historical Audit Chain events that name a legacy type stay untouched.
@@ -363,15 +356,14 @@ Rules:
 - Slice 3 `agency_intake_submission` is business intake. It does not
   own `career_application`.
 
-Exact table, field, route, service, queue and test inventory is
-`docs/agency-extraction/ledger.json` at webcms `master` `be5a1962`. Host
-PHP class files remain **unverified** from this checkout; expand reads
-the ledger rather than re-inventorying. Host copier plugins and
-`agency_migrate` enablement are webcms work after G1.
+Record the exact table, field, route, service, queue and test inventory in the
+host migration record. Verify current source and runtime consumers before
+expansion. Host copier plugins and module enablement require their own review;
+this package does not certify the installation.
 
-## 7. DEV-992 Option A conditions per S2 entity
+## 7. ID-preserving transfer conditions per S2 entity
 
-[DEV-992](https://wilkesliberty.atlassian.net/browse/DEV-992) Option A
+ID-preserving transfer Option A
 (approved 2026-10-26) applies to every **copy** row in §6. Host-stay and
 File Gate carry-over rows are not copiers. Preserving numbers alone does
 not preserve references. Each copier must satisfy all five conditions
@@ -547,13 +539,10 @@ keep that adapter).
 
 ## 11. Test-parity list
 
-Test classes per module are inventoried in `ledger.json` at webcms `master`
-[`be5a1962`](https://github.com/Wilkes-Liberty/webcms/commit/be5a1962)
-(27 Slice 2 classes; category counts in §1). The class-level port map is
-the assurance kit (package 08, webcms#1897). Removal of a legacy module
-is blocked by any unmapped test without a reviewed reason. Names below
-are ledger module scopes and behavioral cases; this checkout still cannot
-open the host PHP files.
+Maintain a class-level test-parity map in the host migration record. Removal
+is blocked by any unmapped test without a reviewed reason. The table below
+identifies behavioral cases and proposed destinations; it is not a host
+acceptance receipt.
 
 | Legacy scope | Behavioral cases to port | Agency or host-adapter destination |
 | --- | --- | --- |
@@ -572,12 +561,13 @@ must keep passing, including the recruiting kind and the S2 source map.
 
 ## 12. Open operator decisions
 
-The numbered G1 checklist at the top is authoritative. This section
-keeps the narrative form.
+The numbered checklist describes the broader proposed design; the linked
+compatibility contract supersedes its conflicting staff onboarding assumptions.
+This section keeps the narrative form.
 
 1. Approve `agency_*` workforce and recruiting types with ID-preserving
    copy and lineage, rather than moving host-named providers into this
-   package. DEV-992 Option A already chose the mechanism.
+   package. The copy-and-lineage mechanism is already settled.
 2. Approve that staff invite, onboard and profile evidence share one
    `workforce` authority row, and that postings, applications and
    résumé references use a separate `recruiting` row (or one shared
