@@ -47,6 +47,15 @@ Observed in the kernel suite against synthetic entity types:
   plugin writer and then sets authority to `legacy`. It is not a database
   restore.
 
+Rollback preview and execution both require `run agency migrate` and
+`administer agency migrate authority`, a valid registered domain currently at
+`agency`, and a nonblank reason of at most 255 bytes after trimming. These
+checks run before reading pending writes or replaying records, so a request
+that fails preflight leaves legacy records, replay markers, authority and
+evidence unchanged. The final authority transition validates the request again.
+Preflight does not lock the domain or provide protection against concurrent
+writes; the rollback limits below still apply.
+
 ## Copier plugins
 
 Implement `Drupal\agency_migrate\Plugin\CopierInterface`, typically by
