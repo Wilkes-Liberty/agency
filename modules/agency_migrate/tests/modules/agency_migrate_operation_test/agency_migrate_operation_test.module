@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * @file
+ * Explicitly selects qualified SQL storage only in the synthetic test host.
+ */
+
+/**
+ * Implements hook_entity_type_alter().
+ */
+function agency_migrate_operation_test_entity_type_alter(array &$entity_types): void {
+  $entity_types['agency_migrate_agency_item']->setHandlerClass('storage', \Drupal\agency_migrate_operation_test\OperationTestStorage::class);
+}

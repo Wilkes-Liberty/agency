@@ -256,8 +256,14 @@ function agency_migrate_schema(): array {
           'size' => 'big',
           'not null' => FALSE,
         ],
+        'envelope_version' => ['type' => 'int', 'size' => 'small', 'not null' => FALSE],
+        'authority_generation' => ['type' => 'int', 'size' => 'big', 'not null' => FALSE],
+        'operation_id' => ['type' => 'varchar_ascii', 'length' => 36, 'binary' => TRUE, 'not null' => FALSE],
+        'request_hash' => ['type' => 'varchar_ascii', 'length' => 64, 'binary' => TRUE, 'not null' => FALSE],
+        'envelope' => ['type' => 'text', 'size' => 'big', 'not null' => FALSE],
       ],
       'primary key' => ['wid'],
+      'unique keys' => ['domain_operation' => ['domain', 'operation_id']],
       'indexes' => [
         'pending' => ['domain', 'replayed'],
       ],
@@ -446,5 +452,21 @@ function agency_migrate_update_10003(): void {
   catch (\Throwable $exception) {
     $transaction?->rollBack();
     throw $exception;
+  }
+}
+
+/**
+ * Adds nullable operation envelopes without qualifying historical write rows.
+ */
+function agency_migrate_update_10004(): void {
+  $schema = \Drupal::database()->schema();
+  $definition = agency_migrate_schema()['agency_migrate_write_log'];
+  foreach (['envelope_version', 'authority_generation', 'operation_id', 'request_hash', 'envelope'] as $field) {
+    if (!$schema->fieldExists('agency_migrate_write_log', $field)) {
+      $schema->addField('agency_migrate_write_log', $field, $definition['fields'][$field]);
+    }
+  }
+  if (!$schema->indexExists('agency_migrate_write_log', 'domain_operation')) {
+    $schema->addUniqueKey('agency_migrate_write_log', 'domain_operation', $definition['unique keys']['domain_operation']);
   }
 }
