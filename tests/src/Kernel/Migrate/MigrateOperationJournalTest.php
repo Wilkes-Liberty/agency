@@ -11,6 +11,7 @@ use Drupal\Tests\agency\Fixtures\MigrateOperationSqlFault;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Symfony\Component\Process\Process;
 
 /**
  * Real local mutations, journal receipts and failure boundaries.
@@ -21,6 +22,9 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 #[RunTestsInSeparateProcesses]
 final class MigrateOperationJournalTest extends MigrateKernelTestBase {
 
+  /**
+   * {@inheritdoc}
+   */
   protected static $modules = ['agency_migrate_operation_test'];
 
   private const TYPE = 'agency_migrate_agency_item';
@@ -35,6 +39,7 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
     $receipt = $this->completed(fn () => $this->writer()->create('synthetic', 3, $operation, self::TYPE, $values));
     $this->assertSame('completed', $receipt['status']);
     $this->assertSame($receipt, $this->writer()->create('synthetic', 3, $operation, self::TYPE, $values));
+    $this->assertSame($receipt, $this->writer()->create('synthetic', 3, $operation, self::TYPE, array_reverse($values, TRUE)));
     $this->assertSame(1, $this->rows('agency_migrate_agency_item'));
     $this->assertSame(1, $this->rows('agency_migrate_write_log'));
     $this->assertSame(1, $this->rows('agency_migrate_outbox'));
@@ -94,7 +99,8 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
    */
   public function testOperationUpdateAndDeleteKeepTypedPreimages(): void {
     $this->authority('agency', 3);
-    $create = $this->completed(fn () => $this->writer()->create('synthetic', 3, $this->container->get('uuid')->generate(), self::TYPE, ['title' => 'Original', 'payload' => 'Before']));
+    $values = ['title' => 'Original', 'payload' => 'Before'];
+    $create = $this->completed(fn () => $this->writer()->create('synthetic', 3, $this->container->get('uuid')->generate(), self::TYPE, $values));
     $updateId = $this->container->get('uuid')->generate();
     $update = $this->writer()->update('synthetic', 3, $updateId, self::TYPE, $create['entity_id'], $create['entity_uuid'], ['payload' => 'After']);
     $envelope = $this->envelope($updateId);
@@ -140,7 +146,8 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
   #[DataProvider('localOperationFailures')]
   public function testOperationLocalFailureIsAtomic(string $fault, string $reason): void {
     $this->authority('agency', 3);
-    $created = $this->completed(fn () => $this->writer()->create('synthetic', 3, $this->container->get('uuid')->generate(), self::TYPE, ['title' => 'Original', 'payload' => 'Before']));
+    $values = ['title' => 'Original', 'payload' => 'Before'];
+    $created = $this->completed(fn () => $this->writer()->create('synthetic', 3, $this->container->get('uuid')->generate(), self::TYPE, $values));
     $entity = $this->target($created['entity_id']);
     $history = $this->container->get('agency_migrate.identity_writer');
     $before = $history->captureHistory($entity);
@@ -148,11 +155,11 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
     $this->container->get('state')->set('agency_operation.fault', $fault);
     $database = $this->container->get('database');
     $table = match ($fault) {
-      'journal' => 'agency_migrate_write_log',
-      'outbox' => 'agency_migrate_outbox',
+      'journal', 'journal_alter' => 'agency_migrate_write_log',
+      'outbox', 'outbox_alter' => 'agency_migrate_outbox',
       default => NULL,
     };
-    $sqlFault = $table !== NULL ? new MigrateOperationSqlFault($database, $table) : NULL;
+    $sqlFault = $table !== NULL ? new MigrateOperationSqlFault($database, $table, str_ends_with($fault, '_alter')) : NULL;
     $sqlFault?->install();
     try {
       $this->assertRefused(fn () => $this->writer()->update('synthetic', 3, $this->container->get('uuid')->generate(), self::TYPE, $created['entity_id'], $created['entity_uuid'], ['payload' => 'Uncommitted']), $reason);
@@ -162,7 +169,9 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
       $this->container->get('state')->delete('agency_operation.fault');
     }
     $this->assertFalse($database->inTransaction());
-    $this->assertSame($before, $history->captureHistory($this->target($created['entity_id'])));
+    $reloaded = $this->container->get('entity_type.manager')->getStorage(self::TYPE)->load($created['entity_id']);
+    $this->assertSame('Before', $reloaded->get('payload')->value, 'Failure must clear mutated entity caches without caller reset.');
+    $this->assertSame($before, $history->captureHistory($reloaded));
     $this->assertSame(1, $this->rows('agency_migrate_write_log'));
     $this->assertSame(1, $this->rows('agency_migrate_outbox'));
   }
@@ -178,6 +187,8 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
       'old history overwrite' => ['history_overwrite', 'operation_history_conflict'],
       'journal insert failure' => ['journal', 'operation_failed'],
       'required outbox unavailable' => ['outbox', 'operation_failed'],
+      'altered journal insert' => ['journal_alter', 'operation_journal_conflict'],
+      'altered evidence insert' => ['outbox_alter', 'operation_evidence_conflict'],
     ];
   }
 
@@ -224,6 +235,40 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
   }
 
   /**
+   * Standard SQL without an explicit participant contract is unsupported.
+   */
+  public function testOperationUnqualifiedStorageRefuses(): void {
+    $this->authority('agency', 3);
+    $this->container->get('state')->set('agency_operation.unsupported_storage', TRUE);
+    $this->container->get('entity_type.manager')->clearCachedDefinitions();
+    $this->assertRefused(fn () => $this->writer()->create('synthetic', 3, $this->container->get('uuid')->generate(), self::TYPE, ['title' => 'Refused']), 'writer_connection_mismatch');
+    $this->assertSame(0, $this->rows('agency_migrate_agency_item'));
+    $this->assertSame(0, $this->rows('agency_migrate_write_log'));
+  }
+
+  /**
+   * Missing operational state never authorizes an Agency write.
+   */
+  public function testOperationMissingAuthorityStorageRefuses(): void {
+    $this->container->get('database')->schema()->dropTable('agency_migrate_authority_state');
+    $this->assertRefused(fn () => $this->writer()->create('synthetic', 3, $this->container->get('uuid')->generate(), self::TYPE, ['title' => 'Refused']), 'authority_storage_unavailable');
+    $this->assertSame(0, $this->rows('agency_migrate_agency_item'));
+    $this->assertSame(0, $this->rows('agency_migrate_write_log'));
+    $this->assertSame(0, $this->rows('agency_migrate_outbox'));
+  }
+
+  /**
+   * Domain declaration is required even for otherwise qualified SQL storage.
+   */
+  public function testOperationMissingDomainMappingRefuses(): void {
+    $this->authority('agency', 3);
+    $this->setSetting('agency_migrate_copier_domains', []);
+    $this->assertRefused(fn () => $this->writer()->create('synthetic', 3, $this->container->get('uuid')->generate(), self::TYPE, ['title' => 'Refused']), 'rollback_unqualified');
+    $this->assertSame(0, $this->rows('agency_migrate_agency_item'));
+    $this->assertSame(0, $this->rows('agency_migrate_write_log'));
+  }
+
+  /**
    * Corrupt envelope identity cannot be trusted as a historical receipt.
    */
   public function testOperationEnvelopeIndexMismatchRefuses(): void {
@@ -267,6 +312,82 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
     $row = $this->container->get('database')->select('agency_migrate_write_log', 'w')->fields('w')
       ->condition('operation_id', $operationId)->execute()->fetchAssoc();
     return PostCutoverOperationEnvelope::decode($row, $this->container->get('agency_migrate.identity_writer'));
+  }
+
+  /**
+   * Concurrent exact operation retries cannot allocate another entity.
+   */
+  public function testOperationConcurrentDuplicateUsesCommittedReceipt(): void {
+    $this->concurrentOperation('duplicate');
+  }
+
+  /**
+   * Authority transition waits through entity, envelope and evidence commit.
+   */
+  public function testOperationConcurrentTransitionWaitsForCommit(): void {
+    $this->concurrentOperation('transition');
+  }
+
+  /**
+   * Exercises two independent real entity kernels sharing only isolated SQL.
+   */
+  private function concurrentOperation(string $mode): void {
+    $this->authority('agency', 3);
+    $operation = $this->container->get('uuid')->generate();
+    $prefix = sys_get_temp_dir() . '/agency-operation-' . bin2hex(random_bytes(8));
+    $ready = $prefix . '-ready';
+    $release = $prefix . '-release';
+    $vendor = dirname($this->root) . '/vendor';
+    if (!is_file($vendor . '/autoload.php')) {
+      $vendor = $this->root . '/vendor';
+    }
+    $process = new Process([
+      PHP_BINARY,
+      dirname(__DIR__, 3) . '/fixtures/migrate/operation-worker.php',
+      $this->root,
+      $vendor,
+    ]);
+    $process->setInput(json_encode([
+      'database' => $this->container->get('database')->getConnectionOptions(),
+      'site' => $this->siteDirectory,
+      'mode' => $mode,
+      'operation_id' => $operation,
+      'ready' => $ready,
+      'release' => $release,
+    ], JSON_THROW_ON_ERROR));
+    $process->setTimeout(35);
+    try {
+      $process->start();
+      $deadline = microtime(TRUE) + 20;
+      while (!is_file($ready)) {
+        if (!$process->isRunning() || microtime(TRUE) > $deadline) {
+          $this->fail('Independent kernel did not boot: ' . $process->getOutput() . $process->getErrorOutput());
+        }
+        usleep(20000);
+      }
+      $this->container->get('state')->set('agency_operation.worker_ready', $ready);
+      $this->container->get('state')->set('agency_operation.worker_release', $release);
+      $receipt = $this->completed(fn () => $this->writer()->create('synthetic', 3, $operation, self::TYPE, ['title' => 'Concurrent once']));
+      $this->assertTrue($this->container->get('state')->get('agency_operation.observed_wait'));
+      $this->assertSame(0, $process->wait(), $process->getErrorOutput() . $process->getOutput());
+      $other = json_decode($process->getOutput(), TRUE, 32, JSON_THROW_ON_ERROR);
+      if ($mode === 'duplicate') {
+        $this->assertSame($receipt, $other);
+      }
+      else {
+        $this->assertSame('transitioned', $other['status']);
+        $this->assertSame('removed', $this->container->get('agency_migrate.authority')->get('synthetic'));
+      }
+      $this->assertSame(1, $this->rows('agency_migrate_agency_item'));
+      $this->assertSame(1, $this->rows('agency_migrate_write_log'));
+      $this->assertSame(1, (int) $this->container->get('database')->select('agency_migrate_outbox', 'o')->condition('operation', 'post_cutover_write')->countQuery()->execute()->fetchField());
+    }
+    finally {
+      touch($release);
+      $process->stop(1);
+      @unlink($ready);
+      @unlink($release);
+    }
   }
 
   /**

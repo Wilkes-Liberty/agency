@@ -14,7 +14,7 @@ use Drupal\Core\Entity\ContentEntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 
 /**
- * Owns local post-cutover mutations and immutable historical operation receipts.
+ * Owns local post-cutover mutations and immutable historical receipts.
  *
  * Calling domain services must authorize their business operation. This service
  * provides no route, permission grant, remote operation or rollback replay.
@@ -60,16 +60,22 @@ final class PostCutoverWriter {
       throw new MigrateRefusal('writer_transaction_owned');
     }
     if (!preg_match('/^[a-z][a-z0-9_]{0,62}$/D', $domain)
-      || $generation < 1 || !Uuid::isValid($operationId) || strtolower($operationId) !== $operationId
+      || $generation < 1 || strlen($operationId) !== 36 || !Uuid::isValid($operationId) || strtolower($operationId) !== $operationId
       || !preg_match('/^[a-z][a-z0-9_]{0,63}$/D', $entityType)
       || ($kind !== 'create' && ($id === NULL || $id < 1 || $uuid === NULL || !Uuid::isValid($uuid)))) {
       throw new MigrateRefusal('operation_invalid');
     }
     try {
       $requestHash = hash('sha256', json_encode($this->canonical([
-        'version' => 1, 'kind' => $kind, 'domain' => $domain,
-        'generation' => $generation, 'operation_id' => $operationId,
-        'entity_type' => $entityType, 'id' => $id, 'uuid' => $uuid, 'values' => $values,
+        'version' => 1,
+        'kind' => $kind,
+        'domain' => $domain,
+        'generation' => $generation,
+        'operation_id' => $operationId,
+        'entity_type' => $entityType,
+        'id' => $id,
+        'uuid' => $uuid,
+        'values' => $values,
       ]), JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION));
       // This read is outside the new transaction. In MySQL it must not create
       // a repeatable-read snapshot before waiting on the authority row.
@@ -101,6 +107,9 @@ final class PostCutoverWriter {
         || $storage->operationConnection() !== $this->database) {
         throw new MigrateRefusal('writer_connection_mismatch');
       }
+      if (!$this->entities->getDefinition($entityType)->isRevisionable()) {
+        throw new MigrateRefusal('operation_history_unsupported');
+      }
       $storage->resetCache();
       $before = NULL;
       $after = NULL;
@@ -122,10 +131,18 @@ final class PostCutoverWriter {
       }
       if ($kind !== 'delete') {
         $keys = $entity->getEntityType()->getKeys();
+        $identity = array_filter([
+          $keys['id'] ?? NULL,
+          $keys['uuid'] ?? NULL,
+          $keys['revision'] ?? NULL,
+          'revision_default',
+          'default_langcode',
+          'revision_translation_affected',
+        ]);
         foreach ($values as $name => $value) {
           if (!is_string($name) || !$entity->hasField($name)
             || $entity->getFieldDefinition($name)->isComputed()
-            || in_array($name, array_filter([$keys['id'] ?? NULL, $keys['uuid'] ?? NULL, $keys['revision'] ?? NULL, 'revision_default', 'default_langcode', 'revision_translation_affected']), TRUE)) {
+            || in_array($name, $identity, TRUE)) {
             throw new MigrateRefusal('operation_invalid');
           }
           $entity->set($name, $value);
@@ -172,10 +189,17 @@ final class PostCutoverWriter {
         }
       }
       $envelope = [
-        'version' => 1, 'kind' => $kind, 'domain' => $domain,
-        'generation' => $generation, 'operation_id' => $operationId,
-        'request_hash' => $requestHash, 'entity_type' => $entityType,
-        'id' => $id, 'uuid' => $uuid, 'before' => $before, 'after' => $after,
+        'version' => 1,
+        'kind' => $kind,
+        'domain' => $domain,
+        'generation' => $generation,
+        'operation_id' => $operationId,
+        'request_hash' => $requestHash,
+        'entity_type' => $entityType,
+        'id' => $id,
+        'uuid' => $uuid,
+        'before' => $before,
+        'after' => $after,
       ];
       $receipt = $this->append($envelope);
       $committing = TRUE;
@@ -232,20 +256,52 @@ final class PostCutoverWriter {
    */
   private function append(array $envelope): array {
     $row = [
-      'domain' => $envelope['domain'], 'entity_type' => $envelope['entity_type'],
-      'entity_id' => $envelope['id'], 'entity_uuid' => $envelope['uuid'],
-      'recorded' => $this->time->getCurrentTime(), 'replayed' => NULL,
-      'envelope_version' => 1, 'authority_generation' => $envelope['generation'],
-      'operation_id' => $envelope['operation_id'], 'request_hash' => $envelope['request_hash'],
+      'domain' => $envelope['domain'],
+      'entity_type' => $envelope['entity_type'],
+      'entity_id' => $envelope['id'],
+      'entity_uuid' => $envelope['uuid'],
+      'recorded' => $this->time->getCurrentTime(),
+      'replayed' => NULL,
+      'envelope_version' => 1,
+      'authority_generation' => $envelope['generation'],
+      'operation_id' => $envelope['operation_id'],
+      'request_hash' => $envelope['request_hash'],
       'envelope' => json_encode($envelope, JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION),
     ];
     PostCutoverOperationEnvelope::decode($row, $this->history);
     $row['wid'] = (int) $this->database->insert('agency_migrate_write_log')->fields($row)->execute();
-    $this->outbox->record('post_cutover_write', [
-      'domain' => $envelope['domain'], 'generation' => $envelope['generation'],
-      'operation_id' => $envelope['operation_id'], 'kind' => $envelope['kind'],
-    ], hash('sha256', 'operation:' . $envelope['domain'] . ':' . $envelope['operation_id']));
-    return PostCutoverOperationEnvelope::receipt($row, $envelope);
+    $metadata = [
+      'domain' => $envelope['domain'],
+      'generation' => $envelope['generation'],
+      'operation_id' => $envelope['operation_id'],
+      'kind' => $envelope['kind'],
+    ];
+    $fingerprint = hash('sha256', 'operation:' . $envelope['domain'] . ':' . $envelope['operation_id']);
+    $intentId = $this->outbox->record('post_cutover_write', $metadata, $fingerprint);
+    $journal = $this->database->select('agency_migrate_write_log', 'w')->fields('w')
+      ->condition('wid', $row['wid'])->forUpdate()->execute()->fetchAssoc();
+    if (!$journal || $row['wid'] < 1 || $journal['envelope'] !== $row['envelope']
+      || $journal['replayed'] !== NULL) {
+      throw new MigrateRefusal('operation_journal_conflict');
+    }
+    $validated = PostCutoverOperationEnvelope::decode($journal, $this->history);
+    $intent = $this->database->select('agency_migrate_outbox', 'o')->fields('o')
+      ->condition('id', $intentId)->forUpdate()->execute()->fetchAssoc();
+    if (!$intent || $intent['operation'] !== 'post_cutover_write'
+      || $intent['fingerprint'] !== $fingerprint || $intent['delivered'] !== NULL) {
+      throw new MigrateRefusal('operation_evidence_conflict');
+    }
+    $storedMetadata = json_decode($intent['metadata'], TRUE, 16, JSON_THROW_ON_ERROR);
+    foreach ($metadata as $key => $value) {
+      if (($storedMetadata[$key] ?? NULL) !== $value) {
+        throw new MigrateRefusal('operation_evidence_conflict');
+      }
+    }
+    if (($storedMetadata['event_id'] ?? NULL) !== $intentId
+      || !is_int($storedMetadata['effective_at'] ?? NULL)) {
+      throw new MigrateRefusal('operation_evidence_conflict');
+    }
+    return PostCutoverOperationEnvelope::receipt($journal, $validated);
   }
 
   /**
@@ -274,7 +330,9 @@ final class PostCutoverWriter {
    * Sorts maps recursively while preserving typed scalars and list order.
    */
   private function canonical(mixed $value, int $depth = 0): mixed {
-    if ($depth > 32 || is_object($value) || is_resource($value)) {
+    if ($depth > 32 || is_object($value) || is_resource($value)
+      || (is_float($value) && !is_finite($value))
+      || (is_string($value) && preg_match('//u', $value) !== 1)) {
       throw new MigrateRefusal('operation_invalid');
     }
     if (!is_array($value)) {

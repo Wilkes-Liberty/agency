@@ -8,7 +8,7 @@ use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\Component\Uuid\Uuid;
 
 /**
- * Validates immutable typed operation payloads against their SQL index identity.
+ * Checks typed operation payloads against their indexed SQL identity.
  */
 final class PostCutoverOperationEnvelope {
 
@@ -18,7 +18,15 @@ final class PostCutoverOperationEnvelope {
   public static function decode(array $row, IdentityPreservingWriter $history): array {
     try {
       $envelope = json_decode($row['envelope'] ?? '', TRUE, 64, JSON_THROW_ON_ERROR);
+      $keys = is_array($envelope) ? array_keys($envelope) : [];
+      $expected = [
+        'version', 'kind', 'domain', 'generation', 'operation_id', 'request_hash',
+        'entity_type', 'id', 'uuid', 'before', 'after',
+      ];
+      sort($keys);
+      sort($expected);
       if (!is_array($envelope)
+        || $keys !== $expected
         || (int) ($row['envelope_version'] ?? 0) !== 1
         || ($envelope['version'] ?? NULL) !== 1
         || !in_array($envelope['kind'] ?? NULL, ['create', 'update', 'delete'], TRUE)

@@ -5,9 +5,15 @@
  * Explicitly selects qualified SQL storage only in the synthetic test host.
  */
 
+use Drupal\agency_migrate_operation_test\OperationTestStorage;
+use Drupal\Core\Entity\Sql\SqlContentEntityStorage;
+
 /**
  * Implements hook_entity_type_alter().
  */
 function agency_migrate_operation_test_entity_type_alter(array &$entity_types): void {
-  $entity_types['agency_migrate_agency_item']->setHandlerClass('storage', \Drupal\agency_migrate_operation_test\OperationTestStorage::class);
+  $handler = \Drupal::state()->get('agency_operation.unsupported_storage')
+    ? SqlContentEntityStorage::class
+    : OperationTestStorage::class;
+  $entity_types['agency_migrate_agency_item']->setHandlerClass('storage', $handler);
 }

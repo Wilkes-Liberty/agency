@@ -35,6 +35,32 @@ final class OperationTestStorage extends OperationSqlContentEntityStorage {
       return SAVED_UPDATED;
     }
     $result = parent::save($entity);
+    $ready = \Drupal::state()->get('agency_operation.worker_ready');
+    $release = \Drupal::state()->get('agency_operation.worker_release');
+    if (is_string($ready) && is_string($release)) {
+      touch($release);
+      $pid = (int) file_get_contents($ready);
+      $deadline = microtime(TRUE) + 10;
+      $blocked = FALSE;
+      do {
+        if ($this->database->driver() === 'pgsql') {
+          $this->database->query('SELECT pg_stat_clear_snapshot()');
+          $query = $this->database->query("SELECT query FROM pg_stat_activity WHERE pid = :pid AND wait_event_type = 'Lock'", [':pid' => $pid])->fetchField();
+        }
+        else {
+          $query = $this->database->query("SELECT INFO FROM INFORMATION_SCHEMA.PROCESSLIST WHERE ID = :pid AND COMMAND = 'Query'", [':pid' => $pid])->fetchField();
+        }
+        $blocked = is_string($query) && str_contains($query, 'agency_migrate_authority_state');
+        if (!$blocked) {
+          usleep(20000);
+        }
+      } while (!$blocked && microtime(TRUE) < $deadline);
+      if (!$blocked) {
+        throw new \RuntimeException('Independent operation did not wait on fresh authority.');
+      }
+      usleep(300000);
+      \Drupal::state()->set('agency_operation.observed_wait', TRUE);
+    }
     if ($fault === 'commit_ack') {
       $this->database->transactionManager()->addPostTransactionCallback(static function (bool $success): void {
         if ($success) {

@@ -11,11 +11,15 @@ use Drupal\Core\Database\Connection;
  */
 final class MigrateOperationSqlFault {
 
+  /**
+   * Unique trigger/function name in this isolated database.
+   */
   private readonly string $name;
 
   public function __construct(
     private readonly Connection $database,
     private readonly string $table,
+    private readonly bool $alter = FALSE,
   ) {
     if (!in_array($table, ['agency_migrate_write_log', 'agency_migrate_outbox'], TRUE)) {
       throw new \InvalidArgumentException('Unknown operation fault.');
@@ -28,12 +32,19 @@ final class MigrateOperationSqlFault {
    */
   public function install(): void {
     $options = ['allow_delimiter_in_query' => TRUE];
+    $column = $this->table === 'agency_migrate_write_log' ? 'envelope' : 'metadata';
     if ($this->database->driver() === 'pgsql') {
-      $this->database->query("CREATE FUNCTION $this->name() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RAISE EXCEPTION ''synthetic operation boundary failure''; END'", [], $options);
+      $body = $this->alter
+        ? "BEGIN NEW.$column := ''{}''; RETURN NEW; END"
+        : "BEGIN RAISE EXCEPTION ''synthetic operation boundary failure''; END";
+      $this->database->query("CREATE FUNCTION $this->name() RETURNS trigger LANGUAGE plpgsql AS '$body'", [], $options);
       $this->database->query("CREATE TRIGGER $this->name BEFORE INSERT ON {{$this->table}} FOR EACH ROW EXECUTE FUNCTION $this->name()");
     }
     else {
-      $this->database->query("CREATE TRIGGER $this->name BEFORE INSERT ON {{$this->table}} FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'synthetic operation boundary failure'", [], $options);
+      $body = $this->alter
+        ? "SET NEW.$column = '{}'"
+        : "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'synthetic operation boundary failure'";
+      $this->database->query("CREATE TRIGGER $this->name BEFORE INSERT ON {{$this->table}} FOR EACH ROW $body", [], $options);
     }
   }
 
