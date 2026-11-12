@@ -7,5 +7,6 @@ Separate this ceremony from authenticated Discovery and defer storage cutover
 until writer exclusion, reconciliation and rollback are qualified.
 
 Remove internal tracker references and dated host rollout windows from transfer
-guidance. Clarify that CRM and time rollback must fence writers, replay and
+guidance and archived release entries, preserving release headings and behavior
+descriptions. Clarify that CRM and time rollback must fence writers, replay and
 reconcile before restoring authority.

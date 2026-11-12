@@ -17,8 +17,10 @@ required evidence together. It does not log the person in or send password mail.
 Keep host consent, wording, localized confirmation, disabled contact input,
 classification tamper checks, no-store and no-referrer handling. Preferred name
 may be collected on acceptance; issuance must not invent a name it does not have.
-Classification and retained language come from the stored invitation. Missing or
-removed configured languages are refusals, not silent language changes.
+Classification and retained language come from the stored invitation. An older
+record without a language field resolves the current configured default, as the
+existing workflow does. An explicit invalid or removed language is refused; the
+stored record is never silently rewritten.
 
 This ceremony grants no Discovery, client, partner or administrator privileges.
 Contact is an account collision input, never authority to resolve or merge an
@@ -46,7 +48,7 @@ Ports must enforce these boundaries:
 | Local staff provisioner | Use trusted contact, classification, language and optional preferred name; return an opaque account binding; use the same database transaction. |
 | Invitation policy | Validate issuer authority, configured scope, duration bounds and languages; missing required policy refuses. |
 | Writer boundary | Validate current authority while acquiring exclusion; retain protection until the root transaction completes. |
-| Evidence delivery | Commit required minimized intent with the business change; deliver after commit through Audit Chain's public idempotent contract. |
+| Evidence delivery | Commit required minimized intent with the business change; deliver after commit through Audit Chain's public signed-append contract. |
 
 The default provisioner denies. A local provisioner must not commit independently,
 make remote calls, send mail or start a session. A remote provisioning workflow
@@ -78,6 +80,18 @@ An ordinary rollback permits retry with the original token. Lost commit
 acknowledgement requires receipt reconciliation against durable state; an uncertain
 result never authorizes reminting. Audit Chain delivery failure leaves a durable
 pending intent and does not undo committed acceptance or allow token reuse.
+The outbox must lock each pending intent and commit its Audit Chain append and
+delivery marker together on the same database connection. `logKeyed()` requires
+signing; that method name alone does not provide delivery idempotence.
+
+Recovery must also work when the response containing the receipt identifier was
+lost. The original bearer may resolve a minimal committed result only within its
+original lifetime and collection scope. It must not disclose contact details,
+profile data or another invitation's result. After that expiry, only an authorized
+operator may reconcile by digest. Keeping a receipt or consumption tombstone must
+not turn an expired invitation into a permanent credential. An absent or unreadable
+receipt remains unconfirmed and never permits automatic reprovisioning. Issuance
+recovery cannot reconstruct the plaintext bearer or silently mint a replacement.
 
 ## Existing invitation storage
 

@@ -5,11 +5,8 @@ Status: **proposed broader Slice 2 design**. The
 supersedes this draft wherever invitation format, anonymous acceptance, source
 identity or provisioning order conflicts. This document does not register
 Slice 2 record types or establish host cutover readiness.
-Package 01 published the caller ledger as draft
-[webcms#1900](https://github.com/Wilkes-Liberty/webcms/pull/1900). Slice 2
-citations below pin webcms `master` at
-[`be5a1962`](https://github.com/Wilkes-Liberty/webcms/commit/be5a1962)
-(2026-10-29 sweep of `docs/agency-extraction/ledger.json` / `LEDGER.md`).
+The source inventory and its verification receipts belong to the installing
+host's migration record. Verify current source and consumers before expansion.
 Ontology draft v0.1.1 in this change adds the recruiting relationship
 kind, a proposed `agency_recruiting` boundary, and proposed S2
 application, posting, profile-evidence, staff-invitation and
@@ -17,12 +14,12 @@ staff-onboard types. Package 05 shipped the authority register in
 [agency#27](https://github.com/Wilkes-Liberty/agency/pull/27) with
 machine names `legacy`, `shadow`, `agency` and `removed` (see
 [Migration](MIGRATION.md)). ID-preserving transfer
-Option A (2026-10-26) is incorporated below. Slice 2 expand still waits
+conditions are incorporated below. Slice 2 expand still waits
 on an explicit operator G1 GO.
 
 The document distinguishes **observed** Agency Discovery behavior in this
 package from **proposed** Slice 2 transfer. Slice 2 ledger rows below
-cite that `be5a1962` ledger, including tokens/locks, services, routes,
+describe required inventory, including tokens/locks, services, routes,
 queues and test classes. Draft ontology names are in
 `ontology/ontology.yml`; they are not an implementation contract until
 G1. Host-tree class names that the ledger inventories but this checkout
@@ -105,26 +102,19 @@ G-ONT.
 
 ## 1. Responsibilities in scope
 
-Slice 2 rows from `docs/agency-extraction/ledger.json` at webcms `master`
-`be5a1962`. The 2026-10-29 sweep of that pin reported **580** Slice 2
-responsibilities still `legacy`, **677** leftover host callers and
-**27** test classes to port, across `chronicle_staff_invite`,
-`chronicle_personnel`, dormant `chronicle_client_access`, the person
-side of `chronicle_api`, the `career` node bundle, and the
-`career_application` / `staff_onboard` webforms. **0** rows were
-`shadow`, `agency` or `removed`. Row ids S2-L1–L5 are this design's
-labels, not ontology machine names.
+Inventory staff invitations, personnel, dormant client-access code, profile
+projections, postings and application/onboarding forms with their callers and
+tests. Row ids S2-L1–L5 are design labels, not ontology machine names or proof
+of runtime authority. The categories below guide the host inventory; the staff
+invitation compatibility contract governs the first workflow extraction.
 
-Ledger categories at that pin (host PHP remains **unverified** from this
-checkout; expand re-reads the ledger rather than this table):
-
-| Category | Cited at `be5a1962` | Slice 2 disposition |
+| Category | Source responsibilities | Slice 2 disposition |
 | --- | --- | --- |
 | Tokens / locks | Staff-invite bearer hashes and generation row locks; `/invite` inspect door; career-upload claim tokens | Copy staff-invite hashes onto `agency_staff_invitation` (plaintext never copied). Career-upload tokens are File Gate carry-over. |
 | Services | `chronicle_staff_invite`, `chronicle_personnel`, person/profile projections on `chronicle_api`, `CareerResumeUploadService`, career validators | Copy/adapt into `agency_workforce` and `agency_recruiting` after G1. Scan job store stays File Gate. |
 | Routes | `/invite`, own-profile, account-summary, `/careers`, `/careers/{slug}`, `/careers/apply` | Host transport retained. Agency owns the records after `agency` authority. |
 | Queues | Staff-invite delivery; résumé quarantine/scan jobs | Invite capture is Agency after cutover. Scan jobs stay File Gate. |
-| Test classes | 27 S2 classes in the ledger | Port map in §11. |
+| Test classes | Host workforce and recruiting test inventory | Port map in §11. |
 
 | Proposed row | Current authority (ledger) | Target | Notes |
 | --- | --- | --- | --- |
@@ -366,11 +356,10 @@ Rules:
 - Slice 3 `agency_intake_submission` is business intake. It does not
   own `career_application`.
 
-Exact table, field, route, service, queue and test inventory is
-`docs/agency-extraction/ledger.json` at webcms `master` `be5a1962`. Host
-PHP class files remain **unverified** from this checkout; expand reads
-the ledger rather than re-inventorying. Host copier plugins and
-`agency_migrate` enablement are webcms work after G1.
+Record the exact table, field, route, service, queue and test inventory in the
+host migration record. Verify current source and runtime consumers before
+expansion. Host copier plugins and module enablement require their own review;
+this package does not certify the installation.
 
 ## 7. ID-preserving transfer conditions per S2 entity
 
@@ -550,13 +539,10 @@ keep that adapter).
 
 ## 11. Test-parity list
 
-Test classes per module are inventoried in `ledger.json` at webcms `master`
-[`be5a1962`](https://github.com/Wilkes-Liberty/webcms/commit/be5a1962)
-(27 Slice 2 classes; category counts in §1). The class-level port map is
-the assurance kit (package 08, webcms#1897). Removal of a legacy module
-is blocked by any unmapped test without a reviewed reason. Names below
-are ledger module scopes and behavioral cases; this checkout still cannot
-open the host PHP files.
+Maintain a class-level test-parity map in the host migration record. Removal
+is blocked by any unmapped test without a reviewed reason. The table below
+identifies behavioral cases and proposed destinations; it is not a host
+acceptance receipt.
 
 | Legacy scope | Behavioral cases to port | Agency or host-adapter destination |
 | --- | --- | --- |

@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "reason": "internal-reference-removal",
+  "fragment": "changelog.d/3637792-invitation-compatibility.md",
+  "releases": [
+    {
+      "heading": "## [1.0.0-alpha4] - 2026-11-06",
+      "before_sha256": "05ae82145ffd199cecaf8d740bd8e72e4ccf4588e336229544923039224e623d",
+      "after_sha256": "06c6916e020e005164d26a56f30750c7f79c16947b8c6ee8a4eebbfbdc6af7f2"
+    },
+    {
+      "heading": "## [1.0.0-alpha3] - 2026-10-18",
+      "before_sha256": "ec023c241a42d0009dab19ff63f0023315b387fcfa7f0a0148729edb21473081",
+      "after_sha256": "418911d68c29d39bd4d0f173347d85d64c48dd12900005c592fd4b1a8fa63c58"
+    }
+  ]
+}
