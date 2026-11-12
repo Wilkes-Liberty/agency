@@ -67,6 +67,17 @@ final class AuthorityRegister {
    * Advances one step, or rolls back agency → legacy when $rollback is TRUE.
    */
   public function transition(string $domain, string $to, string $reason, bool $rollback = FALSE): void {
+    $from = $this->assertTransition($domain, $to, $reason, $rollback);
+    $this->write($domain, $to, $from, $reason, $rollback);
+  }
+
+  /**
+   * Validates a proposed transition without changing authority or evidence.
+   *
+   * @return string
+   *   The current authority state. Validation does not reserve that state.
+   */
+  public function assertTransition(string $domain, string $to, string $reason, bool $rollback = FALSE): string {
     $this->assertDomain($domain);
     $this->assertReason($reason);
     $this->assertPermission('administer agency migrate authority');
@@ -80,7 +91,7 @@ final class AuthorityRegister {
     if (!$this->allowed($from, $to, $rollback)) {
       throw new MigrateRefusal('invalid_transition');
     }
-    $this->write($domain, $to, $from, $reason, $rollback);
+    return $from;
   }
 
   /**

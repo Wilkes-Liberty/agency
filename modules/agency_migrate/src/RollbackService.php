@@ -33,9 +33,7 @@ final class RollbackService {
     if (!$this->currentUser->hasPermission('run agency migrate')) {
       throw new MigrateRefusal('forbidden');
     }
-    if ($this->authority->get($domain) !== 'agency') {
-      throw new MigrateRefusal('invalid_transition');
-    }
+    $this->authority->assertTransition($domain, 'legacy', $reason, TRUE);
     $pending = $this->writes->pending($domain);
     $plan = [
       'domain' => $domain,
