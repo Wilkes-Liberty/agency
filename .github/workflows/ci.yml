@@ -329,6 +329,24 @@ jobs:
               "testChangedLineageDigestRefusesReplayAndReconciliation",
               "testChangedLineageUuidFailsReconciliation",
             ]);
+            $required = array_merge($required, [
+              "testFullReportRejectsExtraTarget",
+              "testFullReportRejectsNewSource",
+              "testFullReportRejectsMissingLineage",
+              "testFullReportRejectsEqualCountsWithDifferentTargetSet",
+              "testFullReportRejectsOrphanedLineage",
+              "testFullReportRejectsChangedLineageIdentitySet",
+              "testSampleIsDeduplicatedAndNeverFullQualification",
+              "testFullReportIdentifiesCompleteCoverage",
+              "testEmptyFullReportCanPass",
+              "testIncompleteSourcePaginationRefusesQualification",
+              "testNonAdvancingInventoryPaginationRefusesQualification",
+              "testAdapterWithoutTargetInventoryCannotQualifyFullReport",
+              "testReportDefensivelyRejectsCountMismatch",
+              "testEqualCountsWithoutCoverageCannotQualify",
+              "testInventoryDiscardsUnsavedEntityCacheChanges",
+              "testInventoryReadsPersistedChangesBehindCache",
+            ]);
             $executed = [];
             $batchRequired = [
               "testFailedBatchIsAtomic with data set \"target before cursor\"",

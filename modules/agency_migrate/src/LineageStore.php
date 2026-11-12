@@ -133,6 +133,31 @@ final class LineageStore {
   }
 
   /**
+   * Loads a bounded identity inventory for one source/target pair.
+   *
+   * @return list<array<string, mixed>>
+   *   Identity columns ordered by the lineage primary-key cursor.
+   */
+  public function rowsForPair(string $source_type, string $target_type, int $after_lid = 0, int $limit = 100): array {
+    $result = $this->database->select('agency_migrate_lineage', 'l')
+      ->fields('l', [
+        'lid', 'source_id', 'source_uuid', 'source_revision_id',
+        'target_id', 'target_uuid', 'target_revision_id',
+      ])
+      ->condition('source_entity_type', $source_type)
+      ->condition('target_entity_type', $target_type)
+      ->condition('lid', max(0, $after_lid), '>')
+      ->orderBy('lid')
+      ->range(0, max(1, min(100, $limit)))
+      ->execute();
+    $rows = [];
+    while ($row = $result->fetchAssoc()) {
+      $rows[] = $row;
+    }
+    return $rows;
+  }
+
+  /**
    * Whether a target id is known as a migrated Agency record.
    */
   public function hasTarget(string $entity_type, int $id): bool {

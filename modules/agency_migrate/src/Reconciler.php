@@ -8,6 +8,7 @@ use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\agency_migrate\Plugin\CopierInterface;
 use Drupal\agency_migrate\Plugin\CopierManager;
 use Drupal\agency_migrate\Plugin\HistoryCopierInterface;
+use Drupal\agency_migrate\Plugin\InventoryCopierInterface;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 
@@ -52,7 +53,7 @@ final class Reconciler {
    * @param string $plugin_id
    *   Copier plugin id.
    * @param list<int> $sample_ids
-   *   Source integer ids to inspect. Empty uses every source id in lineage.
+   *   Source integer ids to inspect. Empty compares complete inventories.
    * @param list<string> $principals
    *   Opaque principal tokens used only for access-decision parity.
    */
@@ -67,8 +68,16 @@ final class Reconciler {
     $source_count = $copier->countSource();
     $target_count = $copier->countTarget();
     $matched = $this->lineage->countPair($copier->sourceEntityType(), $copier->targetEntityType());
-    $ids = $sample_ids !== [] ? $sample_ids : $this->allSourceIds($copier);
     $exceptions = [];
+    $coverage = ['scope' => 'sample', 'complete' => FALSE, 'total_source' => $source_count];
+    $ids = array_values(array_unique(array_map('intval', $sample_ids)));
+    sort($ids, SORT_NUMERIC);
+    if ($sample_ids === []) {
+      $inventory = $this->fullInventory($copier, $source_count, $target_count, $matched);
+      $ids = $inventory['ids'];
+      $coverage = $inventory['coverage'];
+      $exceptions = $inventory['exceptions'];
+    }
     $digests = [];
     foreach ($ids as $id) {
       $id = (int) $id;
@@ -88,10 +97,35 @@ final class Reconciler {
         ];
         continue;
       }
+      if ((int) $source->id() !== $id || (int) $target->id() !== $id
+        || $source->getEntityTypeId() !== $copier->sourceEntityType()
+        || $target->getEntityTypeId() !== $copier->targetEntityType()
+        || $source->uuid() !== $target->uuid()
+        || (int) ($source->getRevisionId() ?? $id) !== (int) ($target->getRevisionId() ?? $id)) {
+        $exceptions[] = ['type' => 'identity_drift', 'id' => $id];
+        continue;
+      }
+      $row = $this->lineage->bySource($copier->sourceEntityType(), $id);
+      if ($row === NULL) {
+        $exceptions[] = ['type' => 'missing_lineage', 'id' => $id];
+      }
+      else {
+        if ($row['source_uuid'] !== $source->uuid()
+          || $row['target_uuid'] !== $target->uuid()
+          || $row['target_entity_type'] !== $copier->targetEntityType()
+          || (int) $row['target_id'] !== $id
+          || (int) $row['source_revision_id'] !== (int) ($source->getRevisionId() ?? $id)
+          || (int) $row['target_revision_id'] !== (int) ($target->getRevisionId() ?? $id)) {
+          $exceptions[] = ['type' => 'identity_drift', 'id' => $id];
+        }
+        if ($row['content_digest'] !== $copier->contentDigest($source)
+          || $row['content_digest'] !== $copier->contentDigest($target)) {
+          $exceptions[] = ['type' => 'lineage_drift', 'id' => $id];
+        }
+      }
       $source_map = $copier->canonicalize($source);
       $target_map = $copier->canonicalize($target);
       if ($copier instanceof HistoryCopierInterface || $source->getEntityType()->isRevisionable()) {
-        $row = $this->lineage->bySource($source->getEntityTypeId(), $id);
         $manifest = $row === NULL ? NULL : $this->lineage->manifest($row);
         try {
           if (!$copier instanceof HistoryCopierInterface || $manifest === NULL) {
@@ -152,6 +186,19 @@ final class Reconciler {
         }
       }
     }
+    if ($sample_ids === []) {
+      try {
+        if ($source_count !== $copier->countSource() || $target_count !== $copier->countTarget()
+          || $matched !== $this->lineage->countPair($copier->sourceEntityType(), $copier->targetEntityType())) {
+          throw new MigrateRefusal('coverage_unverified');
+        }
+      }
+      catch (\Throwable) {
+        $coverage['complete'] = FALSE;
+        $exceptions[] = ['type' => 'coverage_unverified'];
+      }
+    }
+    $coverage['inspected'] = count($ids);
     return new ReconciliationReport(
       [
         'source' => $source_count,
@@ -161,6 +208,7 @@ final class Reconciler {
       ],
       $digests,
       $exceptions,
+      $coverage,
     );
   }
 
@@ -209,25 +257,164 @@ final class Reconciler {
   }
 
   /**
-   * Source ids from a full scan when the caller omits a sample.
+   * Checks complete, bounded source, target and lineage identity inventories.
    *
-   * @return list<int>
-   *   Integer ids.
+   * @return array{ids: list<int>, coverage: array<string, mixed>, exceptions: list<array<string, mixed>>}
+   *   Observed population coverage, not a fence against concurrent writes.
    */
-  private function allSourceIds(CopierInterface $copier): array {
-    $ids = [];
+  private function fullInventory(CopierInterface $copier, int $source_count, int $target_count, int $matched): array {
+    $coverage = ['scope' => 'full', 'complete' => FALSE, 'total_source' => $source_count];
+    $exceptions = [];
+    if ($source_count !== $target_count || $source_count !== $matched) {
+      $exceptions[] = [
+        'type' => 'count_mismatch',
+        'source' => $source_count,
+        'target' => $target_count,
+        'lineage' => $matched,
+      ];
+    }
+    $sources = [];
+    try {
+      $sources = $this->entityInventory($copier->loadSourceBatch(...), $copier->sourceEntityType(), $source_count);
+      if (!$copier instanceof InventoryCopierInterface) {
+        throw new MigrateRefusal('coverage_unverified');
+      }
+      $targets = $this->entityInventory($copier->loadTargetBatch(...), $copier->targetEntityType(), $target_count);
+      $rows = $this->lineageInventory($copier, $matched);
+      $lineage_sources = [];
+      $lineage_targets = [];
+      $mapping = [];
+      foreach ($rows as $row) {
+        $source_id = (int) $row['source_id'];
+        $target_id = (int) $row['target_id'];
+        if ($source_id < 1 || $target_id < 1 || isset($lineage_sources[$source_id]) || isset($lineage_targets[$target_id])) {
+          throw new MigrateRefusal('coverage_unverified');
+        }
+        $lineage_sources[$source_id] = [
+          'uuid' => $row['source_uuid'],
+          'revision_id' => (int) $row['source_revision_id'],
+        ];
+        $lineage_targets[$target_id] = [
+          'uuid' => $row['target_uuid'],
+          'revision_id' => (int) $row['target_revision_id'],
+        ];
+        $mapping[$source_id] = $target_id;
+        if ($source_id !== $target_id) {
+          $exceptions[] = ['type' => 'identity_drift', 'inventory' => 'lineage', 'id' => $source_id];
+        }
+      }
+      ksort($lineage_sources, SORT_NUMERIC);
+      ksort($lineage_targets, SORT_NUMERIC);
+      ksort($mapping, SORT_NUMERIC);
+      $exceptions = [
+        ...$exceptions,
+        ...$this->inventoryExceptions($sources, $targets, 'target'),
+        ...$this->inventoryExceptions($sources, $lineage_sources, 'lineage_source'),
+        ...$this->inventoryExceptions($targets, $lineage_targets, 'lineage_target'),
+      ];
+      if ($source_count !== $copier->countSource() || $target_count !== $copier->countTarget()
+        || $matched !== $this->lineage->countPair($copier->sourceEntityType(), $copier->targetEntityType())) {
+        throw new MigrateRefusal('coverage_unverified');
+      }
+      $coverage['source_inventory_digest'] = hash('sha256', json_encode($sources, JSON_THROW_ON_ERROR));
+      $coverage['target_inventory_digest'] = hash('sha256', json_encode($targets, JSON_THROW_ON_ERROR));
+      $coverage['lineage_inventory_digest'] = hash('sha256', json_encode([$lineage_sources, $lineage_targets, $mapping], JSON_THROW_ON_ERROR));
+      $coverage['complete'] = $exceptions === [];
+    }
+    catch (\Throwable) {
+      $exceptions[] = ['type' => 'coverage_unverified'];
+    }
+    return ['ids' => array_keys($sources), 'coverage' => $coverage, 'exceptions' => $exceptions];
+  }
+
+  /**
+   * Scans pages while rejecting duplicates, wrong types and stale cursors.
+   *
+   * @return array<int, array{uuid: string, revision_id: int}>
+   *   Identity tuples indexed by strictly increasing integer entity id.
+   */
+  private function entityInventory(callable $loader, string $entity_type, int $expected): array {
     $cursor = 0;
+    $inventory = [];
+    $uuids = [];
     while (TRUE) {
-      $batch = $copier->loadSourceBatch($cursor, 100);
+      $batch = $loader($cursor, 100);
       if ($batch === []) {
         break;
       }
+      if (count($batch) > 100) {
+        throw new MigrateRefusal('coverage_unverified');
+      }
       foreach ($batch as $entity) {
+        if (!$entity instanceof ContentEntityInterface || $entity->getEntityTypeId() !== $entity_type
+          || (int) $entity->id() <= $cursor || !$entity->isDefaultRevision()
+          || !is_string($entity->uuid()) || $entity->uuid() === ''
+          || isset($uuids[$entity->uuid()]) || count($inventory) >= $expected) {
+          throw new MigrateRefusal('coverage_unverified');
+        }
         $cursor = (int) $entity->id();
-        $ids[] = $cursor;
+        $inventory[$cursor] = ['uuid' => $entity->uuid(), 'revision_id' => (int) ($entity->getRevisionId() ?? $cursor)];
+        $uuids[$entity->uuid()] = TRUE;
       }
     }
-    return $ids;
+    if (count($inventory) !== $expected) {
+      throw new MigrateRefusal('coverage_unverified');
+    }
+    return $inventory;
+  }
+
+  /**
+   * Scans the lineage primary key with the same finite cursor contract.
+   *
+   * @return list<array<string, mixed>>
+   *   Persisted source/target identity rows, excluding history payloads.
+   */
+  private function lineageInventory(CopierInterface $copier, int $expected): array {
+    $rows = [];
+    $cursor = 0;
+    while (TRUE) {
+      $batch = $this->lineage->rowsForPair($copier->sourceEntityType(), $copier->targetEntityType(), $cursor, 100);
+      if ($batch === []) {
+        break;
+      }
+      foreach ($batch as $row) {
+        if ((int) $row['lid'] <= $cursor || count($rows) >= $expected) {
+          throw new MigrateRefusal('coverage_unverified');
+        }
+        $cursor = (int) $row['lid'];
+        $rows[] = $row;
+      }
+    }
+    if (count($rows) !== $expected) {
+      throw new MigrateRefusal('coverage_unverified');
+    }
+    return $rows;
+  }
+
+  /**
+   * Compares actual membership and identity, independent of population counts.
+   *
+   * @return list<array<string, mixed>>
+   *   Inventory membership or UUID/revision identity mismatches.
+   */
+  private function inventoryExceptions(array $expected, array $actual, string $inventory): array {
+    $exceptions = [];
+    $missing = array_keys(array_diff_key($expected, $actual));
+    $extra = array_keys(array_diff_key($actual, $expected));
+    if ($missing !== [] || $extra !== []) {
+      $exceptions[] = [
+        'type' => 'inventory_mismatch',
+        'inventory' => $inventory,
+        'missing_ids' => $missing,
+        'extra_ids' => $extra,
+      ];
+    }
+    foreach (array_intersect_key($expected, $actual) as $id => $identity) {
+      if ($identity !== $actual[$id]) {
+        $exceptions[] = ['type' => 'identity_drift', 'inventory' => $inventory, 'id' => $id];
+      }
+    }
+    return $exceptions;
   }
 
 }

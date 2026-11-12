@@ -17,7 +17,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
  * Concrete plugins implement ContainerFactoryPluginInterface and call this
  * constructor from create().
  */
-abstract class EntityCopierBase extends PluginBase implements HistoryCopierInterface {
+abstract class EntityCopierBase extends PluginBase implements HistoryCopierInterface, InventoryCopierInterface {
 
   /**
    * Field names that carry identity rather than marked content.
@@ -98,6 +98,13 @@ abstract class EntityCopierBase extends PluginBase implements HistoryCopierInter
    */
   public function loadSourceBatch(int $after_id, int $limit): array {
     return $this->loadBatch($this->sourceEntityType(), $after_id, $limit);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function loadTargetBatch(int $after_id, int $limit): array {
+    return $this->loadBatch($this->targetEntityType(), $after_id, $limit);
   }
 
   /**
@@ -216,6 +223,7 @@ abstract class EntityCopierBase extends PluginBase implements HistoryCopierInter
     if ($ids === []) {
       return [];
     }
+    $storage->resetCache(array_values($ids));
     $entities = [];
     foreach ($storage->loadMultiple($ids) as $entity) {
       if ($entity instanceof ContentEntityInterface) {

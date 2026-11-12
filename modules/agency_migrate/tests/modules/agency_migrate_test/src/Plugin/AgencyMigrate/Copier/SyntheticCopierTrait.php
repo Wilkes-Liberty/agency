@@ -62,6 +62,23 @@ trait SyntheticCopierTrait {
   /**
    * {@inheritdoc}
    */
+  public function loadSourceBatch(int $after_id, int $limit): array {
+    if ($this->state->get('agency_migrate_test.short_source_inventory')) {
+      return $after_id > 0 ? [] : parent::loadSourceBatch(0, 1);
+    }
+    return parent::loadSourceBatch($this->state->get('agency_migrate_test.repeat_source_inventory') ? 0 : $after_id, $limit);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function loadTargetBatch(int $after_id, int $limit): array {
+    return parent::loadTargetBatch($this->state->get('agency_migrate_test.repeat_target_inventory') ? 0 : $after_id, $limit);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function copyToTarget(ContentEntityInterface $source): ContentEntityInterface {
     $stop = $this->state->get('agency_migrate_test.interrupt_title');
     if (is_string($stop) && $stop !== '' && (string) $source->get('title')->value === $stop) {
