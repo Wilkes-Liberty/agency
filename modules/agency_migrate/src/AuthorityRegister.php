@@ -40,6 +40,32 @@ final class AuthorityRegister {
   }
 
   /**
+   * Locks a legacy writer's current generation until its root transaction ends.
+   *
+   * The caller must authorize its business operation and supply the exact
+   * connection used for every mutation. This method neither starts nor commits
+   * that transaction, changes authority, or certifies all host writer coverage.
+   * It permits anonymous workflows without granting authority administration.
+   *
+   * @return int
+   *   The locked legacy/shadow generation, valid only in that transaction.
+   */
+  public function lockForLegacyWrite(Connection $connection, string $domain): int {
+    $this->assertDomain($domain);
+    if ($connection !== $this->database) {
+      throw new MigrateRefusal('writer_connection_mismatch');
+    }
+    if (!$connection->inTransaction()) {
+      throw new MigrateRefusal('writer_transaction_required');
+    }
+    $row = $this->row($domain, TRUE);
+    if ($row === NULL || !in_array($row['state'], ['legacy', 'shadow'], TRUE)) {
+      throw new MigrateRefusal('legacy_writer_refused');
+    }
+    return $row['version'];
+  }
+
+  /**
    * All recorded states and versions; this does not certify host coverage.
    *
    * @return array<string, array<string, mixed>>

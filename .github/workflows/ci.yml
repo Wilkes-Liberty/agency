@@ -368,6 +368,17 @@ jobs:
               "testRollbackAcquiresFenceBeforePendingSnapshot",
               "testEvidenceFailureRollsBackAuthorityStateAndEvent",
             ];
+            $legacyWriterRequired = [
+              "testLegacyWriterRequiresExistingTransaction",
+              "testLegacyWriterRejectsDifferentConnection",
+              "testLegacyWriterAllowsRegisteredGenerationWithoutPromotion",
+              "testLegacyWriterRefusesUnknownAndPromotedAuthority",
+              "testLegacyWriterRefusesMissingStorage",
+              "testLegacyWriterExcludesTransitionUntilRootCompletion",
+              "testLegacyWriterRechecksStateAfterConcurrentPromotion",
+            ];
+            echo "Executed legacy writer boundaries: " . count(array_intersect($legacyWriterRequired, $executed)) . "\n";
+            if (array_diff($legacyWriterRequired, $executed)) { exit(1); }
             echo "Executed authority boundaries: " . count(array_intersect($authorityRequired, $executed)) . "\n";
             if (array_diff($authorityRequired, $executed)) { exit(1); }
             echo "Executed domain tests: " . count($executed) . "\n";

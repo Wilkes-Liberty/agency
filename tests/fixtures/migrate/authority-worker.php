@@ -10,6 +10,7 @@ declare(strict_types=1);
 use Drupal\agency_migrate\AuthorityRegister;
 use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\agency_migrate\MigrateOutbox;
+use Drupal\agency_migrate\TransactionBoundary;
 use Drupal\agency_migrate\UnavailableHostWriterFence;
 use Drupal\Core\Cache\CacheTagsInvalidatorInterface;
 use Drupal\audit_chain\AuditChainLoggerInterface;
@@ -68,7 +69,20 @@ $builder = new class('authorityWorker') extends TestCase {
       usleep(20000);
     }
     try {
-      if ($input['mode'] === 'register') {
+      if ($input['mode'] === 'legacy_write') {
+        $transaction = $database->startTransaction();
+        try {
+          $generation = $authority->lockForLegacyWrite($database, $input['domain']);
+          TransactionBoundary::commit($transaction);
+          print json_encode(['outcome' => 'committed', 'generation' => $generation], JSON_THROW_ON_ERROR);
+          return;
+        }
+        catch (\Throwable $exception) {
+          $transaction?->rollBack();
+          throw $exception;
+        }
+      }
+      elseif ($input['mode'] === 'register') {
         $authority->register($input['domain'], 'second register');
       }
       else {

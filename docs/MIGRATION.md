@@ -240,6 +240,17 @@ removal and executing rollback; a read-only preflight cannot bypass that refusal
 The synthetic test double exercises transition/replay mechanics and is not
 proof of host writer exclusion.
 
+A legacy adapter may call `AuthorityRegister::lockForLegacyWrite($connection,
+$domain)` inside its existing transaction, before any business mutation. The
+connection must be the register's exact database connection and the domain must
+already be registered in `legacy` or `shadow`. The method locks and returns the
+current generation until the root transaction ends. It refuses missing or
+promoted authority and never registers a domain or changes its state. The caller
+still authorizes the business operation; anonymous invitation acceptance does
+not need authority-administration permission. Every participating mutation must
+use that same transaction. This boundary covers only adapters that actually call
+it; it does not qualify other writers or enable the default transition fence.
+
 Executing rollback uses `withTransitionFence()` before loading the pending-write
 snapshot and retains the boundary through replay, markers and authority change.
 Dry runs perform only read-only validation and a snapshot count, with no fence
