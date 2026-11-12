@@ -339,6 +339,19 @@ jobs:
               if (isset($case->skipped)) { exit(1); }
               $executed[] = (string) $case["name"];
             }
+            $authorityRequired = [
+              "testConfigImportCannotChangeOperationalAuthority",
+              "testIndependentRegistrationPreservesBothDomains",
+              "testCompetingTransitionRejectsStaleState",
+              "testCompetingRegistrationRejectsDuplicate",
+              "testMissingAuthorityTableFailsClosed",
+              "testUpgradeImportsExistingAuthorityOnce",
+              "testDefaultFenceRefusesAuthoritativeTransition",
+              "testRollbackAcquiresFenceBeforePendingSnapshot",
+              "testEvidenceFailureRollsBackAuthorityStateAndEvent",
+            ];
+            echo "Executed authority boundaries: " . count(array_intersect($authorityRequired, $executed)) . "\n";
+            if (array_diff($authorityRequired, $executed)) { exit(1); }
             echo "Executed domain tests: " . count($executed) . "\n";
             if (array_diff($required, $executed)) { exit(1); }
             echo "Executed batch boundaries: " . count(array_intersect($batchRequired, $executed)) . "\n";

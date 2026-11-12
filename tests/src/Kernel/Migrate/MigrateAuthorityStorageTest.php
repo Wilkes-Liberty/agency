@@ -219,6 +219,7 @@ final class MigrateAuthorityStorageTest extends MigrateKernelTestBase {
       $this->assertRefused(fn () => $rollback->rollback('synthetic', 'rehearsal rollback', TRUE), 'writer_fence_unavailable');
     }
     finally {
+      $this->assertFalse($database->inTransaction(), 'Fence acquisition failure must close its transaction before DDL cleanup.');
       $database->schema()->renameTable('agency_migrate_write_log_unavailable', 'agency_migrate_write_log');
     }
     $this->assertSame($before, $authority->status());
@@ -244,6 +245,7 @@ final class MigrateAuthorityStorageTest extends MigrateKernelTestBase {
       }
     }
     finally {
+      $this->assertFalse($database->inTransaction(), 'Evidence failure must close its transaction before DDL cleanup.');
       $database->schema()->renameTable('agency_migrate_outbox_unavailable', 'agency_migrate_outbox');
     }
     $this->assertSame(1, (int) $database->select('agency_migrate_outbox', 'o')->countQuery()->execute()->fetchField());
