@@ -20,11 +20,15 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
  *   },
  *   base_table = "agency_migrate_agency_item",
  *   revision_table = "agency_migrate_agency_item_revision",
+ *   data_table = "agency_migrate_agency_item_field_data",
+ *   revision_data_table = "agency_migrate_agency_item_field_revision",
+ *   translatable = TRUE,
  *   entity_keys = {
  *     "id" = "id",
  *     "uuid" = "uuid",
  *     "revision" = "revision_id",
- *     "label" = "title"
+ *     "label" = "title",
+ *     "langcode" = "langcode"
  *   },
  *   revision_metadata_keys = {
  *     "revision_user" = "revision_user",
@@ -42,11 +46,15 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
   ],
   base_table: 'agency_migrate_agency_item',
   revision_table: 'agency_migrate_agency_item_revision',
+  data_table: 'agency_migrate_agency_item_field_data',
+  revision_data_table: 'agency_migrate_agency_item_field_revision',
+  translatable: TRUE,
   entity_keys: [
     'id' => 'id',
     'uuid' => 'uuid',
     'revision' => 'revision_id',
     'label' => 'title',
+    'langcode' => 'langcode',
   ],
   revision_metadata_keys: [
     'revision_user' => 'revision_user',

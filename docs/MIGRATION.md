@@ -20,7 +20,8 @@ Observed in the kernel suite against synthetic entity types:
 
 - A copier plugin copies one source type into one target type with the same
   integer id, UUID, current revision id, created/changed timestamps, revision
-  author and revision log.
+  author and revision log. Every non-computed property, ordered field delta,
+  empty field and current translation is copied for matching field layouts.
 - The target id must not already belong to a different UUID.
 - Each copied pair is stored in a bidirectional lineage map with a content
   digest and the run that wrote it.
@@ -54,7 +55,8 @@ extending `EntityCopierBase`. Discoverable under
 and annotation (Drupal 10). Declare `source_type` and `target_type`. Provide:
 
 - `propertyMarkings()` for every copied content property
-- `referencePropertyNames()` for integer references checked in reconciliation
+- `referencePropertyNames()` for integer references to the same source/target
+  entity type, checked at every delta and language during reconciliation
 - `accessDecision($principal, $side, $id)` for parity checks
 
 The runner does not infer types from the ontology document. When ontology v0
@@ -62,6 +64,31 @@ lists Agency object types, each listed legacy source gets its own plugin.
 Proposed Slice 2 copier plugin ids and Field Guard markings are named in
 [Workforce transfer](WORKFORCE_TRANSFER.md); those plugins are not shipped
 until the operator approves G1.
+
+The generic writer replaces its former `scalarValues()` helper with
+`fieldValues()`, which returns complete item arrays. Host integrations calling
+that alpha helper must adapt; package callers have been updated.
+
+The generic writer requires matching identity key names, revisionability,
+translatability, stored field names, types, cardinality and storage settings.
+It refuses incompatible layouts with `incompatible_field_layout` before the
+record write. Different entity keys (for example `nid` versus `id`), bundles,
+reference target types or field transformations need an explicit host adapter;
+the writer does not infer mappings.
+
+Canonical per-field values are JSON objects keyed by language, containing all
+ordered field items and their non-computed properties. Property keys and
+language keys are sorted; delta order remains significant. Primitive properties
+use their declared Drupal typed-data cast, preserving boolean and numeric types
+across database drivers; null and empty lists remain distinct. Older scalar-only
+lineage digests are not comparable to this encoding. Existing lineage rows still cause a rerun to skip the pair:
+reconcile existing copies before considering them faithful. This change does
+not repair values lost by an earlier copy.
+
+This preserves the current loaded revision only. Earlier revisions, pending
+non-default revisions, historical translation changes and revision-reference
+remapping still require separate work. A passing current-value reconciliation
+does not establish complete history preservation or authorize cutover.
 
 A synthetic copier (`synthetic_item`) lives in
 `modules/agency_migrate/tests/modules/agency_migrate_test` and is not a
@@ -81,7 +108,9 @@ the module.
 ## Rollback limits
 
 - Replay writes current Agency field values onto legacy. It does not rebuild
-  intermediate Agency revisions that existed only after cutover.
+  intermediate Agency revisions that existed only after cutover. Current
+  translations are replayed, including addition and removal, with all field
+  deltas and stored item properties.
 - New Agency records without a lineage row are inserted onto legacy with the
   same integer id and UUID. If that id is taken by a different UUID, rollback
   refuses.
@@ -117,4 +146,6 @@ Kernel tests under `tests/src/Kernel/Migrate` use `@group agency` and synthetic
 records from `tests/fixtures/migrate`. They cover identity preservation,
 occupied-id refusal, unauthorized denial, interrupted resume, second-run
 no-op, unmapped markings, reconciliation exceptions, authority transitions and
-rollback. They are not evidence of a host cutover.
+rollback. Current-value proofs use multivalue formatted text, summaries, user
+references and translated fields in real Drupal storage. They are not evidence
+of complete revision history preservation or a host cutover.

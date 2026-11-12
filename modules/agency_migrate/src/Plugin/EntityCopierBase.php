@@ -10,6 +10,7 @@ use Drupal\Component\Plugin\PluginBase;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\TypedData\PrimitiveInterface;
 
 /**
  * Entity-API copier that preserves integer ids, UUIDs and revision ids.
@@ -168,15 +169,46 @@ abstract class EntityCopierBase extends PluginBase implements CopierInterface {
    * {@inheritdoc}
    */
   public function canonicalize(ContentEntityInterface $entity): array {
-    $values = $this->writer->scalarValues($entity);
+    $values = [];
+    foreach ($entity->getTranslationLanguages() as $langcode => $language) {
+      foreach ($entity->getTranslation($langcode)->getFields(FALSE) as $name => $field) {
+        if ($field->getFieldDefinition()->isComputed()) {
+          continue;
+        }
+        $values[$name][$langcode] = [];
+        foreach ($field as $item) {
+          $properties = [];
+          foreach ($item->getProperties(FALSE) as $property_name => $property) {
+            $value = $property->getValue();
+            $properties[$property_name] = $value !== NULL && $property instanceof PrimitiveInterface
+              ? $property->getCastedValue()
+              : $value;
+          }
+          $values[$name][$langcode][] = $properties;
+        }
+      }
+    }
     ksort($values);
     $canonical = [];
-    foreach ($values as $name => $value) {
-      $canonical[$name] = is_scalar($value) || $value === NULL
-        ? (string) $value
-        : hash('sha256', json_encode($value, JSON_THROW_ON_ERROR));
+    foreach ($values as $name => $translations) {
+      $canonical[$name] = json_encode($this->sortProperties($translations), JSON_THROW_ON_ERROR);
     }
     return $canonical;
+  }
+
+  /**
+   * Sorts property maps while preserving the order of field item lists.
+   */
+  private function sortProperties(array $values): array {
+    if (!array_is_list($values)) {
+      ksort($values);
+    }
+    foreach ($values as &$value) {
+      if (is_array($value)) {
+        $value = $this->sortProperties($value);
+      }
+    }
+    return $values;
   }
 
   /**

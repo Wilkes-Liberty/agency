@@ -20,6 +20,8 @@ trait SyntheticCopierTrait {
     return [
       'title' => 'public',
       'payload' => 'internal',
+      'formatted' => 'internal',
+      'reviewers' => 'internal',
       'related_id' => 'internal',
       'access_class' => 'confidential',
     ];
