@@ -7,6 +7,7 @@ namespace Drupal\agency_migrate;
 use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\ContentEntityStorageInterface;
+use Drupal\Core\Entity\ContentEntityTypeInterface;
 use Drupal\Core\TypedData\PrimitiveInterface;
 use Drupal\Core\TypedData\ComplexDataDefinitionInterface;
 
@@ -109,6 +110,10 @@ final class RevisionHistorySnapshot {
           if (!is_string($langcode) || $langcode === '' || !is_array($items) || !array_is_list($items)) {
             throw new MigrateRefusal('history_unverified');
           }
+          $cardinality = $snapshot['layout']['fields'][$name]['cardinality'];
+          if ($cardinality > 0 && count($items) > $cardinality) {
+            throw new MigrateRefusal('history_unverified');
+          }
           $properties = array_keys($snapshot['layout']['fields'][$name]['properties']);
           foreach ($items as $item) {
             if (!is_array($item) || array_keys($item) !== $properties) {
@@ -188,6 +193,12 @@ final class RevisionHistorySnapshot {
    *   Object-free stored field layout.
    */
   private static function layout(ContentEntityInterface $entity): array {
+    $type = $entity->getEntityType();
+    if (!$type instanceof ContentEntityTypeInterface) {
+      throw new MigrateRefusal('incompatible_field_layout');
+    }
+    $metadata = $type->getRevisionMetadataKeys();
+    ksort($metadata);
     $fields = [];
     foreach ($entity->getFieldDefinitions() as $name => $definition) {
       if ($definition->isComputed()) {
@@ -220,6 +231,7 @@ final class RevisionHistorySnapshot {
     }
     return [
       'keys' => $keys,
+      'revision_metadata_keys' => $metadata,
       'revisionable' => $entity->getEntityType()->isRevisionable(),
       'translatable' => $entity->getEntityType()->isTranslatable(),
       'fields' => $fields,

@@ -135,6 +135,15 @@ final class IdentityPreservingWriter {
         }
         // Saving an already persisted, historically default revision updates
         // current tables. Verification below rejects presave rewrites anywhere.
+        // Compare presave translation metadata to this persisted revision,
+        // rather than to a different current revision on the legacy branch.
+        // Core 10 uses the public original property; core 11 adds setOriginal.
+        if (version_compare(\Drupal::VERSION, '11.2.0', '>=')) {
+          $selected->setOriginal(clone $selected);
+        }
+        else {
+          $selected->original = clone $selected;
+        }
         $selected->setSyncing(TRUE);
         $selected->setNewRevision(FALSE);
         $selected->isDefaultRevision(TRUE);

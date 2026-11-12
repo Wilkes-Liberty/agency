@@ -9,6 +9,8 @@ use Drupal\agency_migrate_test\Entity\SyntheticItem;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\ContentEntityStorageInterface;
 use Drupal\language\Entity\ConfigurableLanguage;
+use Drupal\field\Entity\FieldConfig;
+use Drupal\field\Entity\FieldStorageConfig;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -34,6 +36,20 @@ final class MigrateHistoryMergeTest extends MigrateKernelTestBase {
     parent::setUp();
     ConfigurableLanguage::createFromLangcode('fr')->save();
     ConfigurableLanguage::createFromLangcode('es')->save();
+    foreach (['agency_migrate_legacy_item', 'agency_migrate_agency_item'] as $type) {
+      FieldStorageConfig::create([
+        'field_name' => 'formatted',
+        'entity_type' => $type,
+        'type' => 'text_with_summary',
+        'cardinality' => -1,
+      ])->save();
+      FieldConfig::create([
+        'field_name' => 'formatted',
+        'entity_type' => $type,
+        'bundle' => $type,
+        'translatable' => TRUE,
+      ])->save();
+    }
   }
 
   /**
@@ -62,6 +78,29 @@ final class MigrateHistoryMergeTest extends MigrateKernelTestBase {
     $this->assertSame($legacy_only, $this->writer()->canonicalize($retained));
     $this->assertSame($ids[1], (int) $this->source(1)->getRevisionId());
     $this->assertGreaterThan($ids[1], $ids[2]);
+  }
+
+  /**
+   * Selecting a historical default must not recompute translation metadata.
+   */
+  public function testPromotionPreservesUnaffectedTranslationMetadata(): void {
+    [$agency, $ids] = $this->histories(TRUE);
+    $selected = $this->storage('agency_migrate_agency_item')->loadRevision($ids[1]);
+    $this->assertInstanceOf(SyntheticItem::class, $selected);
+    $this->assertNull($selected->getTranslation('fr')->get('revision_translation_affected')->value);
+    $snapshot = $this->writer()->captureHistory($agency);
+    $expected = $this->writer()->canonicalize($selected);
+    $legacy = $this->source(1);
+    $legacy->setNewRevision(TRUE);
+    $legacy->set('revision_id', 70);
+    $legacy->getTranslation('fr')->set('payload', 'Legacy French branch');
+    $legacy->save();
+    $merged = $this->writer()->mergeHistory($snapshot, 'agency_migrate_legacy_item');
+    $this->assertSame($expected, $this->writer()->canonicalize($merged));
+    $this->assertNull($merged->getTranslation('fr')->get('revision_translation_affected')->value);
+    $retained = $this->storage('agency_migrate_legacy_item')->loadRevision(70);
+    $this->assertInstanceOf(ContentEntityInterface::class, $retained);
+    $this->assertSame('Legacy French branch', $retained->getTranslation('fr')->get('payload')->value);
   }
 
   /**
@@ -285,10 +324,15 @@ final class MigrateHistoryMergeTest extends MigrateKernelTestBase {
         }
         break;
 
+      case 'over cardinality':
+        $snapshot['revisions'][1]['fields']['payload']['en'][] = $snapshot['revisions'][1]['fields']['payload']['en'][0];
+        break;
+
       case 'version':
         $snapshot['version'] = 99;
         break;
     }
+    $this->assertRefused(fn () => $this->writer()->validateHistorySnapshot($snapshot, 'agency_migrate_legacy_item'), $reason);
     $this->assertRefused(fn () => $this->writer()->mergeHistory($snapshot, 'agency_migrate_legacy_item'), $reason);
     $this->assertSame($before, $this->historyValues($this->source(1)));
   }
@@ -304,7 +348,7 @@ final class MigrateHistoryMergeTest extends MigrateKernelTestBase {
     $unverified = [
       'duplicate', 'missing field', 'wrong identity', 'missing default',
       'two defaults', 'draft selected', 'object', 'nonfinite', 'version',
-      'missing revision', 'missing translation',
+      'missing revision', 'missing translation', 'over cardinality',
     ];
     foreach ($unverified as $case) {
       $cases[$case] = [$case, 'history_unverified'];
@@ -321,7 +365,7 @@ final class MigrateHistoryMergeTest extends MigrateKernelTestBase {
    * @return array{\Drupal\agency_migrate_test\Entity\SyntheticItem, list<int>}
    *   The Agency default and all Agency revision identifiers.
    */
-  private function histories(): array {
+  private function histories(bool $unchanged_french = FALSE): array {
     $legacy = $this->storage('agency_migrate_legacy_item')->create([
       'title' => 'Snapshot example',
       'payload' => '00123',
@@ -330,7 +374,14 @@ final class MigrateHistoryMergeTest extends MigrateKernelTestBase {
       'revision_log_message' => 'Original',
     ]);
     $this->assertInstanceOf(SyntheticItem::class, $legacy);
-    $legacy->addTranslation('fr', ['payload' => 'Premier français']);
+    $legacy->set('formatted', [
+      ['value' => 'Original text', 'format' => 'plain_text', 'summary' => 'Original summary'],
+      ['value' => 'Second item', 'format' => 'plain_text', 'summary' => NULL],
+    ]);
+    $legacy->addTranslation('fr', [
+      'payload' => 'Premier français',
+      'formatted' => [['value' => 'Texte original', 'format' => 'plain_text', 'summary' => 'Résumé']],
+    ]);
     $legacy->save();
     $this->copyAll();
     $agency = $this->target(1);
@@ -339,7 +390,11 @@ final class MigrateHistoryMergeTest extends MigrateKernelTestBase {
     $agency->setNewRevision(TRUE);
     $agency->set('revision_id', 80);
     $agency->set('payload', 'Agency default');
-    $agency->getTranslation('fr')->set('payload', 'Nouveau français');
+    if (!$unchanged_french) {
+      $agency->getTranslation('fr')->set('payload', 'Nouveau français');
+      $agency->getTranslation('fr')->set('formatted', []);
+    }
+    $agency->get('formatted')->get(1)->set('summary', 'Later item summary');
     $agency->setRevisionUserId($this->operator->id());
     $agency->setRevisionCreationTime(1000000200);
     $agency->setRevisionLogMessage('Agency current');
@@ -350,7 +405,11 @@ final class MigrateHistoryMergeTest extends MigrateKernelTestBase {
     $agency->isDefaultRevision(FALSE);
     $agency->set('payload', 'Agency pending');
     $agency->removeTranslation('fr');
-    $agency->addTranslation('es', ['payload' => 'Borrador español']);
+    $agency->set('formatted', []);
+    $agency->addTranslation('es', [
+      'payload' => 'Borrador español',
+      'formatted' => [['value' => 'Texto pendiente', 'format' => 'plain_text', 'summary' => 'Resumen']],
+    ]);
     $agency->setRevisionUserId($this->author->id());
     $agency->setRevisionCreationTime(1000000300);
     $agency->setRevisionLogMessage('Pending draft');

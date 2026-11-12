@@ -365,6 +365,7 @@ jobs:
             ]);
             $required = array_merge($required, [
               "testMergePreservesBothHistoriesAndExactDefault",
+              "testPromotionPreservesUnaffectedTranslationMetadata",
               "testSnapshotReplaysAfterSourceDeletion",
               "testSnapshotIgnoresLaterSourceMutation",
               "testConflictingExistingRevisionRefusesBeforeImports",
@@ -387,6 +388,7 @@ jobs:
               "testInvalidSnapshotRefusesWithoutMutation with data set \"missing translation\"",
               "testInvalidSnapshotRefusesWithoutMutation with data set \"missing property\"",
               "testInvalidSnapshotRefusesWithoutMutation with data set \"wrong layout\"",
+              "testInvalidSnapshotRefusesWithoutMutation with data set \"over cardinality\"",
             ]);
             $executed = [];
             $batchRequired = [
