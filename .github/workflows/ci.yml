@@ -404,6 +404,8 @@ jobs:
               "testPopulatedRecoveryTablesBlockUninstall with data set \"migration journal\"",
               "testPopulatedRecoveryTablesBlockUninstall with data set \"authority event\"",
               "testPopulatedRecoveryTablesBlockUninstall with data set \"authority state\"",
+              "testParentRemovalProtectsChildRecords with data set \"migration\"",
+              "testParentRemovalProtectsChildRecords with data set \"invitations\"",
               "testUnreadableRecoveryStorageRefuses",
               "testEmptyModuleCanBeUninstalled with data set \"invitations\"",
               "testEmptyModuleCanBeUninstalled with data set \"migration\"",

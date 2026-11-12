@@ -118,8 +118,21 @@ final class RecoveryUninstallTest extends KernelTestBase {
    */
   public static function populatedChildren(): array {
     return [
-      'migration' => ['agency_migrate', 'agency_migrate_authority_state', ['domain' => 'synthetic', 'state' => 'legacy', 'version' => 1, 'changed' => 1, 'actor_hash' => 'synthetic', 'reason' => 'synthetic']],
-      'invitations' => ['agency_workforce', 'agency_workforce_outbox', ['id' => 'synthetic', 'operation' => 'accepted', 'metadata' => '{}', 'recorded' => 1]],
+      'migration' => [
+        'agency_migrate', 'agency_migrate_authority_state',
+        [
+          'domain' => 'synthetic',
+          'state' => 'legacy',
+          'version' => 1,
+          'changed' => 1,
+          'actor_hash' => 'synthetic',
+          'reason' => 'synthetic',
+        ],
+      ],
+      'invitations' => [
+        'agency_workforce', 'agency_workforce_outbox',
+        ['id' => 'synthetic', 'operation' => 'accepted', 'metadata' => '{}', 'recorded' => 1],
+      ],
     ];
   }
 

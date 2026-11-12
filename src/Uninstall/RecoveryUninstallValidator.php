@@ -6,6 +6,7 @@ namespace Drupal\agency\Uninstall;
 
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Extension\ModuleUninstallValidatorInterface;
+use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslationInterface;
 
@@ -37,6 +38,7 @@ final class RecoveryUninstallValidator implements ModuleUninstallValidatorInterf
   public function __construct(
     private readonly Connection $database,
     TranslationInterface $translation,
+    private readonly ModuleHandlerInterface $moduleHandler,
   ) {
     $this->stringTranslation = $translation;
   }
@@ -45,11 +47,16 @@ final class RecoveryUninstallValidator implements ModuleUninstallValidatorInterf
    * {@inheritdoc}
    */
   public function validate($module): array {
-    if (!isset(self::TABLES[$module])) {
-      return [];
+    $tables = self::TABLES[$module] ?? [];
+    if ($module === 'agency') {
+      foreach (self::TABLES as $child => $child_tables) {
+        if ($this->moduleHandler->moduleExists($child)) {
+          $tables = array_merge($tables, $child_tables);
+        }
+      }
     }
     try {
-      foreach (self::TABLES[$module] as $table) {
+      foreach ($tables as $table) {
         if (!$this->database->schema()->tableExists($table)) {
           return $this->unverified();
         }
