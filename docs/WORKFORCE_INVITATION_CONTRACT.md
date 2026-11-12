@@ -2,8 +2,9 @@
 
 This is the implementation contract for extracting the existing anonymous staff
 onboarding workflow. It supersedes conflicting invitation and provisioning rules
-in the proposed [workforce transfer](WORKFORCE_TRANSFER.md) and ontology. It is
-not a claim that the workflow, host integration or workforce migration has shipped.
+in the proposed [workforce transfer](WORKFORCE_TRANSFER.md) and ontology. The
+optional invitation services implement this contract; host integration and
+workforce storage migration require separate qualification.
 
 ## Participant behavior
 
@@ -30,9 +31,9 @@ protocol is not the staff onboarding protocol.
 
 ## Package and host responsibilities
 
-The proposed `agency_workforce` module owns reusable issuance, inspection,
-acceptance, single-use policy and durable evidence. It must demonstrate those
-behaviors with a synthetic installed host before being described as implemented.
+The `agency_workforce` module owns reusable issuance, inspection, acceptance,
+single-use policy and durable evidence. Its synthetic installed-host tests
+exercise those behaviors; installing it does not supply production host ports.
 Do not share Discovery invitation tables, commands, locks or evidence outbox.
 
 The host owns forms, routes, catalogs, delivery, account and role/profile mapping.

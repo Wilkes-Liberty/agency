@@ -6,6 +6,47 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0-alpha6] - 2026-11-12
+
+### Added
+- A transaction-bound legacy writer API checks and locks the current authority generation on the caller's database connection. It refuses unregistered or promoted domains without granting authority-administration permission or claiming complete host writer coverage.
+- An optional workforce invitation module provides transaction-bound issuance and acceptance, scoped recovery and required evidence delivery through bounded cron. Host storage, provisioning, policy and writer-boundary adapters default to refusal. Synthetic integration proofs cover legacy bearer compatibility, local account/profile atomicity, concurrent acceptance, recovery expiry and signed evidence retry.
+
+### Changed
+- Clarify the staff onboarding extraction contract: preserve anonymous single-use
+  invitations, existing bearer hashes and expiry, and atomic account/profile creation.
+  Separate this ceremony from authenticated Discovery and defer storage cutover
+  until writer exclusion, reconciliation and rollback are qualified.
+
+  Remove internal tracker references and dated host rollout windows from transfer
+  guidance and archived release entries, preserving release headings and behavior
+  descriptions. Clarify that CRM and time rollback must fence writers, replay and
+  reconcile before restoring authority.
+
+### Fixed
+- Migration copy, rollback replay and reconciliation now include all current field
+  items, stored item properties and translations. Incompatible field layouts
+  refuse instead of silently dropping data. Reference checks inspect every delta
+  and language independently of the canonical JSON encoding. Full revision history
+  preservation remains separate work.
+- Preserve complete revision and translation history during identity-preserving copy, including pending revisions and current default selection. Verify replay against versioned lineage manifests and refuse incomplete earlier copies.
+- Migration authority now uses versioned operational SQL rows instead of cached,
+  importable configuration. Competing changes serialize and reread their state;
+  authority, events and evidence commit together. Upgrade 10002 preserves existing
+  recorded states once. Authoritative transitions and rollback fail closed until
+  the host supplies verified source/target writer coverage. Executing rollback
+  acquires that boundary before its pending-write snapshot. Older code that reads
+  the retained authority configuration must not operate on upgraded domains.
+- Require complete source, target and lineage inventories for full reconciliation, detect count and identity-set mismatches, and identify explicit samples as limited comparisons that cannot qualify a full transfer.
+- Refuse unqualified legacy rollback journals and ambiguous or undeclared domain copiers. Verify all pending identities before effects, and permit a concrete empty-journal return only when every declared domain copier passes full reconciliation under the writer fence.
+- Validate rollback authority permission, domain, state and reason before
+  previewing or replaying writes. Refused requests now leave legacy records,
+  replay markers and authority evidence unchanged.
+- Commit each migration batch's copies, lineage, resume progress and evidence
+  intent together. Failed batches now roll back without losing evidence or
+  miscounting copies when the run resumes.
+- Routine module uninstall now refuses while migration or invitation recovery and evidence tables contain records, or their storage cannot be verified. Empty installations remain removable. No automatic purge bypasses retention or recovery review.
+
 ## [1.0.0-alpha5] - 2026-11-12
 
 ### Fixed
