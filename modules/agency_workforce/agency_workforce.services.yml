@@ -1,0 +1,29 @@
+services:
+  agency_workforce.unavailable_ports:
+    class: Drupal\agency_workforce\UnavailableInvitationPorts
+    arguments: ['@database']
+  agency_workforce.store:
+    alias: agency_workforce.unavailable_ports
+  agency_workforce.provisioner:
+    alias: agency_workforce.unavailable_ports
+  agency_workforce.policy:
+    alias: agency_workforce.unavailable_ports
+  agency_workforce.writer_boundary:
+    alias: agency_workforce.unavailable_ports
+  agency_workforce.clock:
+    alias: datetime.time
+  agency_workforce.committer:
+    class: Drupal\agency_workforce\RootTransactionCommitter
+  agency_workforce.invitations:
+    class: Drupal\agency_workforce\InvitationService
+    arguments:
+      - '@database'
+      - '@agency_workforce.store'
+      - '@agency_workforce.provisioner'
+      - '@agency_workforce.policy'
+      - '@agency_workforce.writer_boundary'
+      - '@agency_workforce.clock'
+      - '@current_user'
+      - '@request_stack'
+      - '@uuid'
+      - '@agency_workforce.committer'

@@ -1,0 +1,18 @@
+services:
+  agency_workforce.store:
+    class: Drupal\agency_workforce_test\SqlInvitationStore
+    arguments: ['@database', '@config.factory']
+  agency_workforce.provisioner:
+    class: Drupal\agency_workforce_test\LocalProvisioner
+    arguments: ['@database', '@entity_type.manager', '@config.factory']
+  agency_workforce.policy:
+    class: Drupal\agency_workforce_test\SyntheticPolicy
+    arguments: ['@config.factory', '@current_user']
+  agency_workforce.writer_boundary:
+    class: Drupal\agency_workforce_test\SqlWriterBoundary
+  agency_workforce.clock:
+    class: Drupal\agency_workforce_test\SyntheticClock
+    arguments: ['@config.factory']
+  agency_workforce.committer:
+    class: Drupal\agency_workforce_test\FaultCommitter
+    arguments: ['@config.factory']
