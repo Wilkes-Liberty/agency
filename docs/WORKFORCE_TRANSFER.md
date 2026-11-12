@@ -16,7 +16,7 @@ application, posting, profile-evidence, staff-invitation and
 staff-onboard types. Package 05 shipped the authority register in
 [agency#27](https://github.com/Wilkes-Liberty/agency/pull/27) with
 machine names `legacy`, `shadow`, `agency` and `removed` (see
-[Migration](MIGRATION.md)). [DEV-992](https://wilkesliberty.atlassian.net/browse/DEV-992)
+[Migration](MIGRATION.md)). ID-preserving transfer
 Option A (2026-10-26) is incorporated below. Slice 2 expand still waits
 on an explicit operator G1 GO.
 
@@ -42,11 +42,11 @@ the same questions with context.
 
 Already recorded (design incorporates; do not re-decide unless reversing):
 
-- 2026-10-26 [DEV-992](https://wilkesliberty.atlassian.net/browse/DEV-992)
+- 2026-10-26 ID-preserving transfer
   Option A: ID-preserving copy into tenant-neutral `agency_*` types plus
   a lineage map, with the five conditions in §7.
 - 2026-10-22 operator direction on
-  [DEV-987](https://wilkesliberty.atlassian.net/browse/DEV-987): career
+  the recruiting transfer: career
   postings **and** the résumé/application workflow move to Agency. That
   closes the former §10.4 split (host editorial / Agency rules only).
 
@@ -54,7 +54,7 @@ Approve all of the following for G1 GO:
 
 1. [ ] This document and ontology draft v0.1.1 are the Slice 2 design.
    Expand, entity registration and host copiers stay blocked until GO.
-2. [ ] Confirm DEV-992 Option A for every S2 source in §6: copy into the
+2. [ ] Confirm ID-preserving transfer for every S2 source in §6: copy into the
    named `agency_*` type with the same integer id, UUID, revision ids,
    timestamps and authorship; refuse collisions; do not move host-named
    providers into this package.
@@ -88,10 +88,9 @@ Approve all of the following for G1 GO:
     `revoked`, `suspended`, `ended`. Those states are not Discovery
     states. Application and posting use the recruiting kind and the
     Application / CareerPosting objects.
-11. [ ] Career posting close dates: extend `valid_through` past
-    2026-10-31 until migration, or let the 13 postings close and keep
-    the general (no-role) application. That is an editorial host edit,
-    not a package change.
+11. [ ] Preserve posting close dates and the general (no-role) application
+    behavior. Any editorial date extension belongs to the host; extraction
+    does not authorize changing published hiring windows.
 12. [ ] Posting editorial body stays host-rendered through a host
     adapter while Agency owns the posting record and rules
     (recommended), versus Agency-rendered body in this slice.
@@ -100,7 +99,7 @@ Approve all of the following for G1 GO:
 14. [ ] Network and coordinator profile audiences stay out of this
     expand. Slice 2 audiences remain `own` and `account_summary`.
 
-G-ONT (ontology v0, [DEV-1000](https://wilkesliberty.atlassian.net/browse/DEV-1000))
+G-ONT (ontology v0)
 is a separate operator gate. Approving G1 on this design does not close
 G-ONT.
 
@@ -373,9 +372,9 @@ PHP class files remain **unverified** from this checkout; expand reads
 the ledger rather than re-inventorying. Host copier plugins and
 `agency_migrate` enablement are webcms work after G1.
 
-## 7. DEV-992 Option A conditions per S2 entity
+## 7. ID-preserving transfer conditions per S2 entity
 
-[DEV-992](https://wilkesliberty.atlassian.net/browse/DEV-992) Option A
+ID-preserving transfer Option A
 (approved 2026-10-26) applies to every **copy** row in §6. Host-stay and
 File Gate carry-over rows are not copiers. Preserving numbers alone does
 not preserve references. Each copier must satisfy all five conditions
@@ -577,12 +576,12 @@ must keep passing, including the recruiting kind and the S2 source map.
 ## 12. Open operator decisions
 
 The numbered checklist describes the broader proposed design; the linked
-compatibility contract supersedes its conflicting staff onboarding assumptions. This section
-keeps the narrative form.
+compatibility contract supersedes its conflicting staff onboarding assumptions.
+This section keeps the narrative form.
 
 1. Approve `agency_*` workforce and recruiting types with ID-preserving
    copy and lineage, rather than moving host-named providers into this
-   package. DEV-992 Option A already chose the mechanism.
+   package. ID-preserving transfer already chose the mechanism.
 2. Approve that staff invite, onboard and profile evidence share one
    `workforce` authority row, and that postings, applications and
    résumé references use a separate `recruiting` row (or one shared
