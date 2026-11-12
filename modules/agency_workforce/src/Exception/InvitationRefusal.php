@@ -9,10 +9,18 @@ namespace Drupal\agency_workforce\Exception;
  */
 final class InvitationRefusal extends \RuntimeException {
 
-  public function __construct(
-    public readonly string $reason,
-  ) {
-    parent::__construct($reason);
+  /**
+   * An allowlisted code, never arbitrary adapter exception text.
+   */
+  public readonly string $reason;
+
+  public function __construct(string $reason) {
+    $this->reason = in_array($reason, [
+      'invalid_invitation', 'forbidden', 'configuration', 'unavailable',
+      'collision', 'failed', 'transaction_boundary', 'storage_conflict',
+      'language', 'authority',
+    ], TRUE) ? $reason : 'failed';
+    parent::__construct($this->reason);
   }
 
 }

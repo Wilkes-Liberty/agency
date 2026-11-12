@@ -10,6 +10,22 @@
  */
 function agency_workforce_test_schema(): array {
   return [
+    'agency_workforce_test_concurrent_account' => [
+      'fields' => [
+        'id' => ['type' => 'serial', 'size' => 'big', 'not null' => TRUE],
+        'contact' => ['type' => 'varchar', 'length' => 254, 'not null' => TRUE],
+        'classification' => ['type' => 'varchar', 'length' => 32, 'not null' => TRUE],
+      ],
+      'primary key' => ['id'],
+    ],
+    'agency_workforce_test_concurrent_profile' => [
+      'fields' => [
+        'account_id' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
+        'classification' => ['type' => 'varchar', 'length' => 32, 'not null' => TRUE],
+        'language' => ['type' => 'varchar', 'length' => 32, 'not null' => TRUE],
+      ],
+      'primary key' => ['account_id'],
+    ],
     'agency_workforce_test_invitation' => [
       'fields' => [
         'collection' => ['type' => 'varchar', 'length' => 128, 'not null' => TRUE],

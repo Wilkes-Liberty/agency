@@ -11,6 +11,9 @@ use Drupal\Core\Database\Transaction;
  */
 final class RootTransactionCommitter implements TransactionCommitterInterface {
 
+  /**
+   * {@inheritdoc}
+   */
   public function commit(?Transaction &$transaction): void {
     if ($transaction === NULL) {
       throw new \LogicException('A root transaction is required.');

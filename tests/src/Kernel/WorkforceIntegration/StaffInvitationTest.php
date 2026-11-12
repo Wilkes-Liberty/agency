@@ -6,6 +6,12 @@ namespace Drupal\Tests\agency\Kernel\WorkforceIntegration;
 
 use Drupal\agency_workforce\Exception\InvitationRefusal;
 use Drupal\agency_workforce\UnavailableInvitationPorts;
+use Drupal\agency_workforce\InvitationService;
+use Drupal\agency_workforce_test\SqlInvitationStore;
+use Drupal\agency_workforce_test\DeliveryMarkerFault;
+use Drupal\audit_chain\AuditChainLoggerInterface;
+use Drupal\Component\Uuid\Php;
+use Drupal\Component\Uuid\UuidInterface;
 use Drupal\Core\Database\Database;
 use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\KernelTests\KernelTestBase;
@@ -17,6 +23,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Process\Process;
 
 /**
  * Existing-bearer compatibility and local transaction failure proofs.
@@ -27,6 +34,9 @@ use Symfony\Component\HttpFoundation\Request;
 #[RunTestsInSeparateProcesses]
 class StaffInvitationTest extends KernelTestBase {
 
+  /**
+   * {@inheritdoc}
+   */
   protected static $modules = [
     'system', 'user', 'field', 'language', 'key', 'encrypt', 'audit_chain',
     'agency', 'agency_workforce', 'agency_workforce_test',
@@ -34,6 +44,9 @@ class StaffInvitationTest extends KernelTestBase {
 
   protected const NOW = 1800000000;
 
+  /**
+   * {@inheritdoc}
+   */
   protected function setUp(): void {
     parent::setUp();
     $this->installEntitySchema('user');
@@ -70,7 +83,8 @@ class StaffInvitationTest extends KernelTestBase {
     ])->save();
     User::create(['name' => 'issuer', 'status' => 1, 'roles' => ['synthetic_issuer']])->save();
     $this->container->get('database')->insert('agency_workforce_test_authority')->fields([
-      'scope' => 'synthetic-workforce', 'state' => 'legacy',
+      'scope' => 'synthetic-workforce',
+      'state' => 'legacy',
     ])->execute();
     $this->anonymousPost();
     $this->config('system.mail')->set('interface.default', 'test_mail_collector')->save();
@@ -101,7 +115,7 @@ class StaffInvitationTest extends KernelTestBase {
   }
 
   /**
-   * Issuance uses host bounds, explicit retained language and a transient bearer.
+   * Issuance uses configured bounds, retained language and a transient bearer.
    */
   public function testIssueClampsAndRetainsLanguageWithoutMail(): void {
     $this->container->get('current_user')->setAccount(User::load(2));
@@ -144,6 +158,9 @@ class StaffInvitationTest extends KernelTestBase {
     $this->assertSame('completed', $this->service()->accept($token)['status']);
   }
 
+  /**
+   * Lists independent local failure boundaries before durable acceptance.
+   */
   public static function localFailures(): array {
     return [
       'user failure' => ['user', 'failed'],
@@ -170,7 +187,9 @@ class StaffInvitationTest extends KernelTestBase {
     $this->assertSame('completed', $receipt['status']);
     $this->assertStringStartsWith('user:', $receipt['binding']);
     $this->config('agency_workforce_test.settings')->set('scope', 'another-scope')->save();
-    $this->assertRefused(fn () => $this->service()->reconcile($result['receipt_id'], $token), 'forbidden');
+    $unconfirmed = $this->service()->reconcile($result['receipt_id'], $token);
+    $this->assertSame('unresolved', $unconfirmed['status']);
+    $this->assertArrayNotHasKey('binding', $unconfirmed);
   }
 
   /**
@@ -189,6 +208,19 @@ class StaffInvitationTest extends KernelTestBase {
     $this->container->get('current_user')->setAccount(User::load(2));
     $this->assertSame($recovered, $this->service()->recoverByDigest(hash('sha256', $token)));
     $this->assertSame($before, $this->freshSnapshot());
+  }
+
+  /**
+   * Consumed bearer recovery expires with its original invitation window.
+   */
+  public function testConsumedBearerRecoveryExpires(): void {
+    $token = $this->legacy();
+    $result = $this->service()->accept($token);
+    $this->config('agency_workforce_test.settings')->set('clock', self::NOW + 600)->save();
+    $this->assertRefused(fn () => $this->service()->recover($token), 'forbidden');
+    $this->assertRefused(fn () => $this->service()->reconcile($result['receipt_id'], $token), 'forbidden');
+    $this->container->get('current_user')->setAccount(User::load(2));
+    $this->assertSame('completed', $this->service()->recoverByDigest(hash('sha256', $token))['status']);
   }
 
   /**
@@ -220,8 +252,7 @@ class StaffInvitationTest extends KernelTestBase {
       $transaction->rollBack();
       unset($transaction);
     }
-    $this->container->get('request_stack')->pop();
-    $this->container->get('request_stack')->push(Request::create('/onboard', 'GET'));
+    $this->container->get('request_stack')->getCurrentRequest()->setMethod('GET');
     $this->assertRefused(fn () => $this->service()->accept($token), 'forbidden');
     $this->container->get('current_user')->setAccount(User::load(2));
     $this->assertRefused(fn () => $this->service()->accept($token), 'forbidden');
@@ -241,12 +272,27 @@ class StaffInvitationTest extends KernelTestBase {
     $this->assertSame($before, $this->freshSnapshot());
   }
 
+  /**
+   * Lists malformed or expired legacy records that must remain untouched.
+   */
   public static function refusedRecords(): array {
     return [
       'exact expiry' => [['email' => 'recipient@example.test', 'type' => 'employee'], self::NOW, 'invalid_invitation'],
-      'cross-domain class' => [['email' => 'recipient@example.test', 'type' => 'discovery'], self::NOW + 600, 'invalid_invitation'],
-      'removed language' => [['email' => 'recipient@example.test', 'type' => 'employee', 'langcode' => 'removed'], self::NOW + 600, 'language'],
-      'corrupt language' => [['email' => 'recipient@example.test', 'type' => 'employee', 'langcode' => FALSE], self::NOW + 600, 'invalid_invitation'],
+      'cross-domain class' => [
+        ['email' => 'recipient@example.test', 'type' => 'discovery'],
+        self::NOW + 600,
+        'invalid_invitation',
+      ],
+      'removed language' => [
+        ['email' => 'recipient@example.test', 'type' => 'employee', 'langcode' => 'removed'],
+        self::NOW + 600,
+        'language',
+      ],
+      'corrupt language' => [
+        ['email' => 'recipient@example.test', 'type' => 'employee', 'langcode' => FALSE],
+        self::NOW + 600,
+        'invalid_invitation',
+      ],
       'invalid contact' => [['email' => 'invalid', 'type' => 'employee'], self::NOW + 600, 'invalid_invitation'],
     ];
   }
@@ -310,11 +356,13 @@ class StaffInvitationTest extends KernelTestBase {
    * Required intents survive a signing outage and drain exactly once afterward.
    */
   public function testPendingEvidenceDrainsOnceWithoutPrivateMetadata(): void {
-    $this->installSchema('audit_chain', [
-      'audit_chain_log', 'audit_chain_mutex', 'audit_chain_recovery',
-      'audit_chain_checkpoint', 'audit_chain_witness_receipt',
-    ]);
-    $this->container->get('database')->insert('audit_chain_mutex')->fields(['id' => 1, 'locked' => 1])->execute();
+    $this->installChain();
+    $ids = ['ffffffff-ffff-4fff-8fff-ffffffffffff', '00000000-0000-4000-8000-000000000001'];
+    $uuid = $this->createMock(UuidInterface::class);
+    $uuid->method('generate')->willReturnCallback(static function () use (&$ids): string {
+      return array_shift($ids) ?? (new Php())->generate();
+    });
+    $this->container->set('uuid', $uuid);
     $this->container->get('current_user')->setAccount(User::load(2));
     $issued = $this->service()->issue('recipient@example.test', 'employee');
     $this->anonymousPost();
@@ -332,31 +380,246 @@ class StaffInvitationTest extends KernelTestBase {
       $this->assertStringNotContainsString($issued['bearer'], $row['metadata']);
       $this->assertNull($row['delivered']);
     }
-    Key::create([
-      'id' => 'workforce_test', 'label' => 'Synthetic workforce signing',
-      'key_type' => 'authentication', 'key_provider' => 'config',
-      'key_provider_settings' => ['key_value' => 'synthetic-workforce-signing-key'],
-    ])->save();
-    $this->config('audit_chain.settings')->set('hash_key', 'workforce_test')->save();
-    $this->assertSame(2, $outbox->drain());
+    $this->signingKey();
+    $this->container->get('module_handler')->invoke('agency_workforce', 'cron');
     $this->assertSame(0, $outbox->drain());
     $this->assertSame(2, $this->countRows('audit_chain_log'));
+    $operations = $this->container->get('database')->select('audit_chain_log', 'l')
+      ->fields('l', ['operation'])->orderBy('id')->execute()->fetchCol();
+    $this->assertSame(['invitation_issued', 'invitation_accepted'], $operations);
     $this->assertTrue($this->container->get('audit_chain.logger')->verify()['ok']);
   }
 
+  /**
+   * Actual signed append rolls back with a failed same-connection marker.
+   */
+  public function testAuditAppendAndDeliveryMarkerAreAtomic(): void {
+    $this->installChain();
+    $this->signingKey();
+    $this->container->get('current_user')->setAccount(User::load(2));
+    $this->service()->issue('recipient@example.test', 'employee');
+    $fault = new DeliveryMarkerFault($this->container->get('database'));
+    $fault->install();
+    try {
+      $this->assertSame(0, $this->container->get('agency_workforce.outbox')->drain());
+      $this->assertFalse($this->container->get('database')->inTransaction());
+      $this->assertSame(0, $this->countRows('audit_chain_log'));
+      $row = $this->container->get('database')->select('agency_workforce_outbox', 'o')->fields('o')->execute()->fetchAssoc();
+      $this->assertNull($row['delivered']);
+      $this->assertSame(1, (int) $row['attempts']);
+    }
+    finally {
+      $fault->remove();
+    }
+    $this->assertSame(1, $this->container->get('agency_workforce.outbox')->drain());
+    $this->assertSame(0, $this->container->get('agency_workforce.outbox')->drain());
+    $this->assertSame(1, $this->countRows('audit_chain_log'));
+    $this->assertTrue($this->container->get('audit_chain.logger')->verify()['ok']);
+  }
+
+  /**
+   * Independent Drupal cron supplies a bounded, real delivery path.
+   */
+  public function testCronDeliversAtMostTwentyIntents(): void {
+    $this->installChain();
+    $this->signingKey();
+    $this->container->get('current_user')->setAccount(User::load(2));
+    for ($i = 0; $i < 21; $i++) {
+      $this->service()->issue('recipient-' . $i . '@example.test', 'employee');
+    }
+    $this->container->get('module_handler')->invoke('agency_workforce', 'cron');
+    $this->assertSame(20, $this->countRows('audit_chain_log'));
+    $pending = $this->container->get('database')->select('agency_workforce_outbox', 'o')
+      ->isNull('delivered')->countQuery()->execute()->fetchField();
+    $this->assertSame(1, (int) $pending);
+    $this->container->get('module_handler')->invoke('agency_workforce', 'cron');
+    $this->assertSame(21, $this->countRows('audit_chain_log'));
+    $this->assertSame(2, $this->countRows('users'));
+    $this->assertSame([], $this->container->get('state')->get('system.test_mail_collector', []));
+  }
+
+  /**
+   * Installs only the public logger's real local tables.
+   */
+  private function installChain(): void {
+    $this->installSchema('audit_chain', [
+      'audit_chain_log', 'audit_chain_mutex', 'audit_chain_recovery',
+      'audit_chain_checkpoint', 'audit_chain_witness_receipt',
+    ]);
+    $this->container->get('database')->insert('audit_chain_mutex')->fields(['id' => 1, 'locked' => 1])->execute();
+  }
+
+  /**
+   * Configures synthetic signing material through the Key module's public API.
+   */
+  private function signingKey(): void {
+    Key::create([
+      'id' => 'workforce_test',
+      'label' => 'Synthetic workforce signing',
+      'key_type' => 'authentication',
+      'key_provider' => 'config',
+      'key_provider_settings' => ['key_value' => 'synthetic-workforce-signing-key'],
+    ])->save();
+    $this->config('audit_chain.settings')->set('hash_key', 'workforce_test')->save();
+  }
+
+  /**
+   * The old lease can expire without releasing durable same-token exclusion.
+   */
+  public function testSameTokenConcurrencyBeyondOldLease(): void {
+    $this->concurrentAcceptance('same_token');
+  }
+
+  /**
+   * Separate tokens cannot race the same case-insensitive account contact.
+   */
+  public function testDifferentTokensSameContactConcurrency(): void {
+    $this->concurrentAcceptance('same_contact');
+  }
+
+  /**
+   * Owning authority cannot change while acceptance still holds its boundary.
+   */
+  public function testAuthorityChangeWaitsForAcceptanceCommit(): void {
+    $this->concurrentAcceptance('authority');
+  }
+
+  /**
+   * Runs two independent SQL hosts against the actual portable core service.
+   */
+  private function concurrentAcceptance(string $mode): void {
+    $this->installSchema('agency_workforce_test', [
+      'agency_workforce_test_concurrent_account',
+      'agency_workforce_test_concurrent_profile',
+    ]);
+    $token = $this->legacy();
+    $other = $mode === 'same_token' ? $token : $this->legacy([
+      'email' => ' RECIPIENT@Example.test ', 'type' => 'contractor', 'langcode' => 'es',
+    ]);
+    $database = $this->container->get('database');
+    $prefix = sys_get_temp_dir() . '/workforce-concurrency-' . bin2hex(random_bytes(8));
+    $files = [
+      'ready' => $prefix . '-ready', 'release' => $prefix . '-release',
+      'first' => $prefix . '-first', 'second' => $prefix . '-second',
+    ];
+    $vendor = dirname($this->root) . '/vendor';
+    if (!is_file($vendor . '/autoload.php')) {
+      $vendor = $this->root . '/vendor';
+    }
+    $moduleRoot = dirname(__DIR__, 4);
+    $script = $moduleRoot . '/tests/fixtures/workforce-worker.php';
+    $base = [
+      'database' => $database->getConnectionOptions(),
+      'module_root' => $moduleRoot,
+      'namespaces' => [
+        'Drupal\\agency_workforce\\' => dirname((new \ReflectionClass(InvitationService::class))->getFileName()),
+        'Drupal\\agency_workforce_test\\' => dirname((new \ReflectionClass(SqlInvitationStore::class))->getFileName()),
+        'Drupal\\audit_chain\\' => dirname((new \ReflectionClass(AuditChainLoggerInterface::class))->getFileName()),
+      ],
+    ];
+    $first = new Process([PHP_BINARY, $script, $this->root, $vendor]);
+    $second = new Process([PHP_BINARY, $script, $this->root, $vendor]);
+    $first->setInput(json_encode($base + [
+      'bearer' => $token, 'started' => $files['first'],
+      'ready' => $files['ready'], 'release' => $files['release'],
+    ], JSON_THROW_ON_ERROR));
+    $second->setInput(json_encode($base + [
+      'bearer' => $other, 'started' => $files['second'],
+      'mode' => $mode === 'authority' ? 'authority' : 'accept',
+    ], JSON_THROW_ON_ERROR));
+    $first->setTimeout(35);
+    $second->setTimeout(35);
+    try {
+      $first->start();
+      $this->waitForMarker($first, $files['ready']);
+      $second->start();
+      $this->waitForMarker($second, $files['second']);
+      // The source's cooperative lease was five seconds. The SQL exclusion
+      // must remain effective even when provisioning takes longer than that.
+      usleep(6100000);
+      $this->assertTrue($second->isRunning(), 'Second writer must still await the first root transaction.');
+      $id = (int) file_get_contents($files['second']);
+      if ($database->driver() === 'pgsql') {
+        $database->query('SELECT pg_stat_clear_snapshot()');
+        $waiting = $database->query("SELECT query FROM pg_stat_activity WHERE pid = :id AND wait_event_type = 'Lock'", [':id' => $id])->fetchField();
+      }
+      else {
+        $waiting = $database->query("SELECT INFO FROM INFORMATION_SCHEMA.PROCESSLIST WHERE ID = :id AND COMMAND = 'Query'", [':id' => $id])->fetchField();
+      }
+      $this->assertIsString($waiting);
+      $this->assertTrue(str_contains($waiting, 'agency_workforce_test_authority') || str_contains($waiting, 'agency_workforce_mutex'));
+      touch($files['release']);
+      $this->assertSame(0, $first->wait(), $first->getErrorOutput());
+      $this->assertSame(0, $second->wait(), $second->getErrorOutput());
+      $accepted = json_decode($first->getOutput(), TRUE, 32, JSON_THROW_ON_ERROR);
+      $otherResult = json_decode($second->getOutput(), TRUE, 32, JSON_THROW_ON_ERROR);
+      $this->assertSame('completed', $accepted['status']);
+      if ($mode === 'authority') {
+        $this->assertSame('authority_changed', $otherResult['status']);
+        $this->assertRefused(fn () => $this->service()->accept($other), 'authority');
+      }
+      else {
+        $this->assertSame('refused', $otherResult['status']);
+        $this->assertSame($mode === 'same_token' ? 'invalid_invitation' : 'collision', $otherResult['reason']);
+      }
+      $this->assertSame(1, $this->countRows('agency_workforce_test_concurrent_account'));
+      $this->assertSame(1, $this->countRows('agency_workforce_test_concurrent_profile'));
+      $this->assertSame(1, $this->countRows('agency_workforce_receipt'));
+      $this->assertSame(1, $this->countRows('agency_workforce_outbox'));
+      $this->assertSame($mode === 'same_token' ? 0 : 1, $this->countRows('agency_workforce_test_invitation'));
+      $this->assertSame(2, $this->countRows('users'), 'Synthetic SQL peer must not create real account privileges.');
+    }
+    finally {
+      touch($files['release']);
+      $first->stop(1);
+      $second->stop(1);
+      foreach ($files as $file) {
+        @unlink($file);
+      }
+    }
+  }
+
+  /**
+   * Waits for a real independent process to reach its declared SQL boundary.
+   */
+  private function waitForMarker(Process $worker, string $file): void {
+    $deadline = microtime(TRUE) + 15;
+    while (!is_file($file)) {
+      if (!$worker->isRunning() || microtime(TRUE) > $deadline) {
+        $this->fail('Worker did not reach its boundary: ' . $worker->getOutput() . $worker->getErrorOutput());
+      }
+      usleep(20000);
+    }
+  }
+
+  /**
+   * Returns the actual registered portable service.
+   */
   protected function service(): object {
     return $this->container->get('agency_workforce.invitations');
   }
 
+  /**
+   * Retains the kernel session while selecting anonymous POST context.
+   */
   protected function anonymousPost(): void {
     $this->container->get('current_user')->setAccount(new AnonymousUserSession());
     $stack = $this->container->get('request_stack');
+    $previous = $stack->getCurrentRequest();
+    $session = $previous?->hasSession() ? $previous->getSession() : NULL;
     while ($stack->getCurrentRequest()) {
       $stack->pop();
     }
-    $stack->push(Request::create('/onboard', 'POST'));
+    $request = Request::create('/onboard', 'POST');
+    if ($session !== NULL) {
+      $request->setSession($session);
+    }
+    $stack->push($request);
   }
 
+  /**
+   * Stores a pre-extraction-shaped record without going through issuance.
+   */
   protected function legacy(?array $payload = NULL, ?int $expires = NULL): string {
     $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
     $this->container->get('database')->insert('agency_workforce_test_invitation')->fields([
@@ -368,6 +631,9 @@ class StaffInvitationTest extends KernelTestBase {
     return $token;
   }
 
+  /**
+   * Asserts a stable refusal without inspecting private adapter messages.
+   */
   protected function assertRefused(callable $work, string $reason): void {
     try {
       $work();
@@ -378,10 +644,16 @@ class StaffInvitationTest extends KernelTestBase {
     }
   }
 
+  /**
+   * Counts independently stored rows for a business invariant.
+   */
   protected function countRows(string $table): int {
     return (int) $this->container->get('database')->select($table, 't')->countQuery()->execute()->fetchField();
   }
 
+  /**
+   * Reads committed business state from an independent connection.
+   */
   protected function freshSnapshot(): array {
     $database = $this->container->get('database');
     $options = $database->getConnectionOptions();
@@ -391,7 +663,11 @@ class StaffInvitationTest extends KernelTestBase {
     try {
       $fresh = Database::getConnection('default', $key);
       $snapshot = [];
-      foreach (['users', 'agency_workforce_test_profile', 'agency_workforce_test_invitation', 'agency_workforce_receipt', 'agency_workforce_outbox'] as $table) {
+      $tables = [
+        'users', 'agency_workforce_test_profile', 'agency_workforce_test_invitation',
+        'agency_workforce_receipt', 'agency_workforce_outbox',
+      ];
+      foreach ($tables as $table) {
         $result = $fresh->select($table, 't')->fields('t')->execute();
         $snapshot[$table] = [];
         while ($row = $result->fetchAssoc()) {

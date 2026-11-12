@@ -9,8 +9,14 @@ namespace Drupal\agency_workforce;
  */
 interface InvitationPolicyInterface {
 
+  /**
+   * Returns the canonical scope from trusted installing-host context.
+   */
   public function scope(): string;
 
+  /**
+   * Refuses an issuer without the configured host authority.
+   */
   public function assertIssuerAllowed(): void;
 
   /**

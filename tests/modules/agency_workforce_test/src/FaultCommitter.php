@@ -16,6 +16,9 @@ final class FaultCommitter implements TransactionCommitterInterface {
 
   public function __construct(private readonly ConfigFactoryInterface $config) {}
 
+  /**
+   * {@inheritdoc}
+   */
   public function commit(?Transaction &$transaction): void {
     $fault = $this->config->get('agency_workforce_test.settings')->get('fault');
     if ($fault === 'commit_before') {

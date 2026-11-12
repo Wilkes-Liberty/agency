@@ -13,6 +13,9 @@ use Drupal\Core\Database\Connection;
  */
 final class SqlWriterBoundary implements InvitationWriterBoundaryInterface {
 
+  /**
+   * {@inheritdoc}
+   */
   public function acquire(Connection $connection, string $trustedScope): void {
     if (!$connection->inTransaction()) {
       throw new \LogicException('A root transaction is required.');

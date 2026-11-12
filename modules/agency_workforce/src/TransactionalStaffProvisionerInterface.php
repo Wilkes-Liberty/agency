@@ -11,8 +11,14 @@ use Drupal\Core\Database\Connection;
  */
 interface TransactionalStaffProvisionerInterface {
 
+  /**
+   * Returns the exact connection participating in the caller transaction.
+   */
   public function connection(): Connection;
 
+  /**
+   * Checks case-insensitive account collisions under contact exclusion.
+   */
   public function accountExists(string $normalizedContact): bool;
 
   /**

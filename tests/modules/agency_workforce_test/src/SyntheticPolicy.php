@@ -19,6 +19,9 @@ final class SyntheticPolicy implements InvitationPolicyInterface {
     private readonly AccountProxyInterface $account,
   ) {}
 
+  /**
+   * {@inheritdoc}
+   */
   public function scope(): string {
     $scope = $this->config->get('agency_workforce_test.settings')->get('scope');
     if (!is_string($scope) || $scope === '') {
@@ -27,12 +30,18 @@ final class SyntheticPolicy implements InvitationPolicyInterface {
     return $scope;
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function assertIssuerAllowed(): void {
     if (!$this->account->hasPermission('issue agency workforce invitations')) {
       throw new InvitationRefusal('forbidden');
     }
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function duration(?int $requested): int {
     $settings = $this->config->get('agency_workforce_test.settings');
     $min = $settings->get('minimum');
@@ -44,6 +53,9 @@ final class SyntheticPolicy implements InvitationPolicyInterface {
     return max($min, min($max, $requested ?? $default));
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function language(?string $storedOrRequested): string {
     $settings = $this->config->get('agency_workforce_test.settings');
     $value = $storedOrRequested ?? $settings->get('default_language');
@@ -54,6 +66,9 @@ final class SyntheticPolicy implements InvitationPolicyInterface {
     return $value;
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function canReconcile(): bool {
     return $this->account->hasPermission('reconcile agency workforce invitations');
   }

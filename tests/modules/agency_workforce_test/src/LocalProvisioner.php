@@ -8,7 +8,6 @@ use Drupal\agency_workforce\TransactionalStaffProvisionerInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\user\UserInterface;
 
 /**
  * Real local user plus synthetic host profile, on the supplied transaction.
@@ -21,15 +20,24 @@ final class LocalProvisioner implements TransactionalStaffProvisionerInterface {
     private readonly ConfigFactoryInterface $config,
   ) {}
 
+  /**
+   * {@inheritdoc}
+   */
   public function connection(): Connection {
     return $this->database;
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function accountExists(string $normalizedContact): bool {
     return (bool) $this->database->select('users_field_data', 'u')->condition('uid', 0, '>')
       ->where('LOWER(mail) = :contact', [':contact' => $normalizedContact])->countQuery()->execute()->fetchField();
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function provision(string $normalizedContact, string $classification, string $language, string $preferredName): string {
     $settings = $this->config->get('agency_workforce_test.settings');
     if ($settings->get('fault') === 'user') {
@@ -43,9 +51,6 @@ final class LocalProvisioner implements TransactionalStaffProvisionerInterface {
       'preferred_langcode' => $language,
       'roles' => ['synthetic_' . $classification],
     ]);
-    if (!$user instanceof UserInterface) {
-      throw new \LogicException('Synthetic user type unavailable.');
-    }
     $user->setPassword(bin2hex(random_bytes(32)));
     $user->save();
     if ($settings->get('fault') === 'profile') {

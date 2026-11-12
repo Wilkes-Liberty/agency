@@ -11,6 +11,9 @@ use Drupal\agency_workforce\Exception\InvitationRefusal;
  */
 final class InvitationRecord {
 
+  /**
+   * Normalized contact for local collision checks, never evidence metadata.
+   */
   public readonly string $contact;
 
   public function __construct(
@@ -36,8 +39,16 @@ final class InvitationRecord {
   /**
    * Hydrates the existing serialized payload without inventing missing fields.
    *
+   * @param string $collection
+   *   Original owning collection.
+   * @param string $digest
+   *   Existing SHA-256 key, not a plaintext bearer.
    * @param array<string, mixed> $payload
    *   The stored email/type and optional retained language.
+   * @param int $expires
+   *   Original absolute expiry.
+   * @param string $version
+   *   Opaque adapter snapshot used for conditional consumption.
    */
   public static function fromStorage(string $collection, string $digest, array $payload, int $expires, string $version): self {
     if (!isset($payload['email'], $payload['type'])

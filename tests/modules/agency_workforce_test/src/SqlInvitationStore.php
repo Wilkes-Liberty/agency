@@ -14,6 +14,9 @@ use Drupal\Core\Database\Connection;
  */
 final class SqlInvitationStore implements InvitationStoreInterface {
 
+  /**
+   * Source reads before a synthetic concurrent-contact mutation.
+   */
   private int $reads = 0;
 
   public function __construct(
@@ -21,14 +24,23 @@ final class SqlInvitationStore implements InvitationStoreInterface {
     private readonly ConfigFactoryInterface $config,
   ) {}
 
+  /**
+   * {@inheritdoc}
+   */
   public function connection(): Connection {
     return $this->database;
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function collection(): string {
     return $this->config->get('agency_workforce_test.settings')->get('collection') ?: 'synthetic.staff.invitation';
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function lookupDigest(string $digest, bool $lock = FALSE): ?InvitationRecord {
     $query = $this->database->select('agency_workforce_test_invitation', 'i')->fields('i')
       ->condition('collection', $this->collection())->condition('name', $digest);
@@ -52,15 +64,25 @@ final class SqlInvitationStore implements InvitationStoreInterface {
     return $record;
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function insertDigest(InvitationRecord $record): void {
     $this->database->insert('agency_workforce_test_invitation')->fields([
       'collection' => $record->collection,
       'name' => $record->digest,
-      'value' => serialize(['email' => $record->contact, 'type' => $record->classification, 'langcode' => $record->language]),
+      'value' => serialize([
+        'email' => $record->contact,
+        'type' => $record->classification,
+        'langcode' => $record->language,
+      ]),
       'expire' => $record->expires,
     ])->execute();
   }
 
+  /**
+   * {@inheritdoc}
+   */
   public function consume(InvitationRecord $record): int {
     $expires = $record->expires;
     if ($this->config->get('agency_workforce_test.settings')->get('fault') === 'consume_zero') {

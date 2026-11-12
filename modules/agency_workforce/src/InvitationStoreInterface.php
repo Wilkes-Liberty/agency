@@ -13,12 +13,24 @@ use Drupal\Core\Database\Connection;
  */
 interface InvitationStoreInterface {
 
+  /**
+   * Returns the exact connection participating in the caller transaction.
+   */
   public function connection(): Connection;
 
+  /**
+   * Returns the canonical owning collection without changing source identity.
+   */
   public function collection(): string;
 
+  /**
+   * Loads an existing digest without hashing it again or renewing expiry.
+   */
   public function lookupDigest(string $digest, bool $lock = FALSE): ?InvitationRecord;
 
+  /**
+   * Stores a new digest snapshot with its absolute expiry.
+   */
   public function insertDigest(InvitationRecord $record): void;
 
   /**
