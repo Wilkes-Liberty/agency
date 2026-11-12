@@ -89,6 +89,41 @@ final class RecoveryUninstallTest extends KernelTestBase {
   }
 
   /**
+   * Parent removal previews and execution both protect populated dependencies.
+   *
+   * @dataProvider populatedChildren
+   */
+  #[DataProvider('populatedChildren')]
+  public function testParentRemovalProtectsChildRecords(string $module, string $table, array $row): void {
+    $database = $this->container->get('database');
+    $database->insert($table)->fields($row)->execute();
+    $before = $database->select($table, 'r')->fields('r')->execute()->fetchAll();
+    $reasons = $this->container->get('module_installer')->validateUninstall(['agency']);
+    $this->assertArrayHasKey('agency', $reasons);
+    $this->assertNotEmpty($reasons['agency']);
+    try {
+      $this->container->get('module_installer')->uninstall(['agency']);
+      $this->fail('Parent uninstall must preserve dependent recovery records.');
+    }
+    catch (ModuleUninstallValidatorException $exception) {
+      $this->assertStringContainsString('recovery', $exception->getMessage());
+    }
+    $this->assertTrue($this->container->get('module_handler')->moduleExists('agency'));
+    $this->assertTrue($this->container->get('module_handler')->moduleExists($module));
+    $this->assertEquals($before, $database->select($table, 'r')->fields('r')->execute()->fetchAll());
+  }
+
+  /**
+   * Supplies retained records in each protected child module.
+   */
+  public static function populatedChildren(): array {
+    return [
+      'migration' => ['agency_migrate', 'agency_migrate_authority_state', ['domain' => 'synthetic', 'state' => 'legacy', 'version' => 1, 'changed' => 1, 'actor_hash' => 'synthetic', 'reason' => 'synthetic']],
+      'invitations' => ['agency_workforce', 'agency_workforce_outbox', ['id' => 'synthetic', 'operation' => 'accepted', 'metadata' => '{}', 'recorded' => 1]],
+    ];
+  }
+
+  /**
    * Incomplete storage cannot establish that retained records are absent.
    */
   public function testUnreadableRecoveryStorageRefuses(): void {
