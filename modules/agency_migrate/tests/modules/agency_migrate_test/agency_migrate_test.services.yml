@@ -1,4 +1,4 @@
 services:
   agency_migrate.host_writer_fence:
     class: Drupal\agency_migrate_test\Fence\TestHostWriterFence
-    arguments: ['@database']
+    arguments: ['@database', '@state']

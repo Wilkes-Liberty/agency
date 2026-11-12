@@ -43,4 +43,11 @@ final class MigrateCopier extends Plugin {
    */
   public $target_type;
 
+  /**
+   * Explicit authority domains; empty definitions do not qualify rollback.
+   *
+   * @var string[]
+   */
+  public $domains = [];
+
 }

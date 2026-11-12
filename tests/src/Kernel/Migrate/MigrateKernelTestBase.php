@@ -53,6 +53,7 @@ abstract class MigrateKernelTestBase extends KernelTestBase {
    */
   protected function setUp(): void {
     parent::setUp();
+    $this->setSetting('agency_migrate_copier_domains', ['synthetic' => ['synthetic_item']]);
     $this->installEntitySchema('user');
     $this->installEntitySchema('agency_migrate_legacy_item');
     $this->installEntitySchema('agency_migrate_agency_item');
