@@ -145,6 +145,50 @@ A synthetic copier (`synthetic_item`) lives in
 `modules/agency_migrate/tests/modules/agency_migrate_test` and is not a
 production adapter. Fixture rows are in `tests/fixtures/migrate/records.json`.
 
+## Full and sample reconciliation coverage
+
+A default `compare($plugin_id)` inventories every current source, target and
+lineage identity before qualifying the comparison. Equal totals alone do not
+prove that the identifier sets, UUIDs, current revision ids and lineage mappings
+match. Extra targets, orphaned or missing lineage and incomplete scans fail the
+full report. Inventories use pages of at most 100 records; duplicate ids,
+nonadvancing cursors, invalid records and scans inconsistent with counted totals
+refuse qualification instead of looping or reporting partial work as complete.
+
+Pagination bounds each read; the complete identity sets and field report still
+consume memory proportional to the population. Entity batches discard cached
+objects before loading persisted identities. These checks provide no concurrent
+write guarantee. Real cutover comparisons must run under the host writer fence.
+
+Full reports require `InventoryCopierInterface::loadTargetBatch()`, implemented
+by `EntityCopierBase`. Existing custom copiers remain loadable, but full
+reconciliation reports `coverage_unverified` until they can enumerate their
+complete target population. Explicit source samples remain available through
+`compare($plugin_id, $sample_ids)`. Duplicate sample ids are inspected once.
+
+Reports retain `passed`, `counts`, `field_digests` and `exceptions`, and add
+`coverage` and `full_passed`. Coverage identifies `full` versus `sample`, the
+inspected and total source counts, and complete inventory fingerprints. For
+compatibility, `passed()` on an explicit sample describes only the requested
+comparison. Samples always have `coverage.complete: false` and
+`full_passed: false`, including when the selected ids happen to cover every
+source. Qualification callers must use `fullPassed()` or the JSON
+`full_passed` property. The Drush reconciliation command requests full scope,
+so its successful exit status requires complete passing coverage.
+
+A directly constructed full report also checks source, target, lineage and
+inspected (`sampled`) counts defensively. Empty exceptions alone no longer mean
+a full report passed. Existing three-argument construction remains supported;
+callers must supply accurate inspected counts and explicit inventory evidence.
+Omitted coverage always has `complete: false`, even when all counts match.
+A fourth coverage argument can identify verified full inventory evidence or an
+explicitly limited sample.
+
+Inventory rechecks detect observed population changes. They are not a database
+snapshot or a host write fence, and a passing report does not authorize a real
+transfer or an authority transition. Hosts still supply a qualified write
+boundary and the operator's cutover decision.
+
 ## Authority
 
 Hosts register a domain at `legacy`, then advance `legacy → shadow → agency →
