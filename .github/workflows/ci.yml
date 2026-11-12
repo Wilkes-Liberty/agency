@@ -402,6 +402,7 @@ jobs:
               "testLocalFailureRollsBack with data set \"noop provision\"",
               "testLocalFailureRollsBack with data set \"wrong binding\"",
               "testLocalFailureRollsBack with data set \"missing profile\"",
+              "testLocalFailureRollsBack with data set \"noop consume reports one\"",
               "testCommitAcknowledgementRequiresScopedProof",
               "testDiscardedResponseRecoversByBearerWithoutReplay",
               "testConsumedBearerRecoveryExpires",

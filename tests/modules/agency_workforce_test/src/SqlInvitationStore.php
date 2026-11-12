@@ -87,6 +87,9 @@ final class SqlInvitationStore implements InvitationStoreInterface {
    * {@inheritdoc}
    */
   public function consume(InvitationRecord $record): int {
+    if ($this->config->get('agency_workforce_test.settings')->get('fault') === 'consume_noop') {
+      return 1;
+    }
     $expires = $record->expires;
     if ($this->config->get('agency_workforce_test.settings')->get('fault') === 'consume_zero') {
       $expires++;

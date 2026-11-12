@@ -24,7 +24,11 @@ interface InvitationStoreInterface {
   public function collection(): string;
 
   /**
-   * Loads an existing digest without hashing it again or renewing expiry.
+   * Freshly reads owning SQL storage; never hash again or renew expiry.
+   *
+   * A locked lookup must read through to storage, without an adapter cache.
+   *
+   * @phpstan-impure
    */
   public function lookupDigest(string $digest, bool $lock = FALSE): ?InvitationRecord;
 
@@ -35,6 +39,8 @@ interface InvitationStoreInterface {
 
   /**
    * Conditionally consumes the exact locked snapshot; returns affected rows.
+   *
+   * @phpstan-impure
    */
   public function consume(InvitationRecord $record): int;
 

@@ -124,7 +124,8 @@ final class InvitationService {
         || !$this->provisioner->verifyBinding($binding, $record->contact, $record->classification, $language)) {
         throw new InvitationRefusal('storage_conflict');
       }
-      if ($this->store->consume($record) !== 1) {
+      if ($this->store->consume($record) !== 1
+        || $this->store->lookupDigest($digest, TRUE) !== NULL) {
         throw new InvitationRefusal('storage_conflict');
       }
       $this->journal->record($id, $scope, $record, 'invitation_accepted', $binding);

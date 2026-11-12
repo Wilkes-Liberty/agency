@@ -21,6 +21,8 @@ The provisioner creates a local account and matching profile without committing,
 sending mail, logging in or making remote calls. It must freshly verify the
 returned binding, contact, classification and retained language. Storage must
 conditionally consume the exact record version and report one affected row.
+Locked lookups must freshly read storage; acceptance verifies the digest is
+absent before recording completion.
 The synthetic test module demonstrates these contracts without host source.
 
 Successful operations return only after root commit. An uncertain result must

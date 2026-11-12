@@ -170,6 +170,7 @@ class StaffInvitationTest extends KernelTestBase {
       'user failure' => ['user', 'failed'],
       'profile failure' => ['profile', 'failed'],
       'conditional consume affects zero' => ['consume_zero', 'storage_conflict'],
+      'noop consume reports one' => ['consume_noop', 'storage_conflict'],
       'required evidence unavailable' => ['outbox', 'failed'],
       'changed contact under exclusion' => ['changed_contact', 'invalid_invitation'],
       'noop provision' => ['provision_noop', 'storage_conflict'],
