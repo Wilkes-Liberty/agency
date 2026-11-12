@@ -356,3 +356,42 @@ of complete revision history preservation, host writer coverage or a cutover.
 Independent-process authority proofs cover competing registration/transition,
 stale configuration imports and generation/event atomicity. Host-specific
 writer fencing remains a separate acceptance requirement.
+
+
+### Snapshot history merge helper
+
+`IdentityPreservingWriter::captureHistory()` captures every persisted revision
+of a revisionable content entity as typed scalar, null and array values.
+Version 1 records the source type, integer ID, UUID, selected default revision,
+stored field/property layout, revision count and a list of revisions. Each
+revision carries its original ID, runtime default flag, default language,
+translation language inventory and all stored field properties. Numeric strings
+in string properties remain strings. Objects and nonfinite numbers refuse.
+
+`validateHistorySnapshot($snapshot, $target_type)` validates this reconstruction
+payload without loading the original source or changing storage. It checks exact
+identity, layout, fields, properties, revision IDs and default selection.
+Duplicate IDs, inconsistent counts and missing translations refuse. These
+checks detect malformed or truncated payloads. A self-consistent snapshot does
+not establish that its author captured every source revision; a hash alone
+establishes neither provenance nor authentication.
+
+`mergeHistory($snapshot, $target_type)` merges the captured revisions into an
+existing same-identity entity or restores an absent entity. Existing target-only
+revisions remain. An overlapping ID must have identical stored fields, including
+historical translations, revision author, time, log and stored default metadata.
+A conflicting overlap, another entity owning a revision ID, or ID/UUID mismatch
+refuses before imports. Runtime default flags may differ as current selection
+changes; stored historical default metadata must match. The captured default
+must have been a stored default, and may be older than a later pending revision.
+
+The merge uses a nested transaction, verifies the complete union and exact
+current selection after reload, and invalidates entity and revision caches after
+failure. It does not reload live source content during replay. Repeated identical
+merges are idempotent; later automatic IDs advance beyond imported IDs.
+
+This additive helper does not qualify journal records, change lineage, authorize
+writers or implement nonempty rollback. Existing four-argument journal records
+remain unqualified. Qualified replay still requires a fresh capture inside the
+actual writer boundary, durable operation evidence and final complete domain
+reconciliation under the authority fence.

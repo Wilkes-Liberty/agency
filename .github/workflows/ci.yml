@@ -363,6 +363,31 @@ jobs:
               "testTargetLookupRequiresExplicitQualifiedDomain",
               "testJournalTargetTypeOutsideDomainRefuses",
             ]);
+            $required = array_merge($required, [
+              "testMergePreservesBothHistoriesAndExactDefault",
+              "testSnapshotReplaysAfterSourceDeletion",
+              "testSnapshotIgnoresLaterSourceMutation",
+              "testConflictingExistingRevisionRefusesBeforeImports",
+              "testForeignRevisionCollisionRefusesWholeMerge",
+              "testReplacedTargetIdentityRefusesMerge",
+              "testUuidOwnedByDifferentTargetRefusesMerge",
+              "testSnapshotCanRestoreMissingTarget",
+              "testInterruptedMergeRollsBackHistoryAndCaches",
+              "testRepeatedMergeIsIdempotentAndAdvancesSequence",
+              "testInvalidSnapshotRefusesWithoutMutation with data set \"duplicate\"",
+              "testInvalidSnapshotRefusesWithoutMutation with data set \"missing field\"",
+              "testInvalidSnapshotRefusesWithoutMutation with data set \"wrong identity\"",
+              "testInvalidSnapshotRefusesWithoutMutation with data set \"missing default\"",
+              "testInvalidSnapshotRefusesWithoutMutation with data set \"two defaults\"",
+              "testInvalidSnapshotRefusesWithoutMutation with data set \"draft selected\"",
+              "testInvalidSnapshotRefusesWithoutMutation with data set \"object\"",
+              "testInvalidSnapshotRefusesWithoutMutation with data set \"nonfinite\"",
+              "testInvalidSnapshotRefusesWithoutMutation with data set \"version\"",
+              "testInvalidSnapshotRefusesWithoutMutation with data set \"missing revision\"",
+              "testInvalidSnapshotRefusesWithoutMutation with data set \"missing translation\"",
+              "testInvalidSnapshotRefusesWithoutMutation with data set \"missing property\"",
+              "testInvalidSnapshotRefusesWithoutMutation with data set \"wrong layout\"",
+            ]);
             $executed = [];
             $batchRequired = [
               "testFailedBatchIsAtomic with data set \"target before cursor\"",

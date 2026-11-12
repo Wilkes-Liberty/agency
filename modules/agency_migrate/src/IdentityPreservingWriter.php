@@ -40,6 +40,136 @@ final class IdentityPreservingWriter {
   }
 
   /**
+   * Captures typed revision values for later replay without a live source.
+   *
+   * @return array<string, mixed>
+   *   Version 1 snapshot; see RevisionHistorySnapshot for its value contract.
+   */
+  public function captureHistory(ContentEntityInterface $entity): array {
+    if (!$entity->getEntityType()->isRevisionable()) {
+      throw new MigrateRefusal('history_unverified');
+    }
+    $history = $this->loadHistory($entity);
+    $snapshot = RevisionHistorySnapshot::capture($entity, $history);
+    $this->validateHistorySnapshot($snapshot, $entity->getEntityTypeId());
+    return $snapshot;
+  }
+
+  /**
+   * Checks a snapshot without loading its source or changing entity storage.
+   */
+  public function validateHistorySnapshot(array $snapshot, string $target_type): void {
+    $storage = $this->entityTypeManager->getStorage($target_type);
+    if (!$storage instanceof ContentEntityStorageInterface) {
+      throw new MigrateRefusal('history_unverified');
+    }
+    RevisionHistorySnapshot::decode($snapshot, $storage);
+  }
+
+  /**
+   * Atomically merges immutable revisions and selects the captured default.
+   *
+   * Target-only revisions remain. Identical overlaps are idempotent.
+   * Conflicting stored revisions refuse, even for the same entity.
+   * This helper does not qualify journals, lineage or authority transitions.
+   */
+  public function mergeHistory(array $snapshot, string $target_type): ContentEntityInterface {
+    $storage = $this->entityTypeManager->getStorage($target_type);
+    if (!$storage instanceof ContentEntityStorageInterface) {
+      throw new MigrateRefusal('history_unverified');
+    }
+    // Validate the entire payload before starting any target mutation.
+    $incoming = RevisionHistorySnapshot::decode($snapshot, $storage);
+    $id = $snapshot['id'];
+    $default_id = $snapshot['default_revision_id'];
+    $transaction = $this->database->startTransaction();
+    try {
+      $storage->resetCache([$id]);
+      $current = $storage->load($id);
+      if ($current !== NULL && (!$current instanceof ContentEntityInterface || $current->uuid() !== $snapshot['uuid'])) {
+        throw new MigrateRefusal('history_conflict');
+      }
+      $uuid_ids = $storage->getQuery()->accessCheck(FALSE)
+        ->condition($incoming[$default_id]->getEntityType()->getKey('uuid'), $snapshot['uuid'])->execute();
+      if (array_diff(array_map('intval', array_values($uuid_ids)), [$id]) !== []) {
+        throw new MigrateRefusal('history_conflict');
+      }
+      $expected = [];
+      if ($current instanceof ContentEntityInterface) {
+        foreach ($this->loadHistory($current) as $revision) {
+          $expected[(int) $revision->getRevisionId()] = RevisionHistorySnapshot::fields($revision);
+        }
+      }
+      $missing = [];
+      foreach ($incoming as $revision_id => $revision) {
+        $fields = RevisionHistorySnapshot::fields($revision);
+        $occupied = $storage->loadRevision($revision_id);
+        if ($occupied !== NULL) {
+          if (!$occupied instanceof ContentEntityInterface
+            || (int) $occupied->id() !== $id || $occupied->uuid() !== $snapshot['uuid']
+            || RevisionHistorySnapshot::fields($occupied) !== $fields) {
+            throw new MigrateRefusal('history_conflict');
+          }
+        }
+        else {
+          $missing[$revision_id] = $revision;
+        }
+        $expected[$revision_id] = $fields;
+      }
+      if ($current === NULL) {
+        $this->restoreRevision($incoming[$default_id], $target_type, TRUE);
+        unset($missing[$default_id]);
+      }
+      foreach ($missing as $revision) {
+        $this->restoreRevision($revision, $target_type, FALSE);
+      }
+      $storage->resetCache([$id]);
+      $current = $storage->load($id);
+      if (!$current instanceof ContentEntityInterface) {
+        throw new MigrateRefusal('history_drift');
+      }
+      if ((int) $current->getRevisionId() !== $default_id) {
+        $selected = $storage->loadRevision($default_id);
+        if (!$selected instanceof ContentEntityInterface || !$selected->wasDefaultRevision()) {
+          throw new MigrateRefusal('history_conflict');
+        }
+        // Saving an already persisted, historically default revision updates
+        // current tables. Verification below rejects presave rewrites anywhere.
+        $selected->setSyncing(TRUE);
+        $selected->setNewRevision(FALSE);
+        $selected->isDefaultRevision(TRUE);
+        $selected->save();
+      }
+      $this->advanceSerial($incoming[$default_id]);
+      $storage->resetCache([$id]);
+      $result = $storage->load($id);
+      if (!$result instanceof ContentEntityInterface || (int) $result->getRevisionId() !== $default_id) {
+        throw new MigrateRefusal('history_drift');
+      }
+      $actual = [];
+      foreach ($this->loadHistory($result) as $revision) {
+        if ($revision->isDefaultRevision() !== ((int) $revision->getRevisionId() === $default_id)) {
+          throw new MigrateRefusal('history_drift');
+        }
+        $actual[(int) $revision->getRevisionId()] = RevisionHistorySnapshot::fields($revision);
+      }
+      ksort($expected, SORT_NUMERIC);
+      ksort($actual, SORT_NUMERIC);
+      if ($actual !== $expected) {
+        throw new MigrateRefusal('history_drift');
+      }
+      TransactionBoundary::commit($transaction);
+      $storage->resetCache([$id]);
+      return $result;
+    }
+    catch (\Throwable $exception) {
+      $transaction?->rollBack();
+      $storage->resetCache([$id]);
+      throw $exception;
+    }
+  }
+
+  /**
    * Inserts a complete history inside the writer's transaction boundary.
    */
   private function restoreHistory(ContentEntityInterface $source, string $target_type): ContentEntityInterface {
