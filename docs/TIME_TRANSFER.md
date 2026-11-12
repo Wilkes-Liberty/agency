@@ -10,7 +10,7 @@ published the caller ledger as draft
 shipped the authority register in
 [agency#27](https://github.com/Wilkes-Liberty/agency/pull/27) with machine
 names `legacy`, `shadow`, `agency` and `removed` (see
-[Migration](MIGRATION.md)). [DEV-992](https://wilkesliberty.atlassian.net/browse/DEV-992)
+[Migration](MIGRATION.md)). ID-preserving transfer
 Option A (2026-10-26) decided ID-preserving copy into tenant-neutral
 `agency_*` types with a lineage map. Slice 4 expand still waits on Slice 2
 and Slice 3 cutover and on a later operator G1 for this slice.
@@ -32,7 +32,7 @@ statement, client membership or feed, and sends no message.
 ## 1. Responsibilities in scope
 
 Slice 4 rows from `docs/agency-extraction/ledger.json` at webcms `master`
-`be5a1962` (ledger of record: DEV-999 / webcms#1900). That pin's live
+`be5a1962` (ledger of record: webcms#1900). That pin's live
 ledger run reported **120** Slice 4 responsibilities still `legacy`,
 **174** leftover host callers and **13** test classes to port; **0**
 rows were `shadow`, `agency` or `removed`. Row ids S4-L1–L8 are this
@@ -52,7 +52,7 @@ design's labels, not ontology machine names.
 Out of Slice 4: Discovery relationships (already Agency), Slice 2
 workforce/personnel, Slice 3 CRM and intake, expenses, credentials,
 roster availability, marketing, contracts/agreements (Slice 5), the
-disabled `wl_*` twin modules (DEV-801 / webcms#1681), and the payment
+disabled `wl_*` twin modules (webcms#1681), and the payment
 engine (orders, payment intents, provider settlement).
 
 Observed: `agency_staff` already owns invitation-only Discovery.
@@ -172,7 +172,7 @@ Rules:
   are `personal`; eligibility flags are `internal` until a field map
   exists.
 
-Observed host constraint to preserve (ledger / DEV-989
+Observed host constraint to preserve (host ledger
 slice-specific acceptance; host PHP **unverified** from this checkout):
 no broad employee or client role is granted by the membership move.
 Tests must prove the existing subject-binding and deny semantics.
@@ -231,7 +231,7 @@ Rules:
   numeric id, UUID, revision ids (when the type is revisionable),
   timestamps and revision authorship, and writes a lineage map. Moving
   a host-named entity provider (`wl_time_*`) into this package is
-  rejected (DEV-992 Option A; Option B was declined).
+  rejected (ID-preserving transfer; Option B was declined).
 - Historical Audit Chain events that name a legacy type stay untouched.
   One minimized lineage event per migrated batch links legacy references
   to Agency references; the verifier may resolve either.
@@ -245,9 +245,9 @@ Exact table, field, route, service and test inventory is
 Host PHP class files remain **unverified** from this checkout; expand
 reads the ledger rather than re-inventorying.
 
-### 6.1 DEV-992 Option A conditions per type
+### 6.1 ID-preserving transfer conditions per type
 
-Operator approval on 2026-10-26 (DEV-992) requires five conditions on
+Operator approval on 2026-10-26 (ID-preserving transfer) requires five conditions on
 every copied type. They apply to Slice 4 as follows. Expand must fail
 closed on any type that cannot meet all five.
 
@@ -385,22 +385,26 @@ cutover):
   drafted entries under the submission lock.
 - No unexplained drift over the rehearsal window.
 
-Proposed SLOs (DEV-989; not approved): 99.5% monthly API availability,
+Proposed SLOs (not approved): 99.5% monthly API availability,
 p95 read under 300 ms, outbox age under 150 s, zero unexplained
 reconciliation drift, batch restart within 5 minutes.
 
 Rollback:
 
-- Flip the Slice 4 domain flag(s) to `legacy`.
-- Replay Agency writes to legacy through the lineage map. Do not
-  restore a database backup as the rollback procedure.
+- Validate rollback permission and current authority before effects. Acquire
+  verified source/target writer exclusion and establish a stable replay boundary.
+- Replay Agency changes through lineage and reconcile the complete domain,
+  including revisions, approvals, references and immutable statements. Restore
+  legacy authority atomically only after reconciliation succeeds. Hold exclusion
+  through commit and continue rejecting writes on the non-authoritative side.
+  A flag change or database restore alone is not this rollback procedure.
 - Limits: a statement already shown to a reviewer is not unissued; a
   payment-engine invoice draft already created is not deleted by this
   rollback; capture versus send stay distinct. Historical evidence is
   never re-chained. Authority `removed` has no rollback edge.
 - Rehearse on a staging clone before any production cutover.
 
-Gates proposed by DEV-989 (operator approves G1, G4, G5 and G7):
+Proposed gates (operator approves G1, G4, G5 and G7):
 G1 design → G2 expand → G3 shadow (clean reconciliation for 3
 consecutive days, proposed) → G4 rehearsal → G5 cutover → G6 one
 overlap release → G7 removal. This document is proposed G1 material
@@ -437,8 +441,8 @@ still serialize `wl_time_*` type names.
 
 Test classes per module are inventoried in `ledger.json` at webcms
 `master` `be5a1962`. That pin's sweep counted **13** Slice 4 classes to
-port. The class-level port map is the assurance kit (DEV-1006 /
-webcms#1897). Removal of a legacy module is blocked by any unmapped
+port. The class-level port map is the host test-parity inventory.
+Removal of a legacy module is blocked by any unmapped
 test without a reviewed reason. Names below are ledger module scopes
 and behavioral cases; this checkout still cannot open the host PHP
 files.
@@ -462,8 +466,8 @@ Slice 2 suites. Slice 4 design must not change their outcomes.
 This list is proposed, not a G-gate checklist that records approval.
 
 1. Confirm `agency_*` engagement/time types with ID-preserving copy and
-   lineage (DEV-992 Option A already decided the copy method; G1 still
-   chooses the type set and submodule name).
+   lineage. The copy method is settled; G1 still chooses the type set
+   and submodule name.
 2. Whether Slice 4 is one authority-register row (`engagement`) or
    three (`engagement`, `client_membership`, `commercial_feed`).
    Machine names `legacy` / `shadow` / `agency` / `removed` are already
@@ -484,10 +488,9 @@ This list is proposed, not a G-gate checklist that records approval.
 7. Public refusal strings for cross-person submit and closed
    assignments: preserve host strings via the host adapter, or adopt
    Discovery's closed/`not_found` shape.
-8. Proposed window in DEV-989 (design Nov 9–20 2026, expand Nov 23 –
-   Dec 18, shadow Dec 14 – Jan 6 with a proposed change freeze Dec 21 –
-   Jan 4, rehearsal Jan 6, cutover Jan 7–8) remains a schedule
-   proposal, not an authorization.
+8. Schedule each transfer after its technical prerequisites and host acceptance
+   are met. Deployment windows and change freezes belong in the installing
+   host's operational plan, not this package.
 
 ## Out of this change
 

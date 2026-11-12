@@ -581,7 +581,7 @@ This section keeps the narrative form.
 
 1. Approve `agency_*` workforce and recruiting types with ID-preserving
    copy and lineage, rather than moving host-named providers into this
-   package. ID-preserving transfer already chose the mechanism.
+   package. The copy-and-lineage mechanism is already settled.
 2. Approve that staff invite, onboard and profile evidence share one
    `workforce` authority row, and that postings, applications and
    résumé references use a separate `recruiting` row (or one shared

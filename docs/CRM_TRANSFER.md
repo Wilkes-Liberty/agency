@@ -9,7 +9,7 @@ live host ledger on webcms `master` at
 [`be5a1962`](https://github.com/Wilkes-Liberty/webcms/commit/be5a1962)
 (2026-10-29 operator sweep: `scripts/agency-ledger/generate.py --check`
 passed). Ontology draft v0.1.0 landed in
-[agency#25](https://github.com/Wilkes-Liberty/agency/pull/25). DEV-992
+[agency#25](https://github.com/Wilkes-Liberty/agency/pull/25). ID-preserving transfer
 Option A (ID-preserving copy plus lineage) is recorded as decided; it
 does not approve this slice. Slice 3 expand still waits on a later
 operator G1 after Slice 2.
@@ -51,7 +51,7 @@ live in that ledger; this checkout cannot open the host PHP.
 Out of Slice 3: Discovery relationships (already Agency), workforce
 provisioning (Slice 2), engagement/time and client membership (Slice 4),
 marketing campaigns (Slice 5), payment rails, and the disabled `wl_*`
-twins ([DEV-801](https://wilkesliberty.atlassian.net/browse/DEV-801) /
+twins (legacy namespace retirement,
 [webcms#1681](https://github.com/Wilkes-Liberty/webcms/issues/1681)).
 `crm_client` / `wl_crm_client_profile` are host selection plugins, not
 stored entity types (webcms#1900); they are not copy sources.
@@ -227,7 +227,7 @@ Rules:
 
 Lineage, copy and reconciliation tooling belong to `agency_migrate`
 ([Migration](MIGRATION.md)). Slice 3 specifies what that tool must
-preserve. DEV-992 Option A is decided: copy into tenant-neutral
+preserve. ID-preserving transfer is decided: copy into tenant-neutral
 `agency_*` types with the same integer id, UUID, revision ids,
 timestamps and revision authorship, plus a lineage map. The five
 approval conditions apply per type below.
@@ -246,7 +246,7 @@ approval conditions apply per type below.
 before the batch starts (§10.1). A row that matches both targets, or
 neither, fails preflight.
 
-### DEV-992 conditions per type
+### Identity-preservation conditions per type
 
 Every copier below is proposed. None exists in this package. Host
 adapters will supply `EntityCopierBase` subclasses after G1.
@@ -263,7 +263,7 @@ Shared copy rules (observed `agency_migrate` behavior, proposed here as
 the Slice 3 contract):
 
 - Agency defines `agency_*` types. Moving a host-named entity provider
-  into this package is rejected (DEV-992 Option B).
+  into this package is rejected (provider reassignment).
 - Historical Audit Chain events that name a legacy type stay untouched.
   One minimized lineage event per migrated batch links legacy
   references to Agency references.
@@ -328,16 +328,19 @@ cutover):
   window.
 - No unexplained drift over the rehearsal window.
 
-Proposed SLOs (from [DEV-988](https://wilkesliberty.atlassian.net/browse/DEV-988),
-not approved by this document): 99.5% monthly API availability, p95
+Proposed SLOs (not approved by this document): 99.5% monthly API availability, p95
 read under 300 ms, outbox age under 150 s, zero unexplained
 reconciliation drift, batch restart within 5 minutes.
 
 Rollback:
 
-- Flip the CRM (and intake, if separate) flag to `legacy`.
-- Replay Agency writes to legacy through the lineage map. Do not
-  restore a database backup as the rollback procedure.
+- Validate rollback permission and current authority before effects. Acquire
+  verified source/target writer exclusion and establish a stable replay boundary.
+- Replay Agency changes through lineage, including newly created records and
+  deletions supported by the domain. Reconcile complete data, history, references
+  and access before atomically restoring legacy authority. Keep exclusion through
+  commit and persist rejection of writes on the non-authoritative side. A flag
+  change or database restore alone is not this rollback procedure.
 - Limits: an external intake dispatch already sent is not unsent;
   capture versus send stay distinct. A Discovery person that existed
   before the copy is not deleted. Historical evidence is never
@@ -424,7 +427,7 @@ record answers and is not that gate.
    depends on `chronicle_crm`. If it does not, it leaves with Slice 1
    residue rather than this slice.
 6. **Resolved by the Slice 2 design
-   ([DEV-987](https://wilkesliberty.atlassian.net/browse/DEV-987)).**
+   (the workforce proposal).**
    Career postings and the résumé/application workflow move to Agency
    in Slice 2 under proposed `agency_recruiting`. `career_application`
    copies onto `agency_application`, not `agency_intake_submission`.

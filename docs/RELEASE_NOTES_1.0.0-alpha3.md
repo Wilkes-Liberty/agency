@@ -18,7 +18,7 @@ Publication, host cutover and invitation remain separate decisions.
   `chronicle_agency`. Contact policy and delivery audit are replaceable ports.
   Historical `paladin_issuer` / `paladin_audience` token keys remain readable
   so already-qualified coverage does not change
-  ([DEV-1008](https://wilkesliberty.atlassian.net/browse/DEV-1008),
+  (the host compatibility change,
   [webcms#1899](https://github.com/Wilkes-Liberty/webcms/pull/1899),
   [GitHub #28](https://github.com/Wilkes-Liberty/agency/pull/28)).
 - Draft ontology contract v0.1.0 for tenant-neutral object, link and action

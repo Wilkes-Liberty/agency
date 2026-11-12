@@ -10,7 +10,7 @@ in shadow, and supporting a reversible authority switch. It ships no tenant
 names, policy values or host type identifiers. Production source types arrive
 as copier plugins implemented by the host or by a later Agency capability
 module once the ontology contract lists them. Proposed Slice 3 sources and
-DEV-992 conditions per type are in [CRM transfer](CRM_TRANSFER.md).
+identity-preservation conditions per type are in [CRM transfer](CRM_TRANSFER.md).
 Proposed Slice 4 source mappings live in [Time transfer](TIME_TRANSFER.md);
 that design does not register copiers or record types.
 
