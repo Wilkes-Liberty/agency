@@ -31,10 +31,13 @@ abstract class SyntheticItem extends ContentEntityBase implements RevisionLogInt
       ->setRevisionable(TRUE);
     $fields['payload'] = BaseFieldDefinition::create('string')
       ->setLabel(t('Payload'))
+      ->setTranslatable(TRUE)
       ->setSetting('max_length', 255)
       ->setRevisionable(TRUE);
     $fields['related_id'] = BaseFieldDefinition::create('integer')
       ->setLabel(t('Related'))
+      ->setCardinality(-1)
+      ->setTranslatable(TRUE)
       ->setRevisionable(TRUE);
     $fields['access_class'] = BaseFieldDefinition::create('string')
       ->setLabel(t('Access class'))

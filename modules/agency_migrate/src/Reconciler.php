@@ -148,25 +148,38 @@ final class Reconciler {
    */
   private function referenceExceptions(CopierInterface $copier, ContentEntityInterface $entity, string $side): array {
     $exceptions = [];
-    $canonical = $copier->canonicalize($entity);
-    foreach ($copier->referencePropertyNames() as $field) {
-      $referenced = (int) ($canonical[$field] ?? 0);
-      if ($referenced <= 0) {
-        continue;
+    foreach ($entity->getTranslationLanguages() as $langcode => $language) {
+      $translation = $entity->getTranslation($langcode);
+      foreach ($copier->referencePropertyNames() as $field) {
+        if (!$translation->hasField($field)) {
+          throw new MigrateRefusal('incompatible_field_layout');
+        }
+        foreach ($translation->get($field) as $delta => $item) {
+          $main = $item->mainPropertyName();
+          if ($main === NULL) {
+            throw new MigrateRefusal('incompatible_field_layout');
+          }
+          $referenced = (int) $item->get($main)->getValue();
+          if ($referenced <= 0) {
+            continue;
+          }
+          $loaded = $side === 'source'
+            ? $copier->loadSource($referenced)
+            : $copier->loadTarget($referenced);
+          if ($loaded instanceof ContentEntityInterface) {
+            continue;
+          }
+          $exceptions[] = [
+            'type' => 'broken_reference',
+            'side' => $side,
+            'id' => (int) $entity->id(),
+            'field' => $field,
+            'langcode' => $langcode,
+            'delta' => $delta,
+            'referenced_id' => $referenced,
+          ];
+        }
       }
-      $loaded = $side === 'source'
-        ? $copier->loadSource($referenced)
-        : $copier->loadTarget($referenced);
-      if ($loaded instanceof ContentEntityInterface) {
-        continue;
-      }
-      $exceptions[] = [
-        'type' => 'broken_reference',
-        'side' => $side,
-        'id' => (int) $entity->id(),
-        'field' => $field,
-        'referenced_id' => $referenced,
-      ];
     }
     return $exceptions;
   }

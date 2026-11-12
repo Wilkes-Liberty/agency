@@ -25,7 +25,13 @@ final class IdentityPreservingWriter {
    */
   public function insertCopy(ContentEntityInterface $source, string $target_type): ContentEntityInterface {
     $storage = $this->entityTypeManager->getStorage($target_type);
-    $values = $this->scalarValues($source);
+    $source = $source->getUntranslated();
+    $probe = $storage->create([]);
+    if (!$probe instanceof ContentEntityInterface) {
+      throw new MigrateRefusal('incompatible_field_layout');
+    }
+    $this->assertCompatibleLayout($source, $probe);
+    $values = $this->fieldValues($source);
     $created = $storage->create($values);
     if (!$created instanceof ContentEntityInterface) {
       throw new MigrateRefusal('identity_not_preserved');
@@ -35,8 +41,9 @@ final class IdentityPreservingWriter {
     $target->setSyncing(TRUE);
     if ($target->getEntityType()->isRevisionable()) {
       $target->setNewRevision(FALSE);
-      $target->set('revision_id', $source->getRevisionId());
+      $target->set($target->getEntityType()->getKey('revision'), $source->getRevisionId());
     }
+    $this->copyTranslations($source, $target, FALSE);
     $storage->restore($target);
     $this->assertSameIdentity($source, $target);
     $this->advanceSerial($target);
@@ -53,13 +60,19 @@ final class IdentityPreservingWriter {
    * Overwrites content fields on an existing entity without changing identity.
    */
   public function overwriteContent(ContentEntityInterface $existing, ContentEntityInterface $from): ContentEntityInterface {
-    $existing->setSyncing(TRUE);
-    foreach ($this->scalarValues($from) as $name => $value) {
-      if ($this->isIdentityField($existing, $name)) {
-        continue;
-      }
-      $existing->set($name, $value);
+    $existing = $existing->getUntranslated();
+    $from = $from->getUntranslated();
+    $this->assertCompatibleLayout($from, $existing);
+    if ($existing->language()->getId() !== $from->language()->getId()) {
+      throw new MigrateRefusal('incompatible_field_layout');
     }
+    $existing->setSyncing(TRUE);
+    foreach ($this->fieldValues($from) as $name => $value) {
+      if (!$this->isIdentityField($existing, $name)) {
+        $existing->set($name, $value);
+      }
+    }
+    $this->copyTranslations($from, $existing, TRUE);
     $existing->save();
     $storage = $this->entityTypeManager->getStorage($existing->getEntityTypeId());
     $storage->resetCache([(int) $existing->id()]);
@@ -71,30 +84,89 @@ final class IdentityPreservingWriter {
   }
 
   /**
-   * Builds create() values from scalar and reference main properties.
+   * Builds values from every stored property of every field item.
    *
    * @return array<string, mixed>
-   *   Field names keyed to the main property value.
+   *   Field names keyed to ordered item values, including empty lists.
    */
-  public function scalarValues(ContentEntityInterface $entity): array {
+  public function fieldValues(ContentEntityInterface $entity): array {
     $values = [];
     foreach ($entity->getFields(FALSE) as $name => $field) {
-      $definition = $field->getFieldDefinition();
-      if ($definition->isComputed()) {
+      if ($field->getFieldDefinition()->isComputed()) {
         continue;
       }
-      $item = $field->first();
-      if ($item === NULL) {
-        $values[$name] = NULL;
-        continue;
+      $values[$name] = [];
+      foreach ($field as $item) {
+        $properties = [];
+        foreach ($item->getProperties(FALSE) as $property_name => $property) {
+          $properties[$property_name] = $property->getValue();
+        }
+        $values[$name][] = $properties;
       }
-      $main = $item->mainPropertyName();
-      if ($main === NULL) {
-        continue;
-      }
-      $values[$name] = $item->get($main)->getValue();
     }
     return $values;
+  }
+
+  /**
+   * Rejects layouts requiring an explicit host-specific field mapping.
+   */
+  private function assertCompatibleLayout(ContentEntityInterface $source, ContentEntityInterface $target): void {
+    $source_type = $source->getEntityType();
+    $target_type = $target->getEntityType();
+    foreach (['id', 'uuid', 'revision', 'langcode', 'bundle'] as $key) {
+      if ($source_type->getKey($key) !== $target_type->getKey($key)) {
+        throw new MigrateRefusal('incompatible_field_layout');
+      }
+    }
+    if ($source_type->isRevisionable() !== $target_type->isRevisionable()
+      || $source_type->isTranslatable() !== $target_type->isTranslatable()) {
+      throw new MigrateRefusal('incompatible_field_layout');
+    }
+    $definitions = [];
+    foreach ([$source, $target] as $entity) {
+      $fields = [];
+      foreach ($entity->getFieldDefinitions() as $name => $definition) {
+        if (!$definition->isComputed()) {
+          $fields[$name] = [
+            $definition->getType(),
+            $definition->isTranslatable(),
+            $definition->getFieldStorageDefinition()->getCardinality(),
+            $definition->getFieldStorageDefinition()->getSettings(),
+          ];
+        }
+      }
+      ksort($fields);
+      $definitions[] = $fields;
+    }
+    // Boolean field labels can be equivalent, distinct markup objects.
+    if ($definitions[0] != $definitions[1]) {
+      throw new MigrateRefusal('incompatible_field_layout');
+    }
+  }
+
+  /**
+   * Copies current translations, removing target-only translations on replay.
+   */
+  private function copyTranslations(ContentEntityInterface $source, ContentEntityInterface $target, bool $overwrite): void {
+    foreach ($target->getTranslationLanguages(FALSE) as $langcode => $language) {
+      if (!$source->hasTranslation($langcode)) {
+        $target->removeTranslation($langcode);
+      }
+    }
+    foreach ($source->getTranslationLanguages(FALSE) as $langcode => $language) {
+      $values = $this->fieldValues($source->getTranslation($langcode));
+      if (!$target->hasTranslation($langcode)) {
+        $target->addTranslation($langcode, $values);
+        continue;
+      }
+      $translation = $target->getTranslation($langcode);
+      foreach ($values as $name => $value) {
+        if ($translation->getFieldDefinition($name)->isTranslatable()
+          && (!$overwrite || !$this->isIdentityField($target, $name))) {
+          $translation->set($name, $value);
+        }
+      }
+    }
   }
 
   /**

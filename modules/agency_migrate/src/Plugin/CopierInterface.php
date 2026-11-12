@@ -112,10 +112,10 @@ interface CopierInterface extends PluginInspectionInterface {
   public function accessDecision(string $principal, string $side, int $id): bool;
 
   /**
-   * Canonical scalar map used for per-field digests.
+   * Canonical field map used for per-field digests.
    *
    * @return array<string, string>
-   *   Sorted field names keyed to a stable string encoding of the value.
+   *   Sorted field names keyed to stable JSON of all translations and items.
    */
   public function canonicalize(ContentEntityInterface $entity): array;
 
