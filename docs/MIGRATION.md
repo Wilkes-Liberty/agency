@@ -28,10 +28,11 @@ Observed in the kernel suite against synthetic entity types:
 - Each copied pair is stored in a bidirectional lineage map with a content
   digest, a versioned history manifest and the run that wrote it. The manifest
   contains revision digests and default selection, without content values.
-- Runs are bounded batches. Each record shares a transaction with its lineage
-  row, so a crash mid-batch leaves no partial target. Resume continues from the
-  last committed source id without duplicating copies. A second complete run is
-  a verified no-op when both sides still match the committed manifest.
+- Runs are bounded batches. Each batch commits target records, lineage rows,
+  cursor and counters, and its evidence intent in one transaction. A failed
+  batch leaves no partial copies or progress; resume starts after the last
+  completed batch. Earlier completed batches remain durable. A second complete
+  run is a verified no-op when both sides still match the committed manifest.
 - Every source content property must have a marking (`public`, `internal`,
   `confidential`, `personal` or `financial`). An unmapped or invalid marking
   fails the run before any write.

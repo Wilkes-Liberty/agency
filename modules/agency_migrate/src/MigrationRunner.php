@@ -17,9 +17,9 @@ use Drupal\Core\Session\AccountProxyInterface;
 /**
  * Idempotent, resumable copy in bounded batches.
  *
- * Each record shares a transaction with its lineage row. A crash mid-batch
- * leaves no partial target row. Host adapters supply one copier per source
- * type; this runner does not invent types.
+ * Each batch commits its copies, lineage, resume progress and evidence intent
+ * together. A failed batch leaves the last completed window intact. Host
+ * adapters supply one copier per source type; the runner does not invent types.
  */
 final class MigrationRunner {
 
@@ -111,16 +111,30 @@ final class MigrationRunner {
         $id_from = (int) $batch[0]->id();
         $id_to = (int) $batch[0]->id();
         $batch_copied = 0;
-        foreach ($batch as $source) {
-          $result = $this->copyOne($run_id, $copier, $source);
-          $cursor = (int) $source->id();
-          $id_to = $cursor;
-          if ($result === 'copied') {
-            $batch_copied++;
+        $transaction = $this->database->startTransaction();
+        try {
+          foreach ($batch as $source) {
+            $result = $this->copyOne($run_id, $copier, $source);
+            $cursor = (int) $source->id();
+            $id_to = $cursor;
+            if ($result === 'copied') {
+              $batch_copied++;
+            }
+            $this->touchRun($run_id, $cursor, $result === 'copied' ? 1 : 0, $result === 'skipped' ? 1 : 0);
           }
-          $this->touchRun($run_id, $cursor, $result === 'copied' ? 1 : 0, $result === 'skipped' ? 1 : 0);
+          $this->emitBatch($run_id, $copier, $id_from, $id_to, $batch_copied);
+          TransactionBoundary::commit($transaction);
         }
-        $this->emitBatch($run_id, $copier, $id_from, $id_to, $batch_copied);
+        catch (\Throwable $exception) {
+          try {
+            $transaction?->rollBack();
+          }
+          finally {
+            unset($transaction);
+          }
+          throw $exception;
+        }
+        unset($transaction);
       }
     }
     catch (MigrateRefusal $exception) {
@@ -207,7 +221,7 @@ final class MigrationRunner {
   }
 
   /**
-   * One minimized lineage event covering a finished batch window.
+   * Records the batch intent inside the same transaction as its progress.
    */
   private function emitBatch(string $run_id, CopierInterface $copier, int $id_from, int $id_to, int $count): void {
     $fingerprint = hash('sha256', implode(':', [
@@ -284,7 +298,7 @@ final class MigrationRunner {
   }
 
   /**
-   * Advances the resume cursor after each committed record.
+   * Advances the resume cursor inside the current batch transaction.
    */
   private function touchRun(string $run_id, int $cursor, int $copied_delta, int $skipped_delta): void {
     $this->database->update('agency_migrate_run')->fields([

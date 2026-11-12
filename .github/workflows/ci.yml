@@ -327,12 +327,19 @@ jobs:
               "testChangedLineageUuidFailsReconciliation",
             ]);
             $executed = [];
+            $batchRequired = [
+              "testFailedBatchIsAtomic with data set \"target before cursor\"",
+              "testFailedBatchIsAtomic with data set \"cursor before outbox\"",
+              "testFailedBatchIsAtomic with data set \"outbox insert failure\"",
+            ];
             foreach ($xml->xpath("//testcase") as $case) {
               if (isset($case->skipped)) { exit(1); }
               $executed[] = (string) $case["name"];
             }
             echo "Executed domain tests: " . count($executed) . "\n";
             if (array_diff($required, $executed)) { exit(1); }
+            echo "Executed batch boundaries: " . count(array_intersect($batchRequired, $executed)) . "\n";
+            if (array_diff($batchRequired, $executed)) { exit(1); }
           '
       - name: Run installed-host functional tests
         working-directory: drupal

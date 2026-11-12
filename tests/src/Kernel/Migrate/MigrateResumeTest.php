@@ -17,12 +17,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 final class MigrateResumeTest extends MigrateKernelTestBase {
 
   /**
-   * A crash mid-batch leaves no partial record and resume continues.
+   * A failed batch preserves earlier completed batches and resume continues.
    */
   public function testInterruptedRunResumesWithoutDuplicates(): void {
     $this->seedSources();
     $this->container->get('state')->set('agency_migrate_test.interrupt_title', 'Beta');
-    $this->assertRefused(fn () => $this->copyAll(), 'interrupted');
+    $this->assertRefused(fn () => $this->container->get('agency_migrate.runner')->run('synthetic_item', 1, TRUE), 'interrupted');
     $this->assertNotNull($this->target(1));
     $this->assertNull($this->target(2));
     $this->assertNull($this->target(3));
