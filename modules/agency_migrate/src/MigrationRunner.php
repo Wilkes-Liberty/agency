@@ -7,6 +7,7 @@ namespace Drupal\agency_migrate;
 use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\agency_migrate\Plugin\CopierInterface;
 use Drupal\agency_migrate\Plugin\CopierManager;
+use Drupal\agency_migrate\Plugin\HistoryCopierInterface;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Component\Uuid\UuidInterface;
 use Drupal\Core\Database\Connection;
@@ -140,21 +141,68 @@ final class MigrationRunner {
   private function copyOne(string $run_id, CopierInterface $copier, ContentEntityInterface $source): string {
     $existing = $this->lineage->bySource($source->getEntityTypeId(), (int) $source->id());
     if ($existing !== NULL) {
+      $this->assertFaithfulCopy($copier, $source, $existing);
       return 'skipped';
+    }
+    if ($source->getEntityType()->isRevisionable() && !$copier instanceof HistoryCopierInterface) {
+      throw new MigrateRefusal('history_unverified');
     }
     if ($copier->targetOccupiedByDifferentUuid((int) $source->id(), $source->uuid())) {
       throw new MigrateRefusal('identity_conflict');
     }
     $transaction = $this->database->startTransaction();
     try {
+      $manifest = $copier instanceof HistoryCopierInterface ? $copier->historyManifest($source) : NULL;
       $target = $copier->copyToTarget($source);
-      $this->lineage->record($run_id, $source, $target, $copier->contentDigest($source));
+      if ($manifest !== NULL) {
+        if ($manifest !== $copier->historyManifest($target)
+          || $manifest !== $copier->historyManifest($source)) {
+          throw new MigrateRefusal('history_drift');
+        }
+      }
+      $this->lineage->record($run_id, $source, $target, $copier->contentDigest($source), $manifest);
       TransactionBoundary::commit($transaction);
       return 'copied';
     }
     catch (\Throwable $exception) {
       $transaction?->rollBack();
       throw $exception;
+    }
+  }
+
+  /**
+   * Existing lineage is a claim to verify, not permission to skip stale copies.
+   */
+  private function assertFaithfulCopy(CopierInterface $copier, ContentEntityInterface $source, array $row): void {
+    $target = $copier->loadTarget((int) $source->id());
+    if (!$target instanceof ContentEntityInterface
+      || $target->uuid() !== $source->uuid()
+      || $row['source_uuid'] !== $source->uuid()
+      || $row['target_uuid'] !== $target->uuid()
+      || $row['target_entity_type'] !== $copier->targetEntityType()
+      || (int) $row['target_id'] !== (int) $target->id()
+      || (int) $row['source_revision_id'] !== (int) ($source->getRevisionId() ?? $source->id())
+      || (int) $row['target_revision_id'] !== (int) ($target->getRevisionId() ?? $target->id())) {
+      throw new MigrateRefusal('history_drift');
+    }
+    if ($copier instanceof HistoryCopierInterface) {
+      $manifest = $this->lineage->manifest($row);
+      if ($manifest === NULL) {
+        throw new MigrateRefusal('history_unverified');
+      }
+      if ($manifest !== $copier->historyManifest($source)
+        || $manifest !== $copier->historyManifest($target)
+        || $row['content_digest'] !== $copier->contentDigest($source)) {
+        throw new MigrateRefusal('history_drift');
+      }
+      return;
+    }
+    if ($source->getEntityType()->isRevisionable()) {
+      throw new MigrateRefusal('history_unverified');
+    }
+    if ($row['content_digest'] !== $copier->contentDigest($source)
+      || $row['content_digest'] !== $copier->contentDigest($target)) {
+      throw new MigrateRefusal('history_drift');
     }
   }
 

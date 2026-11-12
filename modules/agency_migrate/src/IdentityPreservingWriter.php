@@ -6,8 +6,10 @@ namespace Drupal\agency_migrate;
 
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\Core\Entity\ContentEntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\Sql\SqlEntityStorageInterface;
+use Drupal\Core\TypedData\PrimitiveInterface;
 use Drupal\agency_migrate\Exception\MigrateRefusal;
 
 /**
@@ -24,20 +26,141 @@ final class IdentityPreservingWriter {
    * Creates a target entity that reuses the source identity fields.
    */
   public function insertCopy(ContentEntityInterface $source, string $target_type): ContentEntityInterface {
+    $transaction = $this->database->startTransaction();
+    try {
+      $target = $this->restoreHistory($source, $target_type);
+      TransactionBoundary::commit($transaction);
+      return $target;
+    }
+    catch (\Throwable $exception) {
+      $transaction?->rollBack();
+      $this->entityTypeManager->getStorage($target_type)->resetCache([(int) $source->id()]);
+      throw $exception;
+    }
+  }
+
+  /**
+   * Inserts a complete history inside the writer's transaction boundary.
+   */
+  private function restoreHistory(ContentEntityInterface $source, string $target_type): ContentEntityInterface {
     $storage = $this->entityTypeManager->getStorage($target_type);
     $source = $source->getUntranslated();
+    $history = $this->loadHistory($source);
+    $snapshot = $this->historySnapshot($history);
     $probe = $storage->create([]);
     if (!$probe instanceof ContentEntityInterface) {
       throw new MigrateRefusal('incompatible_field_layout');
     }
     $this->assertCompatibleLayout($source, $probe);
+    foreach ($history as $revision) {
+      $this->assertCompatibleLayout($revision, $probe);
+      if ($source->getEntityType()->isRevisionable()
+        && $storage instanceof ContentEntityStorageInterface
+        && $storage->loadRevision($revision->getRevisionId()) !== NULL) {
+        throw new MigrateRefusal('history_conflict');
+      }
+    }
+    // Restore the actual default once. Older defaults and pending revisions
+    // must never touch current tables.
+    $target = $this->restoreRevision($source, $target_type, TRUE);
+    foreach ($history as $revision) {
+      if ((int) $revision->getRevisionId() !== (int) $source->getRevisionId()) {
+        $this->restoreRevision($revision, $target_type, FALSE);
+      }
+    }
+    if ($snapshot !== $this->historySnapshot($this->loadHistory($source))) {
+      throw new MigrateRefusal('history_drift');
+    }
+    $this->advanceSerial($target);
+    $storage->resetCache([(int) $target->id()]);
+    $reloaded = $storage->load($target->id());
+    if (!$reloaded instanceof ContentEntityInterface) {
+      throw new MigrateRefusal('identity_not_preserved');
+    }
+    $this->assertSameIdentity($source, $reloaded);
+    $storage->resetCache([(int) $source->id()]);
+    return $reloaded;
+  }
+
+  /**
+   * Loads every persisted revision, refusing an inconsistent current snapshot.
+   *
+   * @return list<\Drupal\Core\Entity\ContentEntityInterface>
+   *   Revisions ordered by revision identifier.
+   */
+  public function loadHistory(ContentEntityInterface $entity): array {
+    $storage = $this->entityTypeManager->getStorage($entity->getEntityTypeId());
+    $storage->resetCache([(int) $entity->id()]);
+    $current = $storage->load($entity->id());
+    if (!$current instanceof ContentEntityInterface
+      || $current->uuid() !== $entity->uuid()
+      || (int) $current->getRevisionId() !== (int) $entity->getRevisionId()
+      || $this->canonicalize($current) !== $this->canonicalize($entity)) {
+      throw new MigrateRefusal('history_drift');
+    }
+    // Cached snapshot rows must not outlive an outer rollback.
+    $storage->resetCache([(int) $entity->id()]);
+    if (!$entity->getEntityType()->isRevisionable()) {
+      return [$current];
+    }
+    if (!$storage instanceof ContentEntityStorageInterface) {
+      throw new MigrateRefusal('history_unverified');
+    }
+    $ids = $storage->getQuery()->allRevisions()->accessCheck(FALSE)
+      ->condition($entity->getEntityType()->getKey('id'), $entity->id())
+      ->sort($entity->getEntityType()->getKey('revision'))
+      ->execute();
+    $revisions = $storage->loadMultipleRevisions(array_keys($ids));
+    if ($ids === [] || count($revisions) !== count($ids)) {
+      throw new MigrateRefusal('history_drift');
+    }
+    foreach ($revisions as $revision) {
+      if (!$revision instanceof ContentEntityInterface
+        || (int) $revision->id() !== (int) $entity->id()
+        || $revision->uuid() !== $entity->uuid()) {
+        throw new MigrateRefusal('history_conflict');
+      }
+    }
+    return array_values($revisions);
+  }
+
+  /**
+   * Full immutable comparison values for a history read, including defaults.
+   *
+   * @param list<\Drupal\Core\Entity\ContentEntityInterface> $history
+   *   Persisted revision objects.
+   *
+   * @return array<int, array<string, mixed>>
+   *   Revision ids keyed to canonical content and runtime default selection.
+   */
+  private function historySnapshot(array $history): array {
+    $snapshot = [];
+    foreach ($history as $revision) {
+      $snapshot[(int) ($revision->getRevisionId() ?? $revision->id())] = [
+        'fields' => $this->canonicalize($revision),
+        'default' => $revision->isDefaultRevision(),
+      ];
+    }
+    ksort($snapshot, SORT_NUMERIC);
+    return $snapshot;
+  }
+
+  /**
+   * Restores one revision while preserving its historical default metadata.
+   */
+  private function restoreRevision(ContentEntityInterface $source, string $target_type, bool $default): ContentEntityInterface {
+    $storage = $this->entityTypeManager->getStorage($target_type);
     $values = $this->fieldValues($source);
     $created = $storage->create($values);
     if (!$created instanceof ContentEntityInterface) {
       throw new MigrateRefusal('identity_not_preserved');
     }
     $target = $created;
-    $target->enforceIsNew(TRUE);
+    // A new entity cannot be marked nondefault through the Entity API. Restore
+    // already has explicit identifiers and performs inserts regardless of this
+    // runtime flag; it does not invoke presave and rewrite revision metadata.
+    $target->enforceIsNew($default);
+    $target->isDefaultRevision($default);
     $target->setSyncing(TRUE);
     if ($target->getEntityType()->isRevisionable()) {
       $target->setNewRevision(FALSE);
@@ -46,13 +169,18 @@ final class IdentityPreservingWriter {
     $this->copyTranslations($source, $target, FALSE);
     $storage->restore($target);
     $this->assertSameIdentity($source, $target);
-    $this->advanceSerial($target);
     $storage->resetCache([(int) $target->id()]);
-    $reloaded = $storage->load($target->id());
+    $reloaded = $source->getEntityType()->isRevisionable() && $storage instanceof ContentEntityStorageInterface
+      ? $storage->loadRevision($source->getRevisionId())
+      : $storage->load($target->id());
     if (!$reloaded instanceof ContentEntityInterface) {
       throw new MigrateRefusal('identity_not_preserved');
     }
     $this->assertSameIdentity($source, $reloaded);
+    if ($this->canonicalize($source) !== $this->canonicalize($reloaded)
+      || $reloaded->isDefaultRevision() !== $default) {
+      throw new MigrateRefusal('history_drift');
+    }
     return $reloaded;
   }
 
@@ -81,6 +209,55 @@ final class IdentityPreservingWriter {
       throw new MigrateRefusal('identity_not_preserved');
     }
     return $reloaded;
+  }
+
+  /**
+   * Typed stored fields shared by copy verification and reconciliation.
+   *
+   * @return array<string, string>
+   *   Sorted field names mapped to JSON of translations and ordered items.
+   */
+  public function canonicalize(ContentEntityInterface $entity): array {
+    $values = [];
+    foreach ($entity->getTranslationLanguages() as $langcode => $language) {
+      foreach ($entity->getTranslation($langcode)->getFields(FALSE) as $name => $field) {
+        if ($field->getFieldDefinition()->isComputed()) {
+          continue;
+        }
+        $values[$name][$langcode] = [];
+        foreach ($field as $item) {
+          $properties = [];
+          foreach ($item->getProperties(FALSE) as $property_name => $property) {
+            $value = $property->getValue();
+            $properties[$property_name] = $value !== NULL && $property instanceof PrimitiveInterface
+              ? $property->getCastedValue()
+              : $value;
+          }
+          $values[$name][$langcode][] = $properties;
+        }
+      }
+    }
+    ksort($values);
+    $canonical = [];
+    foreach ($values as $name => $translations) {
+      $canonical[$name] = json_encode($this->sortProperties($translations), JSON_THROW_ON_ERROR);
+    }
+    return $canonical;
+  }
+
+  /**
+   * Sorts property maps while preserving the order of field item lists.
+   */
+  private function sortProperties(array $values): array {
+    if (!array_is_list($values)) {
+      ksort($values);
+    }
+    foreach ($values as &$value) {
+      if (is_array($value)) {
+        $value = $this->sortProperties($value);
+      }
+    }
+    return $values;
   }
 
   /**

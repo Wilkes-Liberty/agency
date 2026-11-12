@@ -7,6 +7,7 @@ namespace Drupal\agency_migrate;
 use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\agency_migrate\Plugin\CopierInterface;
 use Drupal\agency_migrate\Plugin\CopierManager;
+use Drupal\agency_migrate\Plugin\HistoryCopierInterface;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 
@@ -89,6 +90,29 @@ final class Reconciler {
       }
       $source_map = $copier->canonicalize($source);
       $target_map = $copier->canonicalize($target);
+      if ($copier instanceof HistoryCopierInterface || $source->getEntityType()->isRevisionable()) {
+        $row = $this->lineage->bySource($source->getEntityTypeId(), $id);
+        $manifest = $row === NULL ? NULL : $this->lineage->manifest($row);
+        try {
+          if (!$copier instanceof HistoryCopierInterface || $manifest === NULL) {
+            throw new MigrateRefusal('history_unverified');
+          }
+          if ($manifest !== $copier->historyManifest($source)
+            || $manifest !== $copier->historyManifest($target)
+            || $row['source_uuid'] !== $source->uuid()
+            || $row['target_uuid'] !== $target->uuid()
+            || $row['target_entity_type'] !== $copier->targetEntityType()
+            || (int) $row['target_id'] !== (int) $target->id()
+            || (int) $row['source_revision_id'] !== (int) ($source->getRevisionId() ?? $source->id())
+            || (int) $row['target_revision_id'] !== (int) ($target->getRevisionId() ?? $target->id())
+            || $row['content_digest'] !== $copier->contentDigest($source)) {
+            throw new MigrateRefusal('history_drift');
+          }
+        }
+        catch (MigrateRefusal $exception) {
+          $exceptions[] = ['type' => $exception->reason, 'id' => $id];
+        }
+      }
       $digests[$id] = [];
       foreach ($source_map as $field => $encoded) {
         $target_encoded = $target_map[$field] ?? '';

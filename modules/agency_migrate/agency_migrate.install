@@ -67,6 +67,12 @@ function agency_migrate_schema(): array {
           'length' => 64,
           'not null' => TRUE,
         ],
+        'history_manifest' => [
+          'description' => 'Versioned revision digests; NULL means history has not been verified.',
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
         'recorded' => [
           'type' => 'int',
           'size' => 'big',
@@ -295,4 +301,15 @@ function agency_migrate_schema(): array {
       ],
     ],
   ];
+}
+
+/**
+ * Adds history qualification without inventing manifests for earlier copies.
+ */
+function agency_migrate_update_10001(): void {
+  $schema = \Drupal::database()->schema();
+  if (!$schema->fieldExists('agency_migrate_lineage', 'history_manifest')) {
+    $definition = agency_migrate_schema()['agency_migrate_lineage']['fields']['history_manifest'];
+    $schema->addField('agency_migrate_lineage', 'history_manifest', $definition);
+  }
 }
