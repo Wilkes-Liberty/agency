@@ -62,6 +62,7 @@ abstract class MigrateKernelTestBase extends KernelTestBase {
       'agency_migrate_outbox',
       'agency_migrate_write_log',
       'agency_migrate_authority_event',
+      'agency_migrate_authority_state',
     ]);
     $this->installConfig(['system', 'user', 'audit_chain', 'agency_migrate']);
     User::create(['name' => 'reserved', 'status' => 1])->save();

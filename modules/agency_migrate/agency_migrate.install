@@ -5,6 +5,10 @@
  * Installs lineage, run, outbox and post-cutover write storage.
  */
 
+use Drupal\agency_migrate\TransactionBoundary;
+use Drupal\Component\Serialization\PhpSerialize;
+use Drupal\Core\KeyValueStore\DatabaseStorage;
+
 /**
  * Implements hook_schema().
  */
@@ -257,6 +261,18 @@ function agency_migrate_schema(): array {
         'pending' => ['domain', 'replayed'],
       ],
     ],
+    'agency_migrate_authority_state' => [
+      'description' => 'Operational authority generations independent of configuration import.',
+      'fields' => [
+        'domain' => ['type' => 'varchar', 'length' => 63, 'not null' => TRUE],
+        'state' => ['type' => 'varchar', 'length' => 16, 'not null' => TRUE],
+        'version' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
+        'changed' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
+        'actor_hash' => ['type' => 'varchar', 'length' => 64, 'not null' => TRUE],
+        'reason' => ['type' => 'varchar', 'length' => 255, 'not null' => TRUE],
+      ],
+      'primary key' => ['domain'],
+    ],
     'agency_migrate_authority_event' => [
       'description' => 'Durable authority transitions with actor hash and reason.',
       'fields' => [
@@ -311,5 +327,62 @@ function agency_migrate_update_10001(): void {
   if (!$schema->fieldExists('agency_migrate_lineage', 'history_manifest')) {
     $definition = agency_migrate_schema()['agency_migrate_lineage']['fields']['history_manifest'];
     $schema->addField('agency_migrate_lineage', 'history_manifest', $definition);
+  }
+}
+
+/**
+ * Moves recorded authority from configuration into operational SQL state once.
+ */
+function agency_migrate_update_10002(): void {
+  $database = \Drupal::database();
+  $marker = new DatabaseStorage(
+    'agency_migrate.authority_upgrade',
+    new PhpSerialize(),
+    $database,
+  );
+  if ($marker->get('initialized')) {
+    if (!$database->schema()->tableExists('agency_migrate_authority_state')) {
+      throw new \RuntimeException('Operational migration authority storage is unavailable.');
+    }
+    return;
+  }
+  \Drupal::configFactory()->reset('agency_migrate.authority');
+  $domains = \Drupal::configFactory()->getEditable('agency_migrate.authority')->get('domains') ?? [];
+  if (!is_array($domains)) {
+    throw new \RuntimeException('Existing migration authority configuration is invalid.');
+  }
+  foreach ($domains as $domain => $row) {
+    if (!is_string($domain) || !preg_match('/^[a-z][a-z0-9_]{0,62}$/', $domain)
+      || !is_array($row) || !in_array($row['state'] ?? NULL, ['legacy', 'shadow', 'agency', 'removed'], TRUE)
+      || !is_int($row['changed'] ?? NULL) || $row['changed'] < 0
+      || !is_string($row['actor_hash'] ?? NULL) || !preg_match('/^[a-f0-9]{64}$/', $row['actor_hash'])
+      || !is_string($row['reason'] ?? NULL) || trim($row['reason']) === '' || strlen($row['reason']) > 255) {
+      throw new \RuntimeException('Existing migration authority configuration is invalid.');
+    }
+  }
+  if (!$database->schema()->tableExists('agency_migrate_authority_state')) {
+    $database->schema()->createTable('agency_migrate_authority_state', agency_migrate_schema()['agency_migrate_authority_state']);
+  }
+  $transaction = $database->startTransaction();
+  try {
+    foreach ($domains as $domain => $row) {
+      if (!$database->select('agency_migrate_authority_state', 'a')->condition('domain', $domain)->countQuery()->execute()->fetchField()) {
+        $database->insert('agency_migrate_authority_state')->fields([
+          'domain' => $domain,
+          'state' => $row['state'],
+          'version' => 1,
+          'changed' => $row['changed'],
+          'actor_hash' => $row['actor_hash'],
+          'reason' => $row['reason'],
+        ])->execute();
+      }
+    }
+    // This explicit SQL key/value store shares the authority transaction.
+    $marker->set('initialized', TRUE);
+    TransactionBoundary::commit($transaction);
+  }
+  catch (\Throwable $exception) {
+    $transaction?->rollBack();
+    throw $exception;
   }
 }
