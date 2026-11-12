@@ -1,11 +1,11 @@
 <?php
 
-declare(strict_types=1);
-
 /**
  * @file
  * Bounded delivery of committed workforce evidence through Drupal cron.
  */
+
+declare(strict_types=1);
 
 /**
  * Implements hook_cron().

@@ -125,7 +125,8 @@ $runner = new class('workforceWorker') extends TestCase {
        */
       public function provision(string $normalizedContact, string $classification, string $language, string $preferredName): string {
         $id = $this->database->insert('agency_workforce_test_concurrent_account')->fields([
-          'contact' => $normalizedContact, 'classification' => $classification,
+          'contact' => $normalizedContact,
+          'classification' => $classification,
         ])->execute();
         if (isset($this->input['ready'])) {
           touch($this->input['ready']);
@@ -138,7 +139,9 @@ $runner = new class('workforceWorker') extends TestCase {
           }
         }
         $this->database->insert('agency_workforce_test_concurrent_profile')->fields([
-          'account_id' => (int) $id, 'classification' => $classification, 'language' => $language,
+          'account_id' => (int) $id,
+          'classification' => $classification,
+          'language' => $language,
         ])->execute();
         return 'synthetic:' . $id;
       }

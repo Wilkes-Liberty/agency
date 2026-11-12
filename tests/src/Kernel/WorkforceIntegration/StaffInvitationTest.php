@@ -370,7 +370,7 @@ class StaffInvitationTest extends KernelTestBase {
   }
 
   /**
-   * Another connection to the same database still cannot share this transaction.
+   * Another connection cannot participate in the same root transaction.
    *
    * @dataProvider connectionParticipants
    */
@@ -569,13 +569,16 @@ class StaffInvitationTest extends KernelTestBase {
     $token = $this->legacy();
     $other = $mode === 'same_token' ? $token : $this->legacy([
       'email' => $mode === 'expiry' ? 'other@example.test' : ' RECIPIENT@Example.test ',
-      'type' => 'contractor', 'langcode' => 'es',
+      'type' => 'contractor',
+      'langcode' => 'es',
     ]);
     $database = $this->container->get('database');
     $prefix = sys_get_temp_dir() . '/workforce-concurrency-' . bin2hex(random_bytes(8));
     $files = [
-      'ready' => $prefix . '-ready', 'release' => $prefix . '-release',
-      'first' => $prefix . '-first', 'second' => $prefix . '-second',
+      'ready' => $prefix . '-ready',
+      'release' => $prefix . '-release',
+      'first' => $prefix . '-first',
+      'second' => $prefix . '-second',
     ];
     $vendor = dirname($this->root) . '/vendor';
     if (!is_file($vendor . '/autoload.php')) {
@@ -595,11 +598,14 @@ class StaffInvitationTest extends KernelTestBase {
     $first = new Process([PHP_BINARY, $script, $this->root, $vendor]);
     $second = new Process([PHP_BINARY, $script, $this->root, $vendor]);
     $first->setInput(json_encode($base + [
-      'bearer' => $token, 'started' => $files['first'],
-      'ready' => $files['ready'], 'release' => $files['release'],
+      'bearer' => $token,
+      'started' => $files['first'],
+      'ready' => $files['ready'],
+      'release' => $files['release'],
     ], JSON_THROW_ON_ERROR));
     $second->setInput(json_encode($base + [
-      'bearer' => $other, 'started' => $files['second'],
+      'bearer' => $other,
+      'started' => $files['second'],
       'mode' => $mode === 'authority' ? 'authority' : 'accept',
     ], JSON_THROW_ON_ERROR));
     $first->setTimeout(35);

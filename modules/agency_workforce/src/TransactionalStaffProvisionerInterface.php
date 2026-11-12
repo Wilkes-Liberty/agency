@@ -18,11 +18,15 @@ interface TransactionalStaffProvisionerInterface {
 
   /**
    * Checks case-insensitive account collisions under contact exclusion.
+   *
+   * @phpstan-impure
    */
   public function accountExists(string $normalizedContact): bool;
 
   /**
    * Creates the local account/profile and returns an opaque host binding.
+   *
+   * @phpstan-impure
    */
   public function provision(string $normalizedContact, string $classification, string $language, string $preferredName): string;
 

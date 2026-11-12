@@ -395,6 +395,33 @@ jobs:
             ];
             echo "Executed legacy writer boundaries: " . count(array_intersect($legacyWriterRequired, $executed)) . "\n";
             if (array_diff($legacyWriterRequired, $executed)) { exit(1); }
+            $workforceRequired = [
+              "testExistingBearerAndMissingLanguageRemainCompatible",
+              "testIssueClampsAndRetainsLanguageWithoutMail",
+              "testNoopInsertCannotReportIssued",
+              "testLocalFailureRollsBack with data set \"noop provision\"",
+              "testLocalFailureRollsBack with data set \"wrong binding\"",
+              "testLocalFailureRollsBack with data set \"missing profile\"",
+              "testCommitAcknowledgementRequiresScopedProof",
+              "testDiscardedResponseRecoversByBearerWithoutReplay",
+              "testConsumedBearerRecoveryExpires",
+              "testSchemaBoundsFailClosedWithoutPartialProvisioning",
+              "testOuterTransactionAndContextRefuseWithoutWrites",
+              "testDefaultProvisionerDeniesWithoutSideEffects",
+              "testNoopCommitCannotReportSuccess",
+              "testParticipantConnectionIdentity with data set \"storage connection\"",
+              "testParticipantConnectionIdentity with data set \"provisioner connection\"",
+              "testUncertainIssuanceNeverRemintsOrReturnsBearer",
+              "testPendingEvidenceDrainsOnceWithoutPrivateMetadata",
+              "testAuditAppendAndDeliveryMarkerAreAtomic",
+              "testCronDeliversAtMostTwentyIntents",
+              "testSameTokenConcurrencyBeyondOldLease",
+              "testDifferentTokensSameContactConcurrency",
+              "testAuthorityChangeWaitsForAcceptanceCommit",
+              "testExpiryIsFreshAfterWaitingForWriterBoundary",
+            ];
+            echo "Executed workforce boundaries: " . count(array_intersect($workforceRequired, $executed)) . "\n";
+            if (array_diff($workforceRequired, $executed)) { exit(1); }
             echo "Executed authority boundaries: " . count(array_intersect($authorityRequired, $executed)) . "\n";
             if (array_diff($authorityRequired, $executed)) { exit(1); }
             echo "Executed domain tests: " . count($executed) . "\n";
