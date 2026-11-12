@@ -18,8 +18,11 @@ engines remain independent dependencies.
 - `agency` provides the shared package foundation and tenant configuration.
 - `agency_staff` is the capability boundary for workforce relationships and the
   Discovery workspace.
+- `agency_workforce` provides staff invitation issuance, acceptance, recovery and
+  durable evidence through explicitly configured host adapters.
 - `agency_migrate` copies host records into Agency types with lineage, shadow
-  reconciliation and reversible authority. Host adapters supply copier plugins.
+  reconciliation and operational authority. Host adapters supply copier plugins
+  and verified writer exclusion. Nonempty rollback replay remains unavailable.
 
 `agency_staff` provides invitation-only Discovery domain services, internal
 entity storage, scoped workspace/summary projections and a durable evidence
@@ -27,6 +30,23 @@ outbox. See the [provisional service contract](docs/DISCOVERY_CONTRACT.md).
 The host supplies authentication, transport and the participant interface.
 The default identity adapter denies access. Enabling the module creates no
 relationships, accounts, roles or invitations, and sends no notifications.
+
+`agency_workforce` preserves anonymous staff onboarding separately from Discovery.
+Its optional services commit local account/profile provisioning, invitation
+consumption and evidence intent together. The host supplies storage, policy,
+provisioning and writer-boundary adapters; all four default to refusal. Enabling
+the module supplies no public route, sends no mail and transfers no authority.
+See the [invitation adapter guide](modules/agency_workforce/README.md).
+Routine uninstall preserves populated migration and invitation recovery stores;
+retiring an installation requires a reviewed retention and recovery procedure.
+
+The alpha6 migration scope includes complete revision/translation copying,
+atomic resumable batches and complete-population reconciliation. A rollback with
+no pending journal writes can restore legacy authority only after full domain
+reconciliation under a qualified host fence. Existing nonempty journals lack
+the operation snapshots needed for safe replay and are refused. This release
+does not qualify a production cutover or complete the broader workforce, CRM,
+intake and time extraction.
 
 ## Host contract (`agency_host`)
 
