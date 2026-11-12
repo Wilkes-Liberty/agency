@@ -16,7 +16,8 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
  *   id = "agency_migrate_legacy_item",
  *   label = @Translation("Synthetic legacy item"),
  *   handlers = {
- *     "access" = "Drupal\agency_migrate_test\Access\DenyAccess"
+ *     "access" = "Drupal\agency_migrate_test\Access\DenyAccess",
+ *     "storage" = "Drupal\agency_migrate_test\InterruptibleStorage"
  *   },
  *   base_table = "agency_migrate_legacy_item",
  *   revision_table = "agency_migrate_legacy_item_revision",
@@ -43,6 +44,7 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
   label: new TranslatableMarkup('Synthetic legacy item'),
   handlers: [
     'access' => 'Drupal\\agency_migrate_test\\Access\\DenyAccess',
+    'storage' => 'Drupal\\agency_migrate_test\\InterruptibleStorage',
   ],
   base_table: 'agency_migrate_legacy_item',
   revision_table: 'agency_migrate_legacy_item_revision',

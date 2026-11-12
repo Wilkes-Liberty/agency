@@ -10,7 +10,6 @@ use Drupal\Component\Plugin\PluginBase;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\TypedData\PrimitiveInterface;
 
 /**
  * Entity-API copier that preserves integer ids, UUIDs and revision ids.
@@ -18,7 +17,7 @@ use Drupal\Core\TypedData\PrimitiveInterface;
  * Concrete plugins implement ContainerFactoryPluginInterface and call this
  * constructor from create().
  */
-abstract class EntityCopierBase extends PluginBase implements CopierInterface {
+abstract class EntityCopierBase extends PluginBase implements HistoryCopierInterface {
 
   /**
    * Field names that carry identity rather than marked content.
@@ -145,8 +144,8 @@ abstract class EntityCopierBase extends PluginBase implements CopierInterface {
       throw new MigrateRefusal('identity_conflict');
     }
     $existing = $this->loadTarget((int) $source->id());
-    if ($existing instanceof ContentEntityInterface && $existing->uuid() === $source->uuid()) {
-      return $existing;
+    if ($existing instanceof ContentEntityInterface) {
+      throw new MigrateRefusal('history_unverified');
     }
     return $this->writer->insertCopy($source, $this->targetEntityType());
   }
@@ -169,46 +168,7 @@ abstract class EntityCopierBase extends PluginBase implements CopierInterface {
    * {@inheritdoc}
    */
   public function canonicalize(ContentEntityInterface $entity): array {
-    $values = [];
-    foreach ($entity->getTranslationLanguages() as $langcode => $language) {
-      foreach ($entity->getTranslation($langcode)->getFields(FALSE) as $name => $field) {
-        if ($field->getFieldDefinition()->isComputed()) {
-          continue;
-        }
-        $values[$name][$langcode] = [];
-        foreach ($field as $item) {
-          $properties = [];
-          foreach ($item->getProperties(FALSE) as $property_name => $property) {
-            $value = $property->getValue();
-            $properties[$property_name] = $value !== NULL && $property instanceof PrimitiveInterface
-              ? $property->getCastedValue()
-              : $value;
-          }
-          $values[$name][$langcode][] = $properties;
-        }
-      }
-    }
-    ksort($values);
-    $canonical = [];
-    foreach ($values as $name => $translations) {
-      $canonical[$name] = json_encode($this->sortProperties($translations), JSON_THROW_ON_ERROR);
-    }
-    return $canonical;
-  }
-
-  /**
-   * Sorts property maps while preserving the order of field item lists.
-   */
-  private function sortProperties(array $values): array {
-    if (!array_is_list($values)) {
-      ksort($values);
-    }
-    foreach ($values as &$value) {
-      if (is_array($value)) {
-        $value = $this->sortProperties($value);
-      }
-    }
-    return $values;
+    return $this->writer->canonicalize($entity);
   }
 
   /**
@@ -216,6 +176,27 @@ abstract class EntityCopierBase extends PluginBase implements CopierInterface {
    */
   public function contentDigest(ContentEntityInterface $entity): string {
     return hash('sha256', json_encode($this->canonicalize($entity), JSON_THROW_ON_ERROR));
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function historyManifest(ContentEntityInterface $entity): array {
+    $revisions = [];
+    foreach ($this->writer->loadHistory($entity) as $revision) {
+      $revisions[(int) ($revision->getRevisionId() ?? $revision->id())] = [
+        'digest' => $this->contentDigest($revision),
+        'default' => $revision->isDefaultRevision(),
+      ];
+    }
+    ksort($revisions, SORT_NUMERIC);
+    return [
+      'version' => 1,
+      'id' => (int) $entity->id(),
+      'uuid' => $entity->uuid(),
+      'default_revision_id' => (int) ($entity->getRevisionId() ?? $entity->id()),
+      'revisions' => $revisions,
+    ];
   }
 
   /**

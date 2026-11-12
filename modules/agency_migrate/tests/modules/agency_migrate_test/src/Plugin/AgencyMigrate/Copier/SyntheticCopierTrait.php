@@ -52,12 +52,29 @@ trait SyntheticCopierTrait {
   /**
    * {@inheritdoc}
    */
+  public function historyManifest(ContentEntityInterface $entity): array {
+    if ($this->state->get('agency_migrate_test.invalid_history_manifest')) {
+      return [];
+    }
+    return parent::historyManifest($entity);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function copyToTarget(ContentEntityInterface $source): ContentEntityInterface {
     $stop = $this->state->get('agency_migrate_test.interrupt_title');
     if (is_string($stop) && $stop !== '' && (string) $source->get('title')->value === $stop) {
       throw new \RuntimeException('synthetic interrupt');
     }
-    return parent::copyToTarget($source);
+    $target = parent::copyToTarget($source);
+    if ($this->state->get('agency_migrate_test.change_source_during_copy')) {
+      $source->setNewRevision(TRUE);
+      $source->isDefaultRevision(FALSE);
+      $source->set('payload', 'In-process source mutation');
+      $source->save();
+    }
+    return $target;
   }
 
 }

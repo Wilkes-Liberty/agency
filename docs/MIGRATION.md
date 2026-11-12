@@ -19,16 +19,19 @@ that design does not register copiers or record types.
 Observed in the kernel suite against synthetic entity types:
 
 - A copier plugin copies one source type into one target type with the same
-  integer id, UUID, current revision id, created/changed timestamps, revision
-  author and revision log. Every non-computed property, ordered field delta,
-  empty field and current translation is copied for matching field layouts.
+  integer id, UUID, all revision ids, created/changed timestamps, revision
+  authors and revision logs. Every non-computed property, ordered field delta,
+  empty field and historical translation is copied for matching field layouts.
+  The current default stays selected even when a newer pending revision exists;
+  each revision retains its historical default and translation metadata.
 - The target id must not already belong to a different UUID.
 - Each copied pair is stored in a bidirectional lineage map with a content
-  digest and the run that wrote it.
+  digest, a versioned history manifest and the run that wrote it. The manifest
+  contains revision digests and default selection, without content values.
 - Runs are bounded batches. Each record shares a transaction with its lineage
   row, so a crash mid-batch leaves no partial target. Resume continues from the
   last committed source id without duplicating copies. A second complete run is
-  a no-op.
+  a verified no-op when both sides still match the committed manifest.
 - Every source content property must have a marking (`public`, `internal`,
   `confidential`, `personal` or `financial`). An unmapped or invalid marking
   fails the run before any write.
@@ -90,14 +93,48 @@ ordered field items and their non-computed properties. Property keys and
 language keys are sorted; delta order remains significant. Primitive properties
 use their declared Drupal typed-data cast, preserving boolean and numeric types
 across database drivers; null and empty lists remain distinct. Older scalar-only
-lineage digests are not comparable to this encoding. Existing lineage rows still cause a rerun to skip the pair:
-reconcile existing copies before considering them faithful. This change does
-not repair values lost by an earlier copy.
+lineage digests are not comparable to this encoding.
 
-This preserves the current loaded revision only. Earlier revisions, pending
-non-default revisions, historical translation changes and revision-reference
-remapping still require separate work. A passing current-value reconciliation
-does not establish complete history preservation or authorize cutover.
+## Revision history and existing copies
+
+`EntityCopierBase` implements the additive `HistoryCopierInterface`. It loads
+all revisions through revision-aware entity queries and `loadMultipleRevisions`,
+then compares persisted source and target revision digests. The SQL restore
+writes current tables only for the actual current default. Earlier defaults
+and pending revisions go only to revision storage, preserving each revision's
+stored `wasDefaultRevision()` metadata. Every restored revision is reloaded
+with `loadRevision()`; current-only `load()` is not history verification.
+The writer owns a transaction around the complete history, including when a
+rollback inserts a record outside the migration runner. The runner's enclosing
+transaction adds lineage to the same atomic record operation. PostgreSQL
+sequences advance beyond all explicitly restored revision ids.
+Batch size bounds entities; one complete entity history is loaded into memory
+and restored in a single record transaction.
+
+Run database updates before using the history-aware runner. Update 10001 adds
+a nullable `history_manifest` column without rewriting earlier lineage or
+inventing proof for old copies. Existing NULL, unsupported or malformed
+manifests refuse with `history_unverified`. Changed source history, missing or
+changed target revisions, or changed default selection refuse with
+`history_drift`. An occupied revision identifier refuses with `history_conflict`.
+A target without lineage is not adopted simply because its UUID matches.
+An adapter implementing only `CopierInterface` remains loadable, but cannot
+copy or qualify revisionable records until it implements and proves the history
+contract; declaring the interface alone is not evidence of faithful storage.
+
+For earlier incomplete copies, preserve the source, target and lineage. Take
+a recoverable backup and inspect the source history against the existing target.
+A reviewed host-specific repair must restore and verify all missing or divergent
+revisions before establishing a manifest. This module does not provide an
+automatic repair or manifest-backfill command. Do not delete real records or
+lineage to force a rerun, and do not populate manifests from a current-only copy.
+
+A source-history recheck before lineage commit detects an observed snapshot
+change. It is not a write fence and does not make concurrent source writes safe.
+Hosts must provide a qualified write boundary before a real transfer or cutover.
+Revision-reference remapping and post-cutover historical replay onto existing
+legacy records remain outside this copy contract. Passing reconciliation does
+not authorize cutover.
 
 A synthetic copier (`synthetic_item`) lives in
 `modules/agency_migrate/tests/modules/agency_migrate_test` and is not a
@@ -121,8 +158,9 @@ the module.
   translations are replayed, including addition and removal, with all field
   deltas and stored item properties.
 - New Agency records without a lineage row are inserted onto legacy with the
-  same integer id and UUID. If that id is taken by a different UUID, rollback
-  refuses.
+  same integer id, UUID and complete target revision history. This insertion
+  has its own atomic writer transaction. If an entity or revision identifier
+  is already occupied, rollback refuses.
 - Concurrent legacy writes during the Agency-authoritative window are
   overwritten by replay.
 - Historical evidence is not rewound. Lineage events remain so either

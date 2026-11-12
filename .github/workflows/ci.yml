@@ -308,6 +308,24 @@ jobs:
             $xml = simplexml_load_file("domain-junit.xml");
             if ($xml === false) { exit(1); }
             $required = ["testConcurrentDrainersCommit", "testConcurrentDrainersRollback", "testConcurrentDomainCommit", "testConcurrentDomainRollback", "testInterruptedDrainRetainsIntent", "testDeliveryMarkerFailure", "testSummarySavepointFailure", "testEvidenceHealthAgeAndRollback", "testEvidenceHealthUpgrade", "testEvidenceHealthUnavailable", "testEvidenceHealthTransactionBoundary", "testEvidenceHealthSlowFailure", "testPolicyWriterWaitsForCommit", "testPolicyWriterWaitsForRollback", "testDomainInventoryAfterWaitingWriter", "testDomainInventoryAfterRolledBackWriter", "testCompleteRemovalAndAuthorizedReplay", "testInterruptedBatchLeavesCompletedRemovals", "testWithdrawnRetentionUsesCurrentPolicy", "testConcurrentReferenceCommit", "testConcurrentReferenceRollback", "testConcurrentPolicyCommit", "testEvidenceFailureRollsBackRemoval", "testLostApplicationResponse"];
+            $required = array_merge($required, [
+              "testHistoryAndDefaultSelectionSurviveCopyAndReplay",
+              "testHistoricalRevisionCollisionRefusesAtomically",
+              "testExistingSameUuidWithoutLineageRefuses",
+              "testMissingHistoryRefusesReplayAndFailsReconciliation",
+              "testSourceHistoryChangeRefusesReplay",
+              "testHistoricalMetadataDriftFailsReconciliation",
+              "testSourceMutationInsideCopyRefusesBeforeLineageCommit",
+              "testRollbackNewRecordWriterIsAtomicWithoutRunner",
+              "testStaleDefaultObjectRefusesDirectRollbackInsert",
+              "testInterruptedHistoryRestoreRollsBackAndCanResume",
+              "testNullableManifestUpgradePreservesOldLineageAndRefuses",
+              "testAdapterWithoutHistoryCapabilityRefusesBeforeCopy",
+              "testInvalidAdapterManifestRefusesAtomically",
+              "testMalformedManifestRefuses",
+              "testChangedLineageDigestRefusesReplayAndReconciliation",
+              "testChangedLineageUuidFailsReconciliation",
+            ]);
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
               if (isset($case->skipped)) { exit(1); }
