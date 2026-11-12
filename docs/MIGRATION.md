@@ -300,6 +300,16 @@ change does not make a nonempty replay safe or establish host writer coverage.
 Authority `removed` has no rollback edge. Real transfer and rollback acceptance
 still require a qualified host boundary and an operator-controlled rehearsal.
 
+## Removal and retained records
+
+Routine uninstall refuses while lineage, run receipts, evidence intents, write
+journals, authority events or authority state contain records. Delivered evidence
+remains protected. Missing or unreadable recovery storage also refuses removal;
+empty installations remain removable. Stop writers and complete an explicit
+retention and recovery procedure before retiring a used installation. There is
+no automatic purge, and this check does not replace a backup, restore rehearsal
+or writer fence.
+
 ## Commands
 
 Drush entry points are read-only unless `--execute` is passed:

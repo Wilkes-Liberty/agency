@@ -395,6 +395,23 @@ jobs:
             ];
             echo "Executed legacy writer boundaries: " . count(array_intersect($legacyWriterRequired, $executed)) . "\n";
             if (array_diff($legacyWriterRequired, $executed)) { exit(1); }
+            $uninstallRequired = [
+              "testPopulatedRecoveryTablesBlockUninstall with data set \"invitation receipt\"",
+              "testPopulatedRecoveryTablesBlockUninstall with data set \"invitation evidence\"",
+              "testPopulatedRecoveryTablesBlockUninstall with data set \"migration lineage\"",
+              "testPopulatedRecoveryTablesBlockUninstall with data set \"migration run\"",
+              "testPopulatedRecoveryTablesBlockUninstall with data set \"migration evidence\"",
+              "testPopulatedRecoveryTablesBlockUninstall with data set \"migration journal\"",
+              "testPopulatedRecoveryTablesBlockUninstall with data set \"authority event\"",
+              "testPopulatedRecoveryTablesBlockUninstall with data set \"authority state\"",
+              "testParentRemovalProtectsChildRecords with data set \"migration\"",
+              "testParentRemovalProtectsChildRecords with data set \"invitations\"",
+              "testUnreadableRecoveryStorageRefuses",
+              "testEmptyModuleCanBeUninstalled with data set \"invitations\"",
+              "testEmptyModuleCanBeUninstalled with data set \"migration\"",
+            ];
+            echo "Executed uninstall safeguards: " . count(array_intersect($uninstallRequired, $executed)) . "\n";
+            if (array_diff($uninstallRequired, $executed)) { exit(1); }
             $workforceRequired = [
               "testExistingBearerAndMissingLanguageRemainCompatible",
               "testIssueClampsAndRetainsLanguageWithoutMail",
