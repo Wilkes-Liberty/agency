@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0-alpha5] - 2026-11-12
+
+### Fixed
+- Use Drupal's `FetchAs` enum for invitation delivery listing on Drupal 11.2+,
+  keeping the Drupal 10 PDO fetch mode so listing rows stay associative arrays.
+
 ## [1.0.0-alpha4] - 2026-11-06
 
 ### Added
