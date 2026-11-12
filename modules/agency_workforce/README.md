@@ -40,3 +40,12 @@ a bounded host-operated drain after the business transaction. Signed append and
 the delivery marker share one transaction under an outbox row lock; `logKeyed()`
 alone does not provide retry protection. Evidence excludes bearer, digest,
 contact, preferred name and account binding.
+
+## Removal and retained records
+
+Routine uninstall refuses while invitation receipts or evidence intents remain,
+including delivered intents. Missing or unreadable recovery storage also refuses
+removal. Empty installations can be uninstalled normally. Before retiring a used
+installation, stop its writers and complete an explicit retention and recovery
+procedure; this module supplies no automatic purge. An uninstall refusal is not
+a substitute for backup, a restore rehearsal or a writer fence.

@@ -1,0 +1,6 @@
+services:
+  agency.recovery_uninstall_validator:
+    class: Drupal\agency\Uninstall\RecoveryUninstallValidator
+    arguments: ['@database', '@string_translation']
+    tags:
+      - { name: module_install.uninstall_validator }
