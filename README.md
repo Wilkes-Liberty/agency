@@ -132,7 +132,8 @@ Actual passing results, not the presence of a workflow, establish compatibility.
 - [Architecture](docs/ARCHITECTURE.md): domain, host, integration and evidence boundaries.
 - [Ontology](docs/ONTOLOGY.md): draft tenant-neutral object, link and action contract.
 - [Migration](docs/MIGRATION.md): identity-preserving copy, reconciliation and rollback.
-- [Workforce transfer](docs/WORKFORCE_TRANSFER.md): Slice 2 design ready for operator gate G1, plus unregistered scaffolding. Record types wait on G1.
+- [Workforce transfer](docs/WORKFORCE_TRANSFER.md): broader Slice 2 proposal and unregistered scaffolding.
+- [Staff onboarding compatibility](docs/WORKFORCE_INVITATION_CONTRACT.md): anonymous invitation, transaction and migration requirements; implementation and host qualification remain separate.
 - [CRM transfer](docs/CRM_TRANSFER.md): proposed Slice 3 CRM, intake and contact-lookup design.
 - [Time transfer](docs/TIME_TRANSFER.md): proposed Slice 4 engagement, time, client-membership and feed design. No record types.
 - [Maintaining](docs/MAINTAINING.md): development line, remotes and release verification.

@@ -1,7 +1,10 @@
 # Workforce transfer (Slice 2)
 
-Status: **proposed design ready for operator gate G1**. This is not an
-implementation contract and does not register Slice 2 record types.
+Status: **proposed broader Slice 2 design**. The
+[staff onboarding compatibility contract](WORKFORCE_INVITATION_CONTRACT.md)
+supersedes this draft wherever invitation format, anonymous acceptance, source
+identity or provisioning order conflicts. This document does not register
+Slice 2 record types or establish host cutover readiness.
 Package 01 published the caller ledger as draft
 [webcms#1900](https://github.com/Wilkes-Liberty/webcms/pull/1900). Slice 2
 citations below pin webcms `master` at
@@ -126,7 +129,7 @@ checkout; expand re-reads the ledger rather than this table):
 
 | Proposed row | Current authority (ledger) | Target | Notes |
 | --- | --- | --- | --- |
-| S2-L1 Staff invitation and onboarding | Host `chronicle_staff_invite` | Agency Staff | Ledger: staff onboard Webform. Issuer-minted single-use token; the invitee does not choose classification. After Agency commits acceptance, the host adapter mints uid, fail-closed role and matching Profile. Keycloak remains the IdP; not a password signup. |
+| S2-L1 Staff invitation and onboarding | Host `chronicle_staff_invite` | Agency Staff | Ledger: staff onboard Webform. Issuer-minted single-use token; the invitee does not choose classification. For existing anonymous onboarding, the host adapter creates uid, fail-closed role and matching Profile in the same transaction as invitation consumption and required evidence. Keycloak remains the IdP; not a password signup. |
 | S2-L2 Invitation protocol and `/invite` door | Host `chronicle_client_access` (not enabled) plus host `Query.wlInviteStatus` | Agency Staff, adapted | Ledger: Keycloak invitation protocol adapts into Agency Staff (issuer/subject, POST-only accept, per-read entitlement). Do not enable the dormant module. Host inspect door is `wlInviteStatus` on `/invite`; GET never consumes. |
 | S2-L3 Personnel and profile evidence | Host `chronicle_personnel` plus profile configuration | Agency workforce | Ledger person/account/profile split: Profile holds marked evidence, not identity. Private files stay under File Gate. |
 | S2-L4 Person / account / profile projection | Host `chronicle_api` person, account and profile projections | Agency projection; host keeps transport | Ledger S2 split: person (IdP), account (host uid/role), profile (evidence projection). Own-profile and account-summary contracts stay unchanged. |
@@ -172,7 +175,7 @@ yet):
 | Action | Actor | Effect |
 | --- | --- | --- |
 | `inviteStaff` | Eligible coordinator | Creates a workforce relationship in an invited state, pending workforce entitlement and a captured staff invitation. Classification is an input from the issuer. No uid, role, Profile or message send. |
-| `acceptStaffInvitation` | Authenticated intended principal, POST only | Consumes one generation under a row lock, activates workforce entitlement, then asks the host adapter to mint the host account/role/profile bundle. Wrong account, reused token and GET are refusals. |
+| `acceptStaffInvitation` | Anonymous holder of a valid existing staff bearer, POST only | The compatibility contract governs local account/profile provisioning, single-use consumption and required evidence in one transaction. Authenticated accounts, reused tokens and GET are refused. Proposed relationship/entitlement records are not prerequisites invented for old invitations. |
 | `revokeStaffInvitation` | Assigned coordinator | Revokes generations and workforce entitlement. Stale expected version still applies, matching Discovery denial. Does not reopen Discovery state. |
 | `updateProfileEvidence` | Authorized coordinator or the entitled person for own-profile fields | Writes own-profile evidence. Field names must match the server marking map; caller-chosen markings that disagree are refused. Account-summary is a read projection, not a write audience. File bytes are not accepted; only File Gate references. |
 | `createCareerPosting` / `publishCareerPosting` / `closeCareerPosting` | Eligible coordinator | Writes posting records. Publish still refuses an open role with no close date or a past one. |
@@ -242,8 +245,8 @@ The dormant host client-access module is not a dependency and must not
 be enabled by this transfer. Slice 2 adapts the protocol into Agency
 Staff.
 
-Observed Discovery ceremony that Slice 2 reuses as rules, not as
-classes:
+Observed Discovery ceremony, retained for Discovery only. Its exact
+issuer/subject and entitlement rules do not replace anonymous staff onboarding:
 
 - Intended identity is an exact issuer/subject pair from the host
   identity provider. Contact data never selects or merges a principal.
@@ -266,12 +269,10 @@ Adaptations for staff, distinct from Discovery:
   workforce kind. The ledger's staff onboard Webform records employee
   and contractor provisioning; scaffolding allowlists those two and
   refuses Discovery/client kinds unless G1 adds further kinds.
-- Acceptance may trigger host-side uid/role/profile provisioning through
-  the host adapter **after** the Agency workforce commit. Agency does
-  not mint a user. That is the ledger's account side of the
-  person/account/profile split. Host provisioning failure must not be
-  repaired by silently creating a second Agency relationship; it is an
-  `uncertain` host follow-up against the committed receipt.
+- Existing staff acceptance provisions the host uid/role/profile in the same
+  transaction as consumption and required evidence. Post-commit remote
+  provisioning remains a separate future integration, not the compatibility
+  behavior. See the staff onboarding contract for uncertain commit recovery.
 - Staff invitation copy and languages stay in the host catalog. This
   package ships no invitation wording.
 - Host inspect for invitation doors is `Query.wlInviteStatus` on
@@ -351,7 +352,10 @@ Rules:
   numeric id, UUID, revision ids, timestamps and revision authorship, and
   writes a lineage map. Moving a host-named entity provider into this
   package is rejected.
-- Token plaintext is never copied; re-hash if a hash already exists.
+- Token plaintext is never copied. Preserve an existing SHA-256 digest
+  byte-for-byte; hashing it again invalidates existing invitation links. Preserve
+  absolute expiry. Key/value invitation sources have no original integer ID or
+  UUID and require the dedicated lineage contract linked above.
 - File bytes are never copied. Résumé quarantine, scan and claim-scoped
   access stay on File Gate. No public or derivative URLs are created.
 - Historical Audit Chain events that name a legacy type stay untouched.
@@ -572,7 +576,8 @@ must keep passing, including the recruiting kind and the S2 source map.
 
 ## 12. Open operator decisions
 
-The numbered G1 checklist at the top is authoritative. This section
+The numbered checklist describes the broader proposed design; the linked
+compatibility contract supersedes its conflicting staff onboarding assumptions. This section
 keeps the narrative form.
 
 1. Approve `agency_*` workforce and recruiting types with ID-preserving
