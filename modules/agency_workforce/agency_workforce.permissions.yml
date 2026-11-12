@@ -1,0 +1,6 @@
+issue agency workforce invitations:
+  title: 'Issue workforce invitations'
+  restrict access: true
+reconcile agency workforce invitations:
+  title: 'Reconcile workforce invitation receipts'
+  restrict access: true

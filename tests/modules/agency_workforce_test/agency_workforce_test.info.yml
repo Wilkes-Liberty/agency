@@ -1,0 +1,7 @@
+name: Agency Workforce Synthetic Host
+type: module
+description: 'Synthetic local invitation storage and transaction participants.'
+package: Testing
+core_version_requirement: ^10.6 || ^11.3
+dependencies:
+  - agency:agency_workforce

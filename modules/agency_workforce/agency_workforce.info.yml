@@ -1,0 +1,9 @@
+name: Agency Workforce
+type: module
+description: 'Portable staff invitation and local onboarding services.'
+core_version_requirement: ^10.6 || ^11.3
+package: Agency
+dependencies:
+  - agency:agency
+  - audit_chain:audit_chain
+  - drupal:user

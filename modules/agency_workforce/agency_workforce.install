@@ -1,0 +1,57 @@
+<?php
+
+/**
+ * @file
+ * Durable workforce exclusion, operation receipts and minimized evidence.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function agency_workforce_schema(): array {
+  $id = ['type' => 'varchar_ascii', 'length' => 36, 'binary' => TRUE, 'not null' => TRUE];
+  $scope = ['type' => 'varchar_ascii', 'length' => 64, 'binary' => TRUE, 'not null' => TRUE];
+  $operation = ['type' => 'varchar_ascii', 'length' => 32, 'binary' => TRUE, 'not null' => TRUE];
+  $time = ['type' => 'int', 'size' => 'big', 'not null' => TRUE];
+  return [
+    'agency_workforce_mutex' => [
+      'description' => 'Durable contact/invitation exclusion; no bearer or contact values.',
+      'fields' => [
+        'lock_key' => ['type' => 'varchar_ascii', 'length' => 384, 'binary' => TRUE, 'not null' => TRUE],
+      ],
+      'primary key' => ['lock_key'],
+    ],
+    'agency_workforce_receipt' => [
+      'description' => 'New operation receipts, not fabricated source invitation identifiers.',
+      'fields' => [
+        'id' => $id,
+        'scope' => $scope,
+        'collection' => ['type' => 'varchar_ascii', 'length' => 128, 'binary' => TRUE, 'not null' => TRUE],
+        'digest' => ['type' => 'varchar_ascii', 'length' => 64, 'binary' => TRUE, 'not null' => TRUE],
+        'operation' => $operation,
+        'expires' => $time,
+        'binding' => ['type' => 'varchar_ascii', 'length' => 255, 'binary' => TRUE, 'not null' => FALSE],
+        'recorded' => $time,
+      ],
+      'primary key' => ['id'],
+      'unique keys' => [
+        'source_operation' => ['scope', 'collection', 'digest', 'operation'],
+      ],
+    ],
+    'agency_workforce_outbox' => [
+      'description' => 'Required minimized intents; delivered only after business commit.',
+      'fields' => [
+        'sequence' => ['type' => 'serial', 'size' => 'big', 'not null' => TRUE],
+        'id' => $id,
+        'operation' => $operation,
+        'metadata' => ['type' => 'text', 'size' => 'normal', 'not null' => TRUE],
+        'recorded' => $time,
+        'delivered' => ['type' => 'int', 'size' => 'big', 'not null' => FALSE],
+        'attempts' => ['type' => 'int', 'not null' => TRUE, 'default' => 0],
+      ],
+      'primary key' => ['sequence'],
+      'unique keys' => ['event_id' => ['id']],
+      'indexes' => ['pending' => ['delivered', 'sequence']],
+    ],
+  ];
+}

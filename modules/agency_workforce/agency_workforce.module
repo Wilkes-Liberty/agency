@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * @file
+ * Bounded delivery of committed workforce evidence through Drupal cron.
+ */
+
+declare(strict_types=1);
+
+/**
+ * Implements hook_cron().
+ */
+function agency_workforce_cron(): void {
+  \Drupal::service('agency_workforce.outbox')->drain(20);
+}
