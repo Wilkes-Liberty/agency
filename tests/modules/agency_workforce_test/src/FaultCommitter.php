@@ -21,6 +21,9 @@ final class FaultCommitter implements TransactionCommitterInterface {
    */
   public function commit(?Transaction &$transaction): void {
     $fault = $this->config->get('agency_workforce_test.settings')->get('fault');
+    if ($fault === 'commit_noop') {
+      return;
+    }
     if ($fault === 'commit_before') {
       throw new \RuntimeException('Synthetic commit failure.');
     }

@@ -59,6 +59,15 @@ final class InvitationService {
       }
       $record = new InvitationRecord($collection, $digest, $contact, $classification, $language, $this->time->getCurrentTime() + $duration);
       $this->store->insertDigest($record);
+      $persisted = $this->store->lookupDigest($digest, TRUE);
+      if ($persisted === NULL || $persisted->collection !== $collection
+        || !hash_equals($digest, $persisted->digest)
+        || $persisted->contact !== $contact
+        || $persisted->classification !== $classification
+        || $persisted->language !== $language
+        || $persisted->expires !== $record->expires) {
+        throw new InvitationRefusal('storage_conflict');
+      }
       $this->journal->record($id, $scope, $record, 'invitation_issued');
       return ['status' => 'completed', 'receipt_id' => $id, 'bearer' => $bearer, 'expires' => $record->expires];
     });
@@ -110,7 +119,9 @@ final class InvitationService {
         throw new InvitationRefusal('collision');
       }
       $binding = $this->provisioner->provision($record->contact, $record->classification, $language, $preferredName);
-      if (!$this->validBinding($binding)) {
+      if (!$this->validBinding($binding)
+        || !$this->provisioner->accountExists($record->contact)
+        || !$this->provisioner->verifyBinding($binding, $record->contact, $record->classification, $language)) {
         throw new InvitationRefusal('storage_conflict');
       }
       if ($this->store->consume($record) !== 1) {

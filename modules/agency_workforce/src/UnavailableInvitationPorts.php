@@ -66,6 +66,13 @@ final class UnavailableInvitationPorts implements InvitationStoreInterface, Tran
   /**
    * {@inheritdoc}
    */
+  public function verifyBinding(string $binding, string $normalizedContact, string $classification, string $language): bool {
+    return FALSE;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function scope(): string {
     throw new InvitationRefusal('unavailable');
   }

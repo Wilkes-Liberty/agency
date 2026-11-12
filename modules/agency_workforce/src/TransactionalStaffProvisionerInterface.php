@@ -26,4 +26,12 @@ interface TransactionalStaffProvisionerInterface {
    */
   public function provision(string $normalizedContact, string $classification, string $language, string $preferredName): string;
 
+  /**
+   * Freshly verifies the local account and matching profile on this connection.
+   *
+   * The opaque binding must identify that contact/classification/language.
+   * Do not resolve remote identities or grant permissions during verification.
+   */
+  public function verifyBinding(string $binding, string $normalizedContact, string $classification, string $language): bool;
+
 }

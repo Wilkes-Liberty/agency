@@ -12,7 +12,14 @@ use Drupal\Core\Config\ConfigFactoryInterface;
  */
 final class SyntheticClock implements TimeInterface {
 
-  public function __construct(private readonly ConfigFactoryInterface $config) {}
+  /**
+   * Fixed request time, distinct from the fresh current clock after waiting.
+   */
+  private readonly int $requestTime;
+
+  public function __construct(private readonly ConfigFactoryInterface $config) {
+    $this->requestTime = $this->getCurrentTime();
+  }
 
   /**
    * {@inheritdoc}
@@ -25,7 +32,7 @@ final class SyntheticClock implements TimeInterface {
    * {@inheritdoc}
    */
   public function getRequestTime(): int {
-    return $this->getCurrentTime();
+    return $this->requestTime;
   }
 
   /**
@@ -39,7 +46,7 @@ final class SyntheticClock implements TimeInterface {
    * {@inheritdoc}
    */
   public function getRequestMicroTime(): float {
-    return $this->getCurrentMicroTime();
+    return (float) $this->requestTime;
   }
 
 }

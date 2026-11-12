@@ -68,6 +68,9 @@ final class SqlInvitationStore implements InvitationStoreInterface {
    * {@inheritdoc}
    */
   public function insertDigest(InvitationRecord $record): void {
+    if ($this->config->get('agency_workforce_test.settings')->get('fault') === 'insert_noop') {
+      return;
+    }
     $this->database->insert('agency_workforce_test_invitation')->fields([
       'collection' => $record->collection,
       'name' => $record->digest,

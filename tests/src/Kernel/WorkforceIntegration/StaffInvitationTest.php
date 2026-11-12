@@ -9,6 +9,7 @@ use Drupal\agency_workforce\UnavailableInvitationPorts;
 use Drupal\agency_workforce\InvitationService;
 use Drupal\agency_workforce_test\SqlInvitationStore;
 use Drupal\agency_workforce_test\DeliveryMarkerFault;
+use Drupal\agency_workforce_test\LocalProvisioner;
 use Drupal\audit_chain\AuditChainLoggerInterface;
 use Drupal\Component\Uuid\Php;
 use Drupal\Component\Uuid\UuidInterface;
@@ -96,6 +97,7 @@ class StaffInvitationTest extends KernelTestBase {
   public function testExistingBearerAndMissingLanguageRemainCompatible(): void {
     $token = $this->legacy(['email' => ' Recipient@Example.test ', 'type' => 'contractor']);
     $before = $this->freshSnapshot();
+    $sessionWasStarted = $this->container->get('request_stack')->getSession()->isStarted();
     $view = $this->service()->inspect($token);
     $this->assertTrue($view['valid']);
     $this->assertSame('en', $view['language']);
@@ -108,9 +110,11 @@ class StaffInvitationTest extends KernelTestBase {
     $profile = $this->container->get('database')->select('agency_workforce_test_profile', 'p')->fields('p')->execute()->fetchAssoc();
     $this->assertSame('contractor', $profile['classification']);
     $this->assertSame('en', $profile['language']);
+    $this->assertSame(['authenticated', 'synthetic_contractor'], User::load($profile['uid'])->getRoles());
     $this->assertRefused(fn () => $this->service()->accept($token), 'invalid_invitation');
     $this->assertSame([], $this->container->get('state')->get('system.test_mail_collector', []));
     $this->assertTrue($this->container->get('current_user')->isAnonymous());
+    $this->assertSame($sessionWasStarted, $this->container->get('request_stack')->getSession()->isStarted());
     $this->assertFalse($this->container->get('module_handler')->moduleExists('agency_staff'));
   }
 
@@ -168,7 +172,21 @@ class StaffInvitationTest extends KernelTestBase {
       'conditional consume affects zero' => ['consume_zero', 'storage_conflict'],
       'required evidence unavailable' => ['outbox', 'failed'],
       'changed contact under exclusion' => ['changed_contact', 'invalid_invitation'],
+      'noop provision' => ['provision_noop', 'storage_conflict'],
+      'wrong binding' => ['binding_wrong', 'storage_conflict'],
+      'missing profile' => ['profile_noop', 'storage_conflict'],
     ];
+  }
+
+  /**
+   * A void insert port that persists nothing cannot report an issued bearer.
+   */
+  public function testNoopInsertCannotReportIssued(): void {
+    $this->container->get('current_user')->setAccount(User::load(2));
+    $before = $this->freshSnapshot();
+    $this->config('agency_workforce_test.settings')->set('fault', 'insert_noop')->save();
+    $this->assertRefused(fn () => $this->service()->issue('recipient@example.test', 'employee'), 'storage_conflict');
+    $this->assertSame($before, $this->freshSnapshot());
   }
 
   /**
@@ -254,6 +272,7 @@ class StaffInvitationTest extends KernelTestBase {
     }
     $this->container->get('request_stack')->getCurrentRequest()->setMethod('GET');
     $this->assertRefused(fn () => $this->service()->accept($token), 'forbidden');
+    $this->container->get('request_stack')->getCurrentRequest()->setMethod('POST');
     $this->container->get('current_user')->setAccount(User::load(2));
     $this->assertRefused(fn () => $this->service()->accept($token), 'forbidden');
     $this->assertSame($before, $this->freshSnapshot());
@@ -334,6 +353,54 @@ class StaffInvitationTest extends KernelTestBase {
     $this->assertArrayNotHasKey('binding', $result);
     $this->assertSame($before, $this->freshSnapshot());
     $this->assertSame('unresolved', $this->service()->reconcile($result['receipt_id'], $token)['status']);
+  }
+
+  /**
+   * A broken no-op commit participant cannot return durable success.
+   */
+  public function testNoopCommitCannotReportSuccess(): void {
+    $token = $this->legacy();
+    $before = $this->freshSnapshot();
+    $this->config('agency_workforce_test.settings')->set('fault', 'commit_noop')->save();
+    $result = $this->service()->accept($token);
+    $this->assertSame('uncertain', $result['status']);
+    $this->assertArrayNotHasKey('binding', $result);
+    $this->assertFalse($this->container->get('database')->inTransaction());
+    $this->assertSame($before, $this->freshSnapshot());
+  }
+
+  /**
+   * Another connection to the same database still cannot share this transaction.
+   *
+   * @dataProvider connectionParticipants
+   */
+  #[DataProvider('connectionParticipants')]
+  public function testParticipantConnectionIdentity(string $participant): void {
+    $token = $this->legacy();
+    $before = $this->freshSnapshot();
+    $options = $this->container->get('database')->getConnectionOptions();
+    $options['prefix'] = $this->container->get('database')->getPrefix();
+    $key = 'foreign-workforce-' . bin2hex(random_bytes(6));
+    Database::addConnectionInfo($key, 'default', $options);
+    try {
+      $foreign = Database::getConnection('default', $key);
+      $port = $participant === 'store'
+        ? new SqlInvitationStore($foreign, $this->container->get('config.factory'))
+        : new LocalProvisioner($foreign, $this->container->get('entity_type.manager'), $this->container->get('config.factory'));
+      $this->container->set('agency_workforce.' . $participant, $port);
+      $this->assertRefused(fn () => $this->service()->accept($token), 'transaction_boundary');
+      $this->assertSame($before, $this->freshSnapshot());
+    }
+    finally {
+      Database::removeConnection($key);
+    }
+  }
+
+  /**
+   * Lists transaction participants whose connection identity is mandatory.
+   */
+  public static function connectionParticipants(): array {
+    return ['storage connection' => ['store'], 'provisioner connection' => ['provisioner']];
   }
 
   /**
@@ -485,6 +552,13 @@ class StaffInvitationTest extends KernelTestBase {
   }
 
   /**
+   * A token expiring while waiting cannot reuse the older request timestamp.
+   */
+  public function testExpiryIsFreshAfterWaitingForWriterBoundary(): void {
+    $this->concurrentAcceptance('expiry');
+  }
+
+  /**
    * Runs two independent SQL hosts against the actual portable core service.
    */
   private function concurrentAcceptance(string $mode): void {
@@ -494,7 +568,8 @@ class StaffInvitationTest extends KernelTestBase {
     ]);
     $token = $this->legacy();
     $other = $mode === 'same_token' ? $token : $this->legacy([
-      'email' => ' RECIPIENT@Example.test ', 'type' => 'contractor', 'langcode' => 'es',
+      'email' => $mode === 'expiry' ? 'other@example.test' : ' RECIPIENT@Example.test ',
+      'type' => 'contractor', 'langcode' => 'es',
     ]);
     $database = $this->container->get('database');
     $prefix = sys_get_temp_dir() . '/workforce-concurrency-' . bin2hex(random_bytes(8));
@@ -548,6 +623,9 @@ class StaffInvitationTest extends KernelTestBase {
       }
       $this->assertIsString($waiting);
       $this->assertTrue(str_contains($waiting, 'agency_workforce_test_authority') || str_contains($waiting, 'agency_workforce_mutex'));
+      if ($mode === 'expiry') {
+        $this->config('agency_workforce_test.settings')->set('clock', self::NOW + 600)->save();
+      }
       touch($files['release']);
       $this->assertSame(0, $first->wait(), $first->getErrorOutput());
       $this->assertSame(0, $second->wait(), $second->getErrorOutput());
@@ -560,7 +638,7 @@ class StaffInvitationTest extends KernelTestBase {
       }
       else {
         $this->assertSame('refused', $otherResult['status']);
-        $this->assertSame($mode === 'same_token' ? 'invalid_invitation' : 'collision', $otherResult['reason']);
+        $this->assertSame(in_array($mode, ['same_token', 'expiry'], TRUE) ? 'invalid_invitation' : 'collision', $otherResult['reason']);
       }
       $this->assertSame(1, $this->countRows('agency_workforce_test_concurrent_account'));
       $this->assertSame(1, $this->countRows('agency_workforce_test_concurrent_profile'));

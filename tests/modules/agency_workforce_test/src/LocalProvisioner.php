@@ -40,6 +40,9 @@ final class LocalProvisioner implements TransactionalStaffProvisionerInterface {
    */
   public function provision(string $normalizedContact, string $classification, string $language, string $preferredName): string {
     $settings = $this->config->get('agency_workforce_test.settings');
+    if ($settings->get('fault') === 'provision_noop') {
+      return 'user:999999';
+    }
     if ($settings->get('fault') === 'user') {
       throw new \RuntimeException('Synthetic user failure.');
     }
@@ -55,6 +58,9 @@ final class LocalProvisioner implements TransactionalStaffProvisionerInterface {
     $user->save();
     if ($settings->get('fault') === 'profile') {
       throw new \RuntimeException('Synthetic profile failure.');
+    }
+    if ($settings->get('fault') === 'profile_noop') {
+      return 'user:' . $user->id();
     }
     $hold = $settings->get('hold_file');
     $release = $settings->get('release_file');
@@ -73,7 +79,31 @@ final class LocalProvisioner implements TransactionalStaffProvisionerInterface {
       'classification' => $classification,
       'language' => $language,
     ])->execute();
+    if ($settings->get('fault') === 'binding_wrong') {
+      return 'user:2';
+    }
     return $settings->get('fault') === 'binding_long' ? str_repeat('x', 256) : 'user:' . $user->id();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function verifyBinding(string $binding, string $normalizedContact, string $classification, string $language): bool {
+    if (!preg_match('/^user:([1-9][0-9]*)$/D', $binding, $match)) {
+      return FALSE;
+    }
+    $query = $this->database->select('users_field_data', 'u');
+    $query->innerJoin('agency_workforce_test_profile', 'p', 'p.uid = u.uid');
+    $query->condition('u.uid', (int) $match[1])->condition('u.default_langcode', 1)
+      ->condition('u.status', 1)->condition('u.preferred_langcode', $language)
+      ->where('LOWER(u.mail) = :contact', [':contact' => $normalizedContact])
+      ->condition('p.classification', $classification)->condition('p.language', $language);
+    if (!(bool) $query->countQuery()->execute()->fetchField()) {
+      return FALSE;
+    }
+    $roles = $this->database->select('user__roles', 'r')->fields('r', ['roles_target_id'])
+      ->condition('entity_id', (int) $match[1])->execute()->fetchCol();
+    return $roles === ['synthetic_' . $classification];
   }
 
 }

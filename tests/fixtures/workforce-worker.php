@@ -143,6 +143,21 @@ $runner = new class('workforceWorker') extends TestCase {
         return 'synthetic:' . $id;
       }
 
+      /**
+       * {@inheritdoc}
+       */
+      public function verifyBinding(string $binding, string $normalizedContact, string $classification, string $language): bool {
+        if (!preg_match('/^synthetic:([1-9][0-9]*)$/D', $binding, $match)) {
+          return FALSE;
+        }
+        $query = $this->database->select('agency_workforce_test_concurrent_account', 'a');
+        $query->innerJoin('agency_workforce_test_concurrent_profile', 'p', 'p.account_id = a.id');
+        return (bool) $query->condition('a.id', (int) $match[1])
+          ->condition('a.contact', $normalizedContact)->condition('a.classification', $classification)
+          ->condition('p.classification', $classification)->condition('p.language', $language)
+          ->countQuery()->execute()->fetchField();
+      }
+
     };
     $journal = new InvitationJournal($database, $this->createMock(AuditChainLoggerInterface::class), $clock);
     $service = new InvitationService(
