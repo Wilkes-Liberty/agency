@@ -34,33 +34,35 @@ final class RollbackService {
       throw new MigrateRefusal('forbidden');
     }
     $this->authority->assertTransition($domain, 'legacy', $reason, TRUE);
-    $pending = $this->writes->pending($domain);
-    $plan = [
-      'domain' => $domain,
-      'pending' => count($pending),
-      'execute' => $execute,
-    ];
     if (!$execute) {
-      return $plan + ['status' => 'dry_run'];
+      return [
+        'domain' => $domain,
+        'pending' => count($this->writes->pending($domain)),
+        'execute' => FALSE,
+        'status' => 'dry_run',
+      ];
     }
-    $replayed = 0;
-    foreach ($pending as $write) {
-      $copier = $this->copiers->copierForTarget((string) $write['entity_type']);
-      $target = $copier->loadTarget((int) $write['entity_id']);
-      if ($target === NULL) {
-        throw new MigrateRefusal('rollback_conflict');
+    return $this->authority->withTransitionFence($domain, 'legacy', $reason, TRUE, function () use ($domain, $reason): array {
+      $pending = $this->writes->pending($domain);
+      $replayed = 0;
+      foreach ($pending as $write) {
+        $copier = $this->copiers->copierForTarget((string) $write['entity_type']);
+        $target = $copier->loadTarget((int) $write['entity_id']);
+        if ($target === NULL) {
+          throw new MigrateRefusal('rollback_conflict');
+        }
+        $copier->writeLegacyFromTarget($target);
+        $this->writes->markReplayed((int) $write['wid']);
+        $replayed++;
       }
-      $copier->writeLegacyFromTarget($target);
-      $this->writes->markReplayed((int) $write['wid']);
-      $replayed++;
-    }
-    $this->authority->transition($domain, 'legacy', $reason, TRUE);
-    return [
-      'domain' => $domain,
-      'replayed' => $replayed,
-      'authority' => $this->authority->get($domain),
-      'status' => 'completed',
-    ];
+      $this->authority->transition($domain, 'legacy', $reason, TRUE);
+      return [
+        'domain' => $domain,
+        'replayed' => $replayed,
+        'authority' => $this->authority->get($domain),
+        'status' => 'completed',
+      ];
+    });
   }
 
 }

@@ -6,96 +6,204 @@ namespace Drupal\agency_migrate;
 
 use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\Component\Datetime\TimeInterface;
-use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Database\Connection;
+use Drupal\Core\Database\IntegrityConstraintViolationException;
 use Drupal\Core\Session\AccountProxyInterface;
 
 /**
- * Per-domain authority with forward-only transitions and one rollback edge.
- *
- * States: legacy → shadow → agency → removed. The only reverse edge is
- * agency → legacy, and only as an explicit rollback.
+ * Operational per-domain authority, serialized independently of configuration.
  */
 final class AuthorityRegister {
 
   private const STATES = ['legacy', 'shadow', 'agency', 'removed'];
 
+  /**
+   * Domains currently inside this instance's fenced callback.
+   *
+   * @var array<string, bool>
+   */
+  private array $fencedDomains = [];
+
   public function __construct(
-    private readonly ConfigFactoryInterface $configFactory,
     private readonly AccountProxyInterface $currentUser,
     private readonly MigrateOutbox $outbox,
     private readonly Connection $database,
     private readonly TimeInterface $time,
+    private readonly HostWriterFenceInterface $writerFence,
   ) {}
 
   /**
-   * Current state for a domain, or NULL when the domain is unregistered.
+   * Recorded state for a domain, or NULL when unregistered.
    */
   public function get(string $domain): ?string {
-    $row = $this->configFactory->get('agency_migrate.authority')->get('domains.' . $domain);
-    if (!is_array($row) || !isset($row['state'])) {
-      return NULL;
-    }
-    return (string) $row['state'];
+    return $this->row($domain)['state'] ?? NULL;
   }
 
   /**
-   * All registered domains and their current states.
+   * All recorded states and versions; this does not certify host coverage.
    *
    * @return array<string, array<string, mixed>>
-   *   Domain id keyed to state, changed time, actor hash and reason.
+   *   Domain id keyed to operational state and transition metadata.
    */
   public function status(): array {
-    $domains = $this->configFactory->get('agency_migrate.authority')->get('domains') ?? [];
-    return is_array($domains) ? $domains : [];
+    $this->assertStorage();
+    $rows = $this->database->select('agency_migrate_authority_state', 'a')->fields('a')->orderBy('domain')->execute();
+    $domains = [];
+    while ($row = $rows->fetchAssoc()) {
+      $domain = $row['domain'];
+      unset($row['domain']);
+      $domains[$domain] = $this->validatedRow($row);
+    }
+    return $domains;
   }
 
   /**
-   * Registers a domain at legacy-authoritative. Idempotent for that state.
+   * Registers one domain at legacy; concurrent duplicates refuse.
    */
   public function register(string $domain, string $reason): void {
     $this->assertDomain($domain);
     $this->assertReason($reason);
     $this->assertPermission('administer agency migrate authority');
-    if ($this->get($domain) !== NULL) {
-      throw new MigrateRefusal('invalid_transition');
+    $this->assertStorage();
+    $transaction = $this->database->startTransaction();
+    try {
+      $values = $this->metadata('legacy', 1, $reason);
+      try {
+        $this->database->insert('agency_migrate_authority_state')->fields(['domain' => $domain] + $values)->execute();
+      }
+      catch (IntegrityConstraintViolationException) {
+        throw new MigrateRefusal('invalid_transition');
+      }
+      $this->recordEvent($domain, 'none', $values, FALSE);
+      TransactionBoundary::commit($transaction);
     }
-    $this->write($domain, 'legacy', 'none', $reason, FALSE);
+    catch (\Throwable $exception) {
+      $transaction?->rollBack();
+      throw $exception;
+    }
   }
 
   /**
-   * Advances one step, or rolls back agency → legacy when $rollback is TRUE.
+   * Advances one step, or rolls back agency → legacy under host exclusion.
    */
   public function transition(string $domain, string $to, string $reason, bool $rollback = FALSE): void {
-    $from = $this->assertTransition($domain, $to, $reason, $rollback);
-    $this->write($domain, $to, $from, $reason, $rollback);
+    $this->withTransitionFence($domain, $to, $reason, $rollback, function () use ($domain, $to, $reason, $rollback): void {
+      $row = $this->row($domain, TRUE);
+      if ($row === NULL) {
+        throw new MigrateRefusal('invalid_transition');
+      }
+      $values = $this->metadata($to, $row['version'] + 1, $reason);
+      $updated = $this->database->update('agency_migrate_authority_state')->fields($values)
+        ->condition('domain', $domain)->condition('version', $row['version'])->execute();
+      if ($updated !== 1) {
+        throw new MigrateRefusal('invalid_transition');
+      }
+      $this->recordEvent($domain, $row['state'], $values, $rollback);
+    });
   }
 
   /**
-   * Validates a proposed transition without changing authority or evidence.
+   * Validates a snapshot without writing, locking or reserving anything.
    *
    * @return string
-   *   The current authority state. Validation does not reserve that state.
+   *   The current recorded source state, not a concurrency guarantee.
    */
   public function assertTransition(string $domain, string $to, string $reason, bool $rollback = FALSE): string {
     $this->assertDomain($domain);
     $this->assertReason($reason);
     $this->assertPermission('administer agency migrate authority');
-    if (!in_array($to, self::STATES, TRUE)) {
+    return $this->validateTransition($domain, $to, $rollback, $this->get($domain));
+  }
+
+  /**
+   * Validates either a read-only snapshot or an explicitly locked current row.
+   */
+  private function validateTransition(string $domain, string $to, bool $rollback, ?string $from): string {
+    if (!in_array($to, self::STATES, TRUE) || $from === NULL || !$this->allowed($from, $to, $rollback)) {
       throw new MigrateRefusal('invalid_transition');
     }
-    $from = $this->get($domain);
-    if ($from === NULL) {
-      throw new MigrateRefusal('invalid_transition');
-    }
-    if (!$this->allowed($from, $to, $rollback)) {
-      throw new MigrateRefusal('invalid_transition');
+    if ($this->requiresFence($from, $to)) {
+      $this->writerFence->assertAvailable($domain);
     }
     return $from;
   }
 
   /**
-   * Whether $from → $to is permitted.
+   * Runs an executing transition/replay inside locked, freshly checked state.
+   *
+   * Host exclusion is acquired before the callback can load pending writes or
+   * mutate entities. Row and host database locks survive savepoint release and
+   * remain held until the root transaction completes. A dry run must not call
+   * this method. The callback must not commit the caller's root transaction.
+   */
+  public function withTransitionFence(string $domain, string $to, string $reason, bool $rollback, callable $work): mixed {
+    $this->assertTransition($domain, $to, $reason, $rollback);
+    $transaction = $this->database->startTransaction();
+    $owned_fence = FALSE;
+    try {
+      $locked = $this->row($domain, TRUE);
+      $from = $this->validateTransition($domain, $to, $rollback, $locked['state'] ?? NULL);
+      if ($this->requiresFence($from, $to) && !isset($this->fencedDomains[$domain])) {
+        $this->writerFence->acquire($domain);
+        $this->fencedDomains[$domain] = TRUE;
+        $owned_fence = TRUE;
+      }
+      $result = $work();
+      TransactionBoundary::commit($transaction);
+      return $result;
+    }
+    catch (\Throwable $exception) {
+      $transaction?->rollBack();
+      throw $exception;
+    }
+    finally {
+      if ($owned_fence) {
+        unset($this->fencedDomains[$domain]);
+      }
+    }
+  }
+
+  /**
+   * Fresh committed/current-transaction row, optionally locked until root end.
+   */
+  private function row(string $domain, bool $lock = FALSE): ?array {
+    $this->assertStorage();
+    $query = $this->database->select('agency_migrate_authority_state', 'a')->fields('a')->condition('domain', $domain);
+    if ($lock) {
+      $query->forUpdate();
+    }
+    $row = $query->execute()->fetchAssoc();
+    if (!$row) {
+      return NULL;
+    }
+    unset($row['domain']);
+    return $this->validatedRow($row);
+  }
+
+  /**
+   * Refuses corrupt operational state rather than interpreting a safe default.
+   */
+  private function validatedRow(array $row): array {
+    if (!in_array($row['state'] ?? NULL, self::STATES, TRUE) || (int) ($row['version'] ?? 0) < 1) {
+      throw new MigrateRefusal('authority_storage_unavailable');
+    }
+    $row['version'] = (int) $row['version'];
+    $row['changed'] = (int) $row['changed'];
+    return $row;
+  }
+
+  /**
+   * Requires the operational schema and engines with verified row exclusion.
+   */
+  private function assertStorage(): void {
+    if (!in_array($this->database->driver(), ['mysql', 'pgsql'], TRUE)
+      || !$this->database->schema()->tableExists('agency_migrate_authority_state')) {
+      throw new MigrateRefusal('authority_storage_unavailable');
+    }
+  }
+
+  /**
+   * Whether one state-machine edge is legal.
    */
   private function allowed(string $from, string $to, bool $rollback): bool {
     if ($rollback) {
@@ -110,42 +218,44 @@ final class AuthorityRegister {
   }
 
   /**
-   * Persists config, a durable event row and one minimized evidence intent.
+   * Changes involving authoritative Agency state need host writer coverage.
    */
-  private function write(string $domain, string $to, string $from, string $reason, bool $rollback): void {
-    $now = $this->time->getCurrentTime();
-    $actor = hash('sha256', 'uid:' . $this->currentUser->id());
-    $config = $this->configFactory->getEditable('agency_migrate.authority');
-    $transaction = $this->database->startTransaction();
-    try {
-      $this->database->insert('agency_migrate_authority_event')->fields([
-        'domain' => $domain,
-        'from_state' => $from,
-        'to_state' => $to,
-        'actor_hash' => $actor,
-        'reason' => $reason,
-        'recorded' => $now,
-      ])->execute();
-      $this->outbox->record('authority_change', [
-        'domain' => $domain,
-        'from' => $from,
-        'to' => $to,
-        'rollback' => $rollback,
-      ], hash('sha256', implode(':', ['authority', $domain, $from, $to, (string) $now, $actor])));
-      $domains = $config->get('domains') ?? [];
-      $domains[$domain] = [
-        'state' => $to,
-        'changed' => $now,
-        'actor_hash' => $actor,
-        'reason' => $reason,
-      ];
-      $config->set('domains', $domains)->save();
-      TransactionBoundary::commit($transaction);
-    }
-    catch (\Throwable $exception) {
-      $transaction?->rollBack();
-      throw $exception;
-    }
+  private function requiresFence(string $from, string $to): bool {
+    return $from === 'agency' || $to === 'agency' || $to === 'removed';
+  }
+
+  /**
+   * Builds immutable metadata for one operational generation.
+   */
+  private function metadata(string $state, int $version, string $reason): array {
+    return [
+      'state' => $state,
+      'version' => $version,
+      'changed' => $this->time->getCurrentTime(),
+      'actor_hash' => hash('sha256', 'uid:' . $this->currentUser->id()),
+      'reason' => trim($reason),
+    ];
+  }
+
+  /**
+   * Stores an event and evidence intent in the same authority transaction.
+   */
+  private function recordEvent(string $domain, string $from, array $values, bool $rollback): void {
+    $this->database->insert('agency_migrate_authority_event')->fields([
+      'domain' => $domain,
+      'from_state' => $from,
+      'to_state' => $values['state'],
+      'actor_hash' => $values['actor_hash'],
+      'reason' => $values['reason'],
+      'recorded' => $values['changed'],
+    ])->execute();
+    $this->outbox->record('authority_change', [
+      'domain' => $domain,
+      'from' => $from,
+      'to' => $values['state'],
+      'version' => $values['version'],
+      'rollback' => $rollback,
+    ], hash('sha256', implode(':', ['authority', $domain, (string) $values['version']])));
   }
 
   /**
@@ -167,11 +277,10 @@ final class AuthorityRegister {
   }
 
   /**
-   * Requires a short operator reason with no empty or oversized value.
+   * Requires a short, nonempty operator reason.
    */
   private function assertReason(string $reason): void {
-    $trimmed = trim($reason);
-    if ($trimmed === '' || strlen($trimmed) > 255) {
+    if (trim($reason) === '' || strlen($reason) > 255) {
       throw new MigrateRefusal('invalid_transition');
     }
   }

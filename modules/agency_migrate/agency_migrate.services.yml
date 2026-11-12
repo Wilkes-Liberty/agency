@@ -14,14 +14,16 @@ services:
   agency_migrate.writes:
     class: Drupal\agency_migrate\PostCutoverWriteLog
     arguments: ['@database', '@datetime.time']
+  agency_migrate.host_writer_fence:
+    class: Drupal\agency_migrate\UnavailableHostWriterFence
   agency_migrate.authority:
     class: Drupal\agency_migrate\AuthorityRegister
     arguments:
-      - '@config.factory'
       - '@current_user'
       - '@agency_migrate.outbox'
       - '@database'
       - '@datetime.time'
+      - '@agency_migrate.host_writer_fence'
   agency_migrate.runner:
     class: Drupal\agency_migrate\MigrationRunner
     arguments:

@@ -1,6 +1,6 @@
 agency_migrate.authority:
   type: config_object
-  label: 'Agency migration authority'
+  label: 'Deprecated Agency authority upgrade input'
   constraints:
     FullyValidatable: ~
   mapping:

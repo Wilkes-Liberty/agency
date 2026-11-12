@@ -43,10 +43,14 @@ Observed in the kernel suite against synthetic entity types:
 - A reconciler reports counts, per-field digests, integer-reference integrity
   and access-decision parity (same principal token, same allow/deny on both
   sides) as JSON with a pass/fail and explained exceptions.
-- An authority register holds one state per domain: `legacy`, `shadow`,
-  `agency`, `removed`. Transitions move only forward, except the rollback edge
-  `agency → legacy`. Each change requires `administer agency migrate authority`
-  and stores an actor hash plus reason as evidence.
+- An operational SQL authority register holds one versioned state per domain:
+  `legacy`, `shadow`, `agency`, `removed`. Transitions move forward, except the
+  rollback edge `agency → legacy`. Each change requires
+  `administer agency migrate authority` and stores its state, event and evidence
+  intent in one transaction. Authority configuration is no longer runtime state.
+- Changes involving Agency authority require verified host writer coverage. The
+  shipped adapter refuses with `writer_fence_unavailable`; no production writer
+  barrier or cutover qualification is supplied by this framework.
 - Rollback replays Agency writes recorded after cutover onto legacy through the
   plugin writer and then sets authority to `legacy`. It is not a database
   restore.
@@ -145,12 +149,62 @@ production adapter. Fixture rows are in `tests/fixtures/migrate/records.json`.
 
 Hosts register a domain at `legacy`, then advance `legacy → shadow → agency →
 removed` as the slice gates pass. Shadow means Agency is written in parallel
-and must not be read as authority. Agency-authoritative means legacy is
-read-only for that domain. Removed is a drain state and does not roll back.
+and must not be read as authority. Agency-authoritative requires legacy to be
+read-only. Removed is a drain state and does not roll back. Duplicate domain
+registration refuses rather than replacing an existing generation.
 
-Changing state is an operator action with a required reason. The default
-configuration is an empty domain map; no domain is registered by installing
-the module.
+`agency_migrate_authority_state` is operational storage, independent of
+configuration imports, runtime overrides and cached configuration objects.
+Each transition locks and rereads its domain row, checks the legal edge again,
+updates the expected version, and commits its event and outbox intent together.
+Concurrent registration is arbitrated by the domain's unique key. Outbox
+fingerprints include the operational generation. This boundary is verified on
+MySQL and PostgreSQL; unavailable schema or unsupported database engines refuse
+with `authority_storage_unavailable`.
+
+Changing state is an operator action with a required reason. New installations
+start with an empty operational table. Upgrade `agency_migrate_update_10002`
+validates and imports existing authority configuration once, preserving state,
+actor, reason and time while assigning the first operational version. A marker
+in an explicitly SQL-backed key/value collection shares that import transaction.
+The retained `agency_migrate.authority` configuration is deprecated migration
+input; later configuration imports cannot register or change runtime authority.
+Invalid historical entries stop the upgrade instead of being dropped.
+
+The public `register()`, `get()`, `status()`, `transition()` and read-only
+`assertTransition()` methods remain. `status()` includes each recorded version.
+The internal service constructor now takes the writer-fence service instead of
+the configuration factory. A recorded `agency` state imported from an older
+installation does not certify that its writers are covered.
+
+### Host writer coverage
+
+Replace `agency_migrate.host_writer_fence` with a verified
+`HostWriterFenceInterface` adapter before attempting an authoritative change.
+`assertAvailable()` must check coverage without writes, locks or reservations.
+`acquire()` runs after the operational authority row is locked and must exclude
+all source and target writers until the **root** transaction commits or rolls
+back. Releasing a savepoint cannot release that exclusion. The adapter must also
+enforce the rejected side's write policy after authority commits and couple
+normal Agency writes to the replay log in the same transaction.
+
+An inventory must cover Entity API writes, direct SQL, queues, cron, imports,
+independent processes and other database clients. Cooperative advisory locks or
+an optimistic snapshot alone do not establish this coverage. No positive
+production adapter ships here. The default refuses entering Agency authority,
+removal and executing rollback; a read-only preflight cannot bypass that refusal.
+The synthetic test double exercises transition/replay mechanics and is not
+proof of host writer exclusion.
+
+Executing rollback uses `withTransitionFence()` before loading the pending-write
+snapshot and retains the boundary through replay, markers and authority change.
+Dry runs perform only read-only validation and a snapshot count, with no fence
+acquisition. A dry-run result is not a reservation or concurrency guarantee.
+
+Keep older code that reads authority configuration away from a domain after
+this upgrade. The retained configuration becomes stale as operational authority
+changes; downgrading to such code is not an authority rollback. Use the verified
+rollback service and a reviewed code/data recovery procedure instead.
 
 ## Rollback limits
 
@@ -162,8 +216,9 @@ the module.
   same integer id, UUID and complete target revision history. This insertion
   has its own atomic writer transaction. If an entity or revision identifier
   is already occupied, rollback refuses.
-- Concurrent legacy writes during the Agency-authoritative window are
-  overwritten by replay.
+- Uncovered legacy or Agency writers make cutover and replay unsupported. The
+  host must exclude them and enforce the recorded side; the default writer-fence
+  service refuses these operations.
 - Historical evidence is not rewound. Lineage events remain so either
   reference can be resolved.
 - Authority `removed` has no rollback edge. Restoring from `removed` is out of
@@ -196,4 +251,7 @@ occupied-id refusal, unauthorized denial, interrupted resume, second-run
 no-op, unmapped markings, reconciliation exceptions, authority transitions and
 rollback. Current-value proofs use multivalue formatted text, summaries, user
 references and translated fields in real Drupal storage. They are not evidence
-of complete revision history preservation or a host cutover.
+of complete revision history preservation, host writer coverage or a cutover.
+Independent-process authority proofs cover competing registration/transition,
+stale configuration imports and generation/event atomicity. Host-specific
+writer fencing remains a separate acceptance requirement.
