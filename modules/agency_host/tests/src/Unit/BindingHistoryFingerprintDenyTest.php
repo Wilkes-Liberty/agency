@@ -65,15 +65,30 @@ final class BindingHistoryFingerprintDenyTest extends UnitTestCase {
    * An unreviewed Composer reference cannot produce a fingerprint.
    *
    * Local mutation: removing the IdentityDirectoryUnavailable throw while
-   * leaving `'drupal/externalauth' => '2.0.13'` in the reviewed array makes
-   * this case fail (fingerprint() returns a digest instead).
+   * leaving `'drupal/externalauth' => '2.0.15'` in the reviewed array makes
+   * this case fail (fingerprint() returns a digest instead). Mutating the
+   * installed reference to the previous 2.0.13 pin is also refused.
    */
   public function testUnreviewedExternalauthReferenceIsRefused(): void {
     $this->overrideInstalled(static function (array $data): array {
-      $data['versions']['drupal/externalauth']['reference'] = '2.0.15';
+      $data['versions']['drupal/externalauth']['reference'] = '2.0.16';
       return $data;
     });
-    $this->assertSame('2.0.15', InstalledVersions::getReference('drupal/externalauth'));
+    $this->assertSame('2.0.16', InstalledVersions::getReference('drupal/externalauth'));
+    $this->expectException(IdentityDirectoryUnavailable::class);
+    $this->expectExceptionMessage('Binding writer dependency requires review.');
+    $this->history()->fingerprint();
+  }
+
+  /**
+   * The previous 2.0.13 pin is no longer a reviewed Composer reference.
+   */
+  public function testPreviouslyReviewedExternalauthReferenceIsRefused(): void {
+    $this->overrideInstalled(static function (array $data): array {
+      $data['versions']['drupal/externalauth']['reference'] = '2.0.13';
+      return $data;
+    });
+    $this->assertSame('2.0.13', InstalledVersions::getReference('drupal/externalauth'));
     $this->expectException(IdentityDirectoryUnavailable::class);
     $this->expectExceptionMessage('Binding writer dependency requires review.');
     $this->history()->fingerprint();
@@ -96,7 +111,7 @@ final class BindingHistoryFingerprintDenyTest extends UnitTestCase {
         $data['versions']['drupal/externalauth']['install_path'] = $scratch;
         return $data;
       });
-      $this->assertSame('2.0.13', InstalledVersions::getReference('drupal/externalauth'));
+      $this->assertSame('2.0.15', InstalledVersions::getReference('drupal/externalauth'));
       $this->expectException(IdentityDirectoryUnavailable::class);
       $this->expectExceptionMessage('Binding writer source requires review.');
       $this->history()->fingerprint();

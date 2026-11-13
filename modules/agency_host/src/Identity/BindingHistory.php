@@ -89,7 +89,7 @@ final class BindingHistory implements BindingHistoryInterface {
    */
   public function fingerprint(bool $includeMappings = TRUE): string {
     $versions = [];
-    foreach (['drupal/externalauth' => '2.0.13', 'drupal/openid_connect' => '3.0.0-alpha9'] as $package => $reviewed) {
+    foreach (['drupal/externalauth' => '2.0.15', 'drupal/openid_connect' => '3.0.0-alpha9'] as $package => $reviewed) {
       $actual = InstalledVersions::getReference($package);
       if ($actual !== $reviewed) {
         throw new IdentityDirectoryUnavailable('Binding writer dependency requires review.');

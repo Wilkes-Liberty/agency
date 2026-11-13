@@ -11,7 +11,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 
 /**
- * Pins the reviewed Externalauth 2.0.x writers without moving the fingerprint.
+ * Pins the reviewed Externalauth 2.0.15 writers after the operator pin move.
  *
  * Findings live in docs/EXTERNALAUTH_2.0.15.md.
  *
@@ -32,22 +32,24 @@ final class BindingHistoryFingerprintTest extends UnitTestCase {
   ];
 
   /**
-   * The reviewed reference string stays 2.0.13 so the digest cannot drift.
+   * The reviewed reference string is 2.0.15 so the digest matches that pin.
+   *
+   * Mutating it back to 2.0.13, or to an unreviewed 2.0.16, fails this case.
    */
-  public function testReviewedReferenceStaysTwoZeroThirteen(): void {
+  public function testReviewedReferenceIsTwoZeroFifteen(): void {
     $source = file_get_contents($this->bindingHistoryPath());
     $this->assertNotFalse($source);
-    $this->assertStringContainsString("'drupal/externalauth' => '2.0.13'", $source);
+    $this->assertStringContainsString("'drupal/externalauth' => '2.0.15'", $source);
     $this->assertStringContainsString("InstalledVersions::getReference(\$package)", $source);
     $this->assertDoesNotMatchRegularExpression(
-      "/'drupal\\/externalauth'\\s*=>\\s*'2\\.0\\.1[45]'/",
+      "/'drupal\\/externalauth'\\s*=>\\s*'2\\.0\\.1[346]'/",
       $source,
-      'Bumping the reviewed Externalauth reference would change the fingerprint digest.',
+      'The reviewed Externalauth reference must be 2.0.15, not 2.0.13 or an unreviewed 2.0.x.',
     );
   }
 
   /**
-   * Releases 2.0.14 and 2.0.15 keep the same writer bytes already bound.
+   * Releases 2.0.13, 2.0.14 and 2.0.15 keep the same writer bytes already bound.
    */
   public function testReviewedWriterHashesMatchTwoOhFifteen(): void {
     $writers = (new \ReflectionClass(BindingHistory::class))->getConstant('REVIEWED_WRITERS');
@@ -67,9 +69,9 @@ final class BindingHistoryFingerprintTest extends UnitTestCase {
   }
 
   /**
-   * The installed 2.0.13 writers still match the hashes bound into coverage.
+   * The installed 2.0.15 writers still match the hashes bound into coverage.
    *
-   * CI always installs Externalauth 2.0.13 on agency_host unit and kernel
+   * CI always installs Externalauth 2.0.15 on agency_host unit and kernel
    * lanes. This assertion must not skip.
    */
   public function testInstalledWritersMatchReviewedHashes(): void {
@@ -78,7 +80,7 @@ final class BindingHistoryFingerprintTest extends UnitTestCase {
       InstalledVersions::isInstalled('drupal/externalauth'),
       'Reviewed Externalauth must be installed; this assertion is not skippable.',
     );
-    $this->assertSame('2.0.13', InstalledVersions::getReference('drupal/externalauth'));
+    $this->assertSame('2.0.15', InstalledVersions::getReference('drupal/externalauth'));
     $root = InstalledVersions::getInstallPath('drupal/externalauth');
     foreach (self::WRITER_HASHES as $file => $expected) {
       $path = $root . '/' . $file;
