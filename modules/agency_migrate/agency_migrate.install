@@ -7,6 +7,7 @@
 
 use Drupal\agency_migrate\TransactionBoundary;
 use Drupal\Component\Serialization\PhpSerialize;
+use Drupal\Core\Database\IntegrityConstraintViolationException;
 use Drupal\Core\KeyValueStore\DatabaseStorage;
 
 /**
@@ -379,6 +380,67 @@ function agency_migrate_update_10002(): void {
     }
     // This explicit SQL key/value store shares the authority transaction.
     $marker->set('initialized', TRUE);
+    TransactionBoundary::commit($transaction);
+  }
+  catch (\Throwable $exception) {
+    $transaction?->rollBack();
+    throw $exception;
+  }
+}
+
+/**
+ * Implements hook_install().
+ */
+function agency_migrate_install(): void {
+  agency_migrate_update_10003();
+}
+
+/**
+ * Allowed creation state for Slice 2 authority rows.
+ */
+function agency_migrate_s2_create_state(string $state): string {
+  if ($state !== 'legacy') {
+    throw new \RuntimeException('Slice two domains may only be created at legacy.');
+  }
+  return $state;
+}
+
+/**
+ * Registers workforce and recruiting at legacy without changing other rows.
+ */
+function agency_migrate_update_10003(): void {
+  $database = \Drupal::database();
+  if (!$database->schema()->tableExists('agency_migrate_authority_state')) {
+    throw new \RuntimeException('Operational migration authority storage is unavailable.');
+  }
+  $state = agency_migrate_s2_create_state('legacy');
+  $now = \Drupal::time()->getCurrentTime();
+  $actor_hash = hash('sha256', 'uid:' . \Drupal::currentUser()->id());
+  $reason = 'Register slice two domains at legacy';
+  $transaction = $database->startTransaction();
+  try {
+    foreach (['workforce', 'recruiting'] as $domain) {
+      $query = $database->select('agency_migrate_authority_state', 'a')
+        ->fields('a', ['domain'])
+        ->condition('domain', $domain);
+      $query->forUpdate();
+      if ($query->execute()->fetchField()) {
+        continue;
+      }
+      try {
+        $database->insert('agency_migrate_authority_state')->fields([
+          'domain' => $domain,
+          'state' => $state,
+          'version' => 1,
+          'changed' => $now,
+          'actor_hash' => $actor_hash,
+          'reason' => $reason,
+        ])->execute();
+      }
+      catch (IntegrityConstraintViolationException) {
+        // A concurrent installer won the unique domain key.
+      }
+    }
     TransactionBoundary::commit($transaction);
   }
   catch (\Throwable $exception) {
