@@ -35,11 +35,14 @@ Observed in the kernel suite against synthetic entity types:
   run is a verified no-op when both sides still match the committed manifest.
 - Every source content property must have a marking (`public`, `internal`,
   `confidential`, `personal` or `financial`). An unmapped or invalid marking
-  fails the run before any write.
+  fails the run before any write and records a minimized `unmapped_marking`
+  outbox intent. That intent carries plugin, source and target type ids, a
+  count, hashed actor and the operator-visible reason. It does not list
+  property names or write a run receipt, lineage or target rows.
 - Historical Audit Chain rows are never rewritten. One minimized lineage event
   per batch is recorded through Agency's outbox and drained with Audit Chain's
   public `logKeyed()` contract so a verifier can resolve a legacy reference to
-  its Agency counterpart.
+  its Agency counterpart. The unmapped-marking stop uses the same outbox.
 - A reconciler reports counts, per-field digests, integer-reference integrity
   and access-decision parity (same principal token, same allow/deny on both
   sides) as JSON with a pass/fail and explained exceptions.

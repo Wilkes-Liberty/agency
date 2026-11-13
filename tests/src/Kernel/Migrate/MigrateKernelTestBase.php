@@ -162,4 +162,34 @@ abstract class MigrateKernelTestBase extends KernelTestBase {
     }
   }
 
+  /**
+   * Asserts one migrate outbox operation exists and carries no secrets.
+   *
+   * @return list<array<string, mixed>>
+   *   Decoded metadata rows.
+   */
+  protected function assertMinimizedMigrateEvidence(string $operation): array {
+    $rows = [];
+    $result = $this->container->get('database')
+      ->select('agency_migrate_outbox', 'o')
+      ->fields('o', ['metadata'])
+      ->condition('operation', $operation)
+      ->execute();
+    while ($row = $result->fetchAssoc()) {
+      $metadata = json_decode($row['metadata'], TRUE, 512, JSON_THROW_ON_ERROR);
+      $this->assertIsArray($metadata);
+      $encoded = json_encode($metadata, JSON_THROW_ON_ERROR);
+      $this->assertDoesNotMatchRegularExpression(
+        '/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|\bBearer\b|\.pdf\b|\.docx\b|\.png\b/i',
+        $encoded,
+      );
+      foreach (['email', 'phone', 'token', 'filename', 'sub'] as $key) {
+        $this->assertArrayNotHasKey($key, $metadata);
+      }
+      $rows[] = $metadata;
+    }
+    $this->assertNotSame([], $rows);
+    return $rows;
+  }
+
 }

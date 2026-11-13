@@ -162,7 +162,7 @@ function agency_migrate_schema(): array {
       ],
     ],
     'agency_migrate_outbox' => [
-      'description' => 'Minimized lineage and authority intents for Audit Chain.',
+      'description' => 'Minimized lineage, authority and refusal intents for Audit Chain.',
       'fields' => [
         'id' => [
           'type' => 'varchar',

@@ -27,7 +27,8 @@ final class MigrateS2WindowTest extends MigrateKernelTestBase {
    * An unmapped property stops the run with the framework reason.
    *
    * The operator-visible reason is the existing `unmapped_marking`
-   * equivalent of threat-model `unmapped_property`.
+   * equivalent of threat-model `unmapped_property`. A minimized outbox
+   * intent is the Audit Chain trace for that refused write.
    */
   public function testUnmappedPropertyStopsRunWithOperatorVisibleReason(): void {
     agency_migrate_install();
@@ -41,7 +42,18 @@ final class MigrateS2WindowTest extends MigrateKernelTestBase {
     $this->assertNull($this->target(3));
     $this->assertSame(0, (int) $this->container->get('database')->select('agency_migrate_lineage', 'l')->countQuery()->execute()->fetchField());
     $this->assertSame(0, (int) $this->container->get('database')->select('agency_migrate_run', 'r')->countQuery()->execute()->fetchField());
-    $this->assertSame(0, (int) $this->container->get('database')->select('agency_migrate_outbox', 'o')->countQuery()->execute()->fetchField());
+    $this->assertSame(0, (int) $this->container->get('database')->select('agency_migrate_outbox', 'o')->condition('operation', 'lineage_batch')->countQuery()->execute()->fetchField());
+    $events = $this->assertMinimizedMigrateEvidence('unmapped_marking');
+    $this->assertCount(1, $events);
+    $this->assertSame('unmapped_marking', $events[0]['reason']);
+    $this->assertSame('synthetic_item_unmapped', $events[0]['plugin_id']);
+    $this->assertSame('agency_migrate_legacy_item', $events[0]['source_type']);
+    $this->assertSame('agency_migrate_agency_item', $events[0]['target_type']);
+    $this->assertIsInt($events[0]['unmapped_count']);
+    $this->assertGreaterThan(0, $events[0]['unmapped_count']);
+    $this->assertArrayNotHasKey('properties', $events[0]);
+    $this->assertArrayNotHasKey('payload', $events[0]);
+    $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $events[0]['actor_hash']);
   }
 
   /**
@@ -105,36 +117,6 @@ final class MigrateS2WindowTest extends MigrateKernelTestBase {
       $target->get('file_uuid')->value,
     );
     $this->assertMinimizedMigrateEvidence('lineage_batch');
-  }
-
-  /**
-   * Asserts one migrate outbox operation exists and carries no secrets.
-   *
-   * @return list<array<string, mixed>>
-   *   Decoded metadata rows.
-   */
-  private function assertMinimizedMigrateEvidence(string $operation): array {
-    $rows = [];
-    $result = $this->container->get('database')
-      ->select('agency_migrate_outbox', 'o')
-      ->fields('o', ['metadata'])
-      ->condition('operation', $operation)
-      ->execute();
-    while ($row = $result->fetchAssoc()) {
-      $metadata = json_decode($row['metadata'], TRUE, 512, JSON_THROW_ON_ERROR);
-      $this->assertIsArray($metadata);
-      $encoded = json_encode($metadata, JSON_THROW_ON_ERROR);
-      $this->assertDoesNotMatchRegularExpression(
-        '/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|\bBearer\b|\.pdf\b|\.docx\b|\.png\b/i',
-        $encoded,
-      );
-      foreach (['email', 'phone', 'token', 'filename', 'sub'] as $key) {
-        $this->assertArrayNotHasKey($key, $metadata);
-      }
-      $rows[] = $metadata;
-    }
-    $this->assertNotSame([], $rows);
-    return $rows;
   }
 
 }
