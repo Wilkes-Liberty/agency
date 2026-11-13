@@ -98,12 +98,13 @@ final class MigrateAuthorityReaderTest extends MigrateKernelTestBase {
     $this->assertInstanceOf(ContentEntityInterface::class, $this->target(1));
     $events = $this->assertMinimizedMigrateEvidence('agency_read_refused');
     $this->assertCount(2, $events);
-    $this->assertSame('shadow', $events[0]['reason']);
-    $this->assertSame('invalid_transition', $events[1]['reason']);
-    $this->assertSame('unregistered', $events[1]['domain']);
+    $by_domain = [];
     foreach ($events as $event) {
+      $by_domain[$event['domain']] = $event;
       $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $event['actor_hash']);
     }
+    $this->assertSame('shadow', $by_domain['synthetic']['reason']);
+    $this->assertSame('invalid_transition', $by_domain['unregistered']['reason']);
   }
 
 }

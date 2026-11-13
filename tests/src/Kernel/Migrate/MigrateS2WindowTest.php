@@ -86,12 +86,14 @@ final class MigrateS2WindowTest extends MigrateKernelTestBase {
     $this->assertMinimizedMigrateEvidence('lineage_batch');
     $events = $this->assertMinimizedMigrateEvidence('agency_read_refused');
     $this->assertCount(2, $events);
-    $this->assertSame('legacy', $events[0]['reason']);
-    $this->assertSame('legacy', $events[1]['reason']);
-    $this->assertSame('workforce', $events[0]['domain']);
-    $this->assertSame('recruiting', $events[1]['domain']);
-    $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $events[0]['actor_hash']);
-    $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $events[1]['actor_hash']);
+    $by_domain = [];
+    foreach ($events as $event) {
+      $by_domain[$event['domain']] = $event;
+      $this->assertSame('legacy', $event['reason']);
+      $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $event['actor_hash']);
+    }
+    $this->assertArrayHasKey('workforce', $by_domain);
+    $this->assertArrayHasKey('recruiting', $by_domain);
   }
 
   /**
