@@ -3,19 +3,22 @@
 Status: **proposed broader Slice 2 design**. The
 [staff onboarding compatibility contract](WORKFORCE_INVITATION_CONTRACT.md)
 supersedes this draft wherever invitation format, anonymous acceptance, source
-identity or provisioning order conflicts. This document does not register
-Slice 2 record types or establish host cutover readiness.
+identity or provisioning order conflicts. This document does not establish
+host cutover readiness.
 The source inventory and its verification receipts belong to the installing
 host's migration record. Verify current source and consumers before expansion.
-Ontology draft v0.1.1 in this change adds the recruiting relationship
-kind, a proposed `agency_recruiting` boundary, and proposed S2
-application, posting, profile-evidence, staff-invitation and
-staff-onboard types. Package 05 shipped the authority register in
+Ontology draft v0.1.1 declares the recruiting relationship kind, an
+`agency_recruiting` boundary, and S2 application, posting,
+profile-evidence, staff-invitation and staff-onboard types. Observed:
+`agency_recruiting` now registers deny-by-default `agency_career_posting`
+and `agency_application` storage. It copies no host data and writes no
+`recruiting` authority row. Remaining Slice 2 types stay unregistered.
+Package 05 shipped the authority register in
 [agency#27](https://github.com/Wilkes-Liberty/agency/pull/27) with
 machine names `legacy`, `shadow`, `agency` and `removed` (see
 [Migration](MIGRATION.md)). ID-preserving transfer
-conditions are incorporated below. Slice 2 expand still waits
-on an explicit operator G1 GO.
+conditions are incorporated below. Copiers, shadow writes and cutover
+remain blocked.
 
 The document distinguishes **observed** Agency Discovery behavior in this
 package from **proposed** Slice 2 transfer. Slice 2 ledger rows below
@@ -46,11 +49,15 @@ Already recorded (design incorporates; do not re-decide unless reversing):
   the recruiting transfer: career
   postings **and** the résumé/application workflow move to Agency. That
   closes the former §10.4 split (host editorial / Agency rules only).
+- 2026-11-13 `agency_recruiting` registers `agency_career_posting` and
+  `agency_application` storage. Copiers, recruiting authority and
+  host-caller rewiring remain out of this expand.
 
 Approve all of the following for G1 GO:
 
 1. [ ] This document and ontology draft v0.1.1 are the Slice 2 design.
-   Expand, entity registration and host copiers stay blocked until GO.
+   Host copiers stay blocked until GO. Posting and application storage
+   is registered; that is not copier or authority cutover.
 2. [ ] Confirm ID-preserving transfer for every S2 source in §6: copy into the
    named `agency_*` type with the same integer id, UUID, revision ids,
    timestamps and authorship; refuse collisions; do not move host-named
@@ -60,7 +67,7 @@ Approve all of the following for G1 GO:
    separate `recruiting` row for career postings, applications and
    résumé File Gate references (recommended, so posting close and staff
    cutover can move independently). Posting and application types are
-   owned by proposed `agency_recruiting`; staff types stay on proposed
+   owned by `agency_recruiting`; staff types stay on proposed
    `agency_workforce`. Alternative: one shared `workforce` row. Machine
    names stay `legacy` / `shadow` / `agency` / `removed`.
 4. [ ] Classification allowlist stays `employee` and `contractor` only.
@@ -150,13 +157,13 @@ or recruiting paths.
 | Principal binding | Internal `agency_principal` | Exact issuer/subject from the Keycloak invitation protocol. Contact never selects a principal. Reuse the host `IdentityProviderInterface`. |
 | Organization / Membership | none in this package | Workforce membership is distinct from Discovery participation and from client membership. Draft ontology proposes `agency_organization` and `agency_membership` for S2; expand still waits on G1. |
 | Relationship (workforce) | Internal `agency_discovery` | New workforce relationship type (`agency_workforce`). Never the Discovery entity. |
-| Relationship (recruiting) | none | Proposed kind `recruiting` (`agency_recruiting`). Not a Discovery or workforce state. Application and posting records may link to it. |
+| Relationship (recruiting) | none | Proposed kind `recruiting` (`agency_recruiting`). Not a Discovery or workforce state. Application and posting records may link to it. No recruiting authority row ships with storage registration. |
 | Invitation (staff) | Internal `agency_invitation` (Discovery generations) | New staff invitation type `agency_staff_invitation`. Never share the Discovery generation table or command class. |
 | Entitlement (workforce) | Internal `agency_entitlement` (Discovery grants) | New workforce entitlement. Never share the Discovery grant table or command class. |
 | Profile evidence | none | `agency_profile_evidence` under proposed `agency_workforce`. Marked fields plus File Gate references. Not a public Profile entity. Copy sources are profile bundles `employee` and `contractor` and `chronicle_personnel` evidence. Client profile bundles are host-stay with fail-closed collision preflight. |
 | Staff onboard | none | `agency_staff_onboard`. ID-preserving copy of the `staff_onboard` webform submission. Classification is issuer-supplied. |
-| Career posting | none | `agency_career_posting` under proposed `agency_recruiting`. ID-preserving copy of the `career` node. Host adapter renders the public list and detail. |
-| Application | none | `agency_application` under proposed `agency_recruiting`. ID-preserving copy of the `career_application` webform. Résumé bytes stay in File Gate; the row stores the File Gate UUID. Distinct from Slice 3 `agency_intake_submission`. |
+| Career posting | Internal `agency_career_posting` (deny-by-default; no routes) | Storage registered in `agency_recruiting`. ID-preserving copy of the `career` node is still proposed. Host adapter renders the public list and detail. |
+| Application | Internal `agency_application` (deny-by-default; no routes) | Storage registered in `agency_recruiting`. ID-preserving copy of the `career_application` webform is still proposed. Résumé bytes stay in File Gate; the row stores the File Gate UUID. Distinct from Slice 3 `agency_intake_submission`. |
 
 Proposed actions (input schemas in scaffolding or ontology; no service
 yet):
@@ -613,11 +620,11 @@ evidence (proposed `agency_workforce` submodule after G1):
 - `updateProfileEvidence` writes `own` only and applies a server
   marking map (`display_name` is `personal`)
 
-Posting and application types are owned by proposed `agency_recruiting`
-(`Drupal\agency_recruiting\`). That namespace is not registered in this
-change. Do not hang those types on `agency_workforce`.
+Posting and application types are owned by `agency_recruiting`
+(`Drupal\agency_recruiting\`). The submodule registers deny-by-default
+storage. It does not register recruiting commands, copiers or a
+`recruiting` authority row. Do not hang those types on `agency_workforce`.
 
-Tests instantiate workforce value objects directly. There is no service
-registration, no schema change and no Discovery behavior change.
-Expand implements the interfaces after G1. This G1-ready update does
-not register Slice 2 record types.
+Tests instantiate workforce value objects directly. There is no workforce
+service registration, no Discovery behavior change, and no recruiting
+copier in this expand.

@@ -470,6 +470,64 @@ jobs:
             echo "Executed tests: $executed\n";
             if ($executed < 2) { exit(1); }
           '
+      - name: Run agency_recruiting kernel tests
+        working-directory: drupal
+        env:
+          SIMPLETEST_DB: ${{ matrix.driver }}://agency_test:test_only@127.0.0.1/agency_test
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          recruiting="$PWD/web/modules/contrib/agency/modules/agency_recruiting/tests/src"
+          test -d "$recruiting/Kernel"
+          # Drupal 10.6's PHPUnit 9 runner is the unit suite. Recruiting
+          # kernel proofs use PHPUnit 10 attributes and run on 11.x,
+          # including PostgreSQL 16.
+          if [ "${{ matrix.minor }}" = "10.6" ]; then
+            echo "Skipping agency_recruiting kernel tests on Drupal 10.6"
+            exit 0
+          fi
+          export BROWSERTEST_OUTPUT_DIRECTORY="$PWD/web/sites/simpletest/browser_output"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/agency-recruiting-junit.xml" \
+            "$recruiting/Kernel"
+          # PHP expressions are intentionally passed literally to PHP.
+          # shellcheck disable=SC2016
+          php -r '
+            $xml = simplexml_load_file("agency-recruiting-junit.xml");
+            if ($xml === false) { exit(1); }
+            $executed = [];
+            $skipped = [];
+            foreach ($xml->xpath("//testcase") as $case) {
+              $name = (string) $case["name"];
+              if (isset($case->failure) || isset($case->error)) { exit(1); }
+              if (isset($case->skipped)) {
+                $skipped[] = $name;
+                continue;
+              }
+              $executed[] = $name;
+            }
+            echo "Executed agency_recruiting tests: " . count($executed) . "\n";
+            echo "Skipped agency_recruiting tests: " . count($skipped) . "\n";
+            if ($skipped) { exit(1); }
+            $required = [
+              "testInstallRegistersEntityTypes",
+              "testEmptyModuleCanBeUninstalled",
+              "testSchemaMatchesOntologyPropertiesAndMarkings",
+              "testPublishedWithoutCloseDateIsRefused",
+              "testPublishedWithPastCloseDateIsRefused",
+              "testPublishedWithFutureCloseDateIsAccepted",
+              "testDraftWithoutCloseDateIsAccepted",
+              "testGeneralApplicationWithoutPostingIsAccepted",
+              "testExplicitIdentifiersArePreserved",
+              "testOccupiedIdIsRefused",
+              "testOccupiedUuidIsRefused",
+              "testOccupiedRevisionIdIsRefused",
+              "testDefaultAccessDeniesEverything",
+              "testSourceDoesNotReferenceWorkforceOrDiscoveryCommands",
+              "testLoadedClassesDoNotExtendCommandTypes",
+            ];
+            echo "Executed recruiting boundaries: " . count(array_intersect($required, $executed)) . "\n";
+            if (array_diff($required, $executed)) { exit(1); }
+          '
       - name: Run agency_host unit, kernel and functional tests
         working-directory: drupal
         env:
@@ -553,6 +611,7 @@ jobs:
             drupal/junit.xml
             drupal/domain-junit.xml
             drupal/agency-host-junit.xml
+            drupal/agency-recruiting-junit.xml
             drupal/tenant-strings-junit.xml
             drupal/composer.lock
             drupal/server.log
