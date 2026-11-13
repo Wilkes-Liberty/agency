@@ -1,9 +1,10 @@
 # Agency ontology contract
 
 Status: draft v0.1.1. This is the canonical, tenant-neutral model Agency
-owns. Later slices implement a subset. It is not evidence that a proposed
-type, submodule or action exists in code. Slice 2 recruiting and
-application types stay proposed until operator gate G1.
+owns. Later slices implement a subset. YAML `proposed` is not a route,
+command, copier or authority transfer. `agency_recruiting` registers
+CareerPosting and Application storage; ontology YAML still marks those
+types and the recruiting kind as proposed until the status flip.
 
 The machine-readable contract is [`ontology/ontology.yml`](../ontology/ontology.yml).
 JSON Schemas in `ontology/` validate object, link, action and Slice 2
@@ -19,22 +20,25 @@ Where a fact is already specified for Discovery, that contract wins.
 
 | Status | Meaning |
 | --- | --- |
-| Implemented | Present in `agency_staff` and must match current storage and commands. |
-| Proposed | Design for a later slice. Not an installed module, route or API. |
+| Implemented | Present in current storage and commands. Discovery types live in `agency_staff`. Posting and application storage live in `agency_recruiting`. |
+| Proposed | Design for a later slice. Not a route, command, copier or authority transfer. |
 
-Implemented object types are the five internal Discovery records:
-`agency_person`, `agency_principal`, `agency_discovery`, `agency_invitation`
-and `agency_entitlement`. Implemented actions are the Discovery commands,
-invitation issue/resend/accept/revoke/inspect, and expired-record removal.
+Implemented object types are the five internal Discovery records
+(`agency_person`, `agency_principal`, `agency_discovery`,
+`agency_invitation`, `agency_entitlement`) plus recruiting storage for
+`agency_career_posting` and `agency_application`. Implemented actions are
+the Discovery commands, invitation issue/resend/accept/revoke/inspect,
+and expired-record removal. Recruiting actions are not shipped.
 
 Expense, Credential, Availability and Campaign stay proposed for slice 5.
 Agreement is also proposed for that slice. Organization, Membership,
 ProfileEvidence, StaffInvitation and StaffOnboard are proposed for
-slice 2 under `agency_workforce`. CareerPosting and Application are
-proposed for slice 2 under `agency_recruiting`. Opportunity, Activity and
-IntakeSubmission are proposed for slice 3. The proposed Slice 3 transfer
-design is [CRM transfer](CRM_TRANSFER.md). Engagement, assignment, time
-and statement types are proposed for slice 4. The proposed transfer design is
+slice 2 under `agency_workforce`. CareerPosting and Application storage
+is registered in `agency_recruiting`; ontology YAML still marks those
+types as proposed. Opportunity, Activity and IntakeSubmission are
+proposed for slice 3. The proposed Slice 3 transfer design is
+[CRM transfer](CRM_TRANSFER.md). Engagement, assignment, time and
+statement types are proposed for slice 4. The proposed transfer design is
 [Time transfer](TIME_TRANSFER.md); it does not implement those types.
 Career applications are Slice 2 Application records, not Slice 3 intake.
 
@@ -67,6 +71,8 @@ Invitation lifecycle is separate from relationship state. Entitlement
 status is separate from both. Application and recruiting labels are not
 Discovery states. They use the proposed `recruiting` kind
 (`agency_recruiting`) plus the Application and CareerPosting objects.
+Those objects have deny-by-default storage; the kind and recruiting
+actions remain proposed.
 
 ### Markings
 
@@ -146,14 +152,17 @@ model as frozen.
    `agency_recruiting`, `agency_commercial`, `agency_intake`,
    `agency_engagement`, `agency_agreement`, `agency_expense` and
    `agency_campaign`. Posting and application types belong to
-   `agency_recruiting`.
+   `agency_recruiting`. The submodule now registers those types; YAML
+   status, recruiting actions and a `recruiting` authority row do not
+   ship in this registration.
 4. Approve the marking vocabulary and the rule that an unmapped property
    stops migration.
 5. Approve participant authorization as an entitled principal rather than
    a Drupal permission.
 6. Approve the draft as ontology v0 for the ontology approval gate, with
    slice-five types remaining proposed until that slice is designed.
-   Slice 2 recruiting and application types stay proposed until G1.
+   Ontology YAML still marks Slice 2 recruiting types as proposed.
+   Storage registration does not close G-ONT.
 
 ## What this version does not do
 

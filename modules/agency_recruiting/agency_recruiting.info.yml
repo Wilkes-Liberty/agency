@@ -1,0 +1,7 @@
+name: Agency Recruiting
+type: module
+description: 'Stores career posting and application records. Enabling it copies no host data and transfers no recruiting authority.'
+core_version_requirement: ^10.6 || ^11.3
+package: Agency
+dependencies:
+  - agency:agency

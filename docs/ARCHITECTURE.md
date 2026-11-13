@@ -13,6 +13,7 @@ its [service contract](DISCOVERY_CONTRACT.md) through explicit adapters.
 | `config/schema` | Typed tenant-configuration contract |
 | `modules/agency_staff` | Initial workforce capability boundary |
 | `modules/agency_workforce` | Transactional staff invitations with explicit host ports |
+| `modules/agency_recruiting` | Career posting and application storage; deny-by-default; no copiers or authority |
 | `modules/agency_host` | Generic Discovery host adapter |
 | `modules/agency_migrate` | Identity-preserving copy, lineage and authority |
 | `ontology/` | Draft object, link and action contract |

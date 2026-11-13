@@ -77,6 +77,8 @@ vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
   "$PWD/web/modules/contrib/agency/tests/src/Functional"
 vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
   "$PWD/web/modules/contrib/agency/modules/agency_host/tests/src"
+vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+  "$PWD/web/modules/contrib/agency/modules/agency_recruiting/tests"
 ```
 
 The GitHub matrix installs the host identity/OAuth stack and Drush so
@@ -124,7 +126,8 @@ functional tests. A separate job runs PHPStan against a Drupal 11.4 analysis hos
 Every database lane also executes the domain suite and explicitly checks that
 the independent-writer, interrupted-drain, delivery-marker, summary-savepoint
 and retention removal cases ran without skips. The same lanes run
-`modules/agency_host` unit and kernel tests. The PostgreSQL 16 leg must
+`modules/agency_host` unit and kernel tests. The 11.x lanes, including
+PostgreSQL 16, also run `modules/agency_recruiting` kernel tests. The PostgreSQL 16 leg must
 execute the deferred clean-origin COMMIT-fault cases; it must not skip them.
 smtp and postmark_webhooks cases may skip when those modules are absent.
 The CLI-only workers accept kernel-test-prefixed connection options via

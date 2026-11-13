@@ -20,6 +20,8 @@ engines remain independent dependencies.
   Discovery workspace.
 - `agency_workforce` provides staff invitation issuance, acceptance, recovery and
   durable evidence through explicitly configured host adapters.
+- `agency_recruiting` registers career posting and application storage. Enabling
+  it copies no host data and transfers no recruiting authority.
 - `agency_migrate` copies host records into Agency types with lineage, shadow
   reconciliation and operational authority. Host adapters supply copier plugins
   and verified writer exclusion. Nonempty rollback replay remains unavailable.
@@ -39,6 +41,12 @@ the module supplies no public route, sends no mail and transfers no authority.
 See the [invitation adapter guide](modules/agency_workforce/README.md).
 Routine uninstall preserves populated migration and invitation recovery stores;
 retiring an installation requires a reviewed retention and recovery procedure.
+
+`agency_recruiting` stores `agency_career_posting` and `agency_application`
+records. Entity access is denied by default. There are no routes, forms, Views
+or menu links. A published posting requires a future close date. An application
+may omit a posting. Résumé bytes stay in File Gate; the row stores a File Gate
+UUID. See the [recruiting module note](modules/agency_recruiting/README.md).
 
 The alpha6 migration scope includes complete revision/translation copying,
 atomic resumable batches and complete-population reconciliation. A rollback with
@@ -152,7 +160,7 @@ Actual passing results, not the presence of a workflow, establish compatibility.
 - [Architecture](docs/ARCHITECTURE.md): domain, host, integration and evidence boundaries.
 - [Ontology](docs/ONTOLOGY.md): draft tenant-neutral object, link and action contract.
 - [Migration](docs/MIGRATION.md): identity-preserving copy, reconciliation and rollback.
-- [Workforce transfer](docs/WORKFORCE_TRANSFER.md): broader Slice 2 proposal and unregistered scaffolding.
+- [Workforce transfer](docs/WORKFORCE_TRANSFER.md): Slice 2 design; posting and application storage is registered, copiers and recruiting authority are not.
 - [Staff onboarding compatibility](docs/WORKFORCE_INVITATION_CONTRACT.md): anonymous invitation, transaction and migration requirements; implementation and host qualification remain separate.
 - [CRM transfer](docs/CRM_TRANSFER.md): proposed Slice 3 CRM, intake and contact-lookup design.
 - [Time transfer](docs/TIME_TRANSFER.md): proposed Slice 4 engagement, time, client-membership and feed design. No record types.
