@@ -1,1 +1,11 @@
-domains: {  }
+domains:
+  workforce:
+    state: legacy
+    changed: 0
+    actor_hash: 6d422e16b2aa28e255047c0802dd6d6e4777266ef380db7d1ac8d558cb16b16d
+    reason: 'Register slice two domains at legacy'
+  recruiting:
+    state: legacy
+    changed: 0
+    actor_hash: 6d422e16b2aa28e255047c0802dd6d6e4777266ef380db7d1ac8d558cb16b16d
+    reason: 'Register slice two domains at legacy'

@@ -35,11 +35,14 @@ Observed in the kernel suite against synthetic entity types:
   run is a verified no-op when both sides still match the committed manifest.
 - Every source content property must have a marking (`public`, `internal`,
   `confidential`, `personal` or `financial`). An unmapped or invalid marking
-  fails the run before any write.
+  fails the run before any write and records a minimized `unmapped_marking`
+  outbox intent. That intent carries plugin, source and target type ids, a
+  count, hashed actor and the operator-visible reason. It does not list
+  property names or write a run receipt, lineage or target rows.
 - Historical Audit Chain rows are never rewritten. One minimized lineage event
   per batch is recorded through Agency's outbox and drained with Audit Chain's
   public `logKeyed()` contract so a verifier can resolve a legacy reference to
-  its Agency counterpart.
+  its Agency counterpart. The unmapped-marking stop uses the same outbox.
 - A reconciler reports counts, per-field digests, integer-reference integrity
   and access-decision parity (same principal token, same allow/deny on both
   sides) as JSON with a pass/fail and explained exceptions.
@@ -206,14 +209,18 @@ fingerprints include the operational generation. This boundary is verified on
 MySQL and PostgreSQL; unavailable schema or unsupported database engines refuse
 with `authority_storage_unavailable`.
 
-Changing state is an operator action with a required reason. New installations
-start with an empty operational table. Upgrade `agency_migrate_update_10002`
-validates and imports existing authority configuration once, preserving state,
-actor, reason and time while assigning the first operational version. A marker
-in an explicitly SQL-backed key/value collection shares that import transaction.
-The retained `agency_migrate.authority` configuration is deprecated migration
-input; later configuration imports cannot register or change runtime authority.
-Invalid historical entries stop the upgrade instead of being dropped.
+Changing state is an operator action with a required reason. A new install
+records `workforce` and `recruiting` at `legacy` through `hook_install`.
+Upgrade `agency_migrate_update_10002` validates and imports existing authority
+configuration once, preserving state, actor, reason and time while assigning
+the first operational version. A marker in an explicitly SQL-backed key/value
+collection shares that import transaction. Upgrade
+`agency_migrate_update_10003` then inserts missing `workforce` and `recruiting`
+rows at `legacy` without changing already recorded domains or their states.
+Creation of those two domains in any other state is refused. The retained
+`agency_migrate.authority` configuration is deprecated migration input; later
+configuration imports cannot register or change runtime authority. Invalid
+historical entries stop the upgrade instead of being dropped.
 
 The public `register()`, `get()`, `status()`, `transition()` and read-only
 `assertTransition()` methods remain. `status()` includes each recorded version.

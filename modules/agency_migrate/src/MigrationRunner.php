@@ -43,7 +43,7 @@ final class MigrationRunner {
     $this->assertRunAccess();
     $batch_size = $this->boundedBatch($batch_size);
     $copier = $this->copier($plugin_id);
-    $this->assertMarkings($copier);
+    $this->assertMarkings($copier, $plugin_id);
     $plan = [
       'plugin_id' => $plugin_id,
       'source_type' => $copier->sourceEntityType(),
@@ -73,7 +73,7 @@ final class MigrationRunner {
       throw new MigrateRefusal('plugin_missing');
     }
     $copier = $this->copier($run['plugin_id']);
-    $this->assertMarkings($copier);
+    $this->assertMarkings($copier, $run['plugin_id']);
     if (!$execute) {
       return [
         'run_id' => $run_id,
@@ -243,12 +243,29 @@ final class MigrationRunner {
 
   /**
    * Fails the run before any write when a source property has no marking.
+   *
+   * The refusal records a minimized outbox intent so a refused write still
+   * leaves an Audit Chain trace. Property names are omitted from metadata.
    */
-  private function assertMarkings(CopierInterface $copier): void {
+  private function assertMarkings(CopierInterface $copier, string $plugin_id): void {
     $unmapped = $copier->unmappedProperties();
-    if ($unmapped !== []) {
-      throw new MigrateRefusal('unmapped_marking');
+    if ($unmapped === []) {
+      return;
     }
+    $fingerprint = hash('sha256', implode(':', [
+      'unmapped_marking',
+      $plugin_id,
+      $this->uuid->generate(),
+    ]));
+    $this->outbox->record('unmapped_marking', [
+      'plugin_id' => $plugin_id,
+      'source_type' => $copier->sourceEntityType(),
+      'target_type' => $copier->targetEntityType(),
+      'reason' => 'unmapped_marking',
+      'unmapped_count' => count($unmapped),
+      'actor_hash' => hash('sha256', 'uid:' . $this->currentUser->id()),
+    ], $fingerprint);
+    throw new MigrateRefusal('unmapped_marking');
   }
 
   /**

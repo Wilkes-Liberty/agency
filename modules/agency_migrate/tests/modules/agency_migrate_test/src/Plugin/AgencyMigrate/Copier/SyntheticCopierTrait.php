@@ -24,6 +24,7 @@ trait SyntheticCopierTrait {
       'reviewers' => 'internal',
       'related_id' => 'internal',
       'access_class' => 'confidential',
+      'file_uuid' => 'confidential',
     ];
   }
 
