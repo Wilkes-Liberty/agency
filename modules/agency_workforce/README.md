@@ -25,6 +25,29 @@ Locked lookups must freshly read storage; acceptance verifies the digest is
 absent before recording completion.
 The synthetic test module demonstrates these contracts without host source.
 
+## Internal workforce records
+
+The module registers internal content entity types for profile evidence,
+staff onboard submissions, workforce relationships and workforce
+entitlements. Machine names are `agency_profile_evidence`,
+`agency_staff_onboard`, `agency_workforce` and
+`agency_workforce_entitlement`. They have no routes, forms, Views or menu
+links. The access handler denies view, update, delete and create for every
+account, including users granted the module's invitation permissions.
+
+Entity keys accept an explicit integer id, UUID, revision id, created and
+changed timestamps and owner on create. A colliding id, UUID or revision
+id is refused. Profile evidence stores File Gate UUID strings only, never
+file bytes or `file` entity references. Staff onboard classification is
+`employee` or `contractor`; `discovery`, `client`, `partner` and
+`supplier` are refused.
+
+Invitation bearers remain on `InvitationStoreInterface`, keyed by
+collection and digest. This module does not register
+`agency_staff_invitation`. Existing sites that already enabled the module
+gain the new types through `agency_workforce_update_10001`. Enabling the
+types does not transfer workforce authority.
+
 Successful operations return only after root commit. An uncertain result must
 be reconciled rather than retried automatically. Acceptance recovery requires
 the original bearer within its original expiry window, or an authorized

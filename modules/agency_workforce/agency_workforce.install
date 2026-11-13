@@ -5,6 +5,8 @@
  * Durable workforce exclusion, operation receipts and minimized evidence.
  */
 
+use Drupal\agency_workforce\WorkforceTypes;
+
 /**
  * Implements hook_schema().
  */
@@ -54,4 +56,16 @@ function agency_workforce_schema(): array {
       'indexes' => ['pending' => ['delivered', 'sequence']],
     ],
   ];
+}
+
+/**
+ * Installs workforce entity types on sites that already enabled the module.
+ */
+function agency_workforce_update_10001(): void {
+  $updates = \Drupal::entityDefinitionUpdateManager();
+  foreach (WorkforceTypes::ALL as $type) {
+    if (!$updates->getEntityType($type)) {
+      $updates->installEntityType(\Drupal::entityTypeManager()->getDefinition($type));
+    }
+  }
 }
