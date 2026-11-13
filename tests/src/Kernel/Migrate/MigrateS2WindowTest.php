@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\agency\Kernel\Migrate;
 
-use Drupal\agency_migrate_test\Access\AuthorityGatedReader;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
@@ -58,6 +57,9 @@ final class MigrateS2WindowTest extends MigrateKernelTestBase {
 
   /**
    * A reader at legacy authority does not return Agency-side rows.
+   *
+   * The production reader records a minimized outbox intent for each
+   * refused load. Entity API can still load the planted Agency row.
    */
   public function testLegacyAuthorityReaderDoesNotReadAgencyRows(): void {
     agency_migrate_install();
@@ -69,15 +71,29 @@ final class MigrateS2WindowTest extends MigrateKernelTestBase {
     $this->assertSame('completed', $receipt['status']);
     $target = $this->target(1);
     $this->assertInstanceOf(ContentEntityInterface::class, $target);
-    $reader = new AuthorityGatedReader(
-      $authority,
-      $this->container->get('entity_type.manager'),
+    $reader = $this->container->get('agency_migrate.authority_reader');
+    $this->assertRefused(
+      fn () => $reader->readAgency('workforce', 'agency_migrate_agency_item', 1),
+      'legacy',
     );
-    $this->assertRefused(fn () => $reader->readAgency('workforce', 1), 'legacy');
-    $this->assertRefused(fn () => $reader->readAgency('recruiting', 1), 'legacy');
+    $this->assertRefused(
+      fn () => $reader->readAgency('recruiting', 'agency_migrate_agency_item', 1),
+      'legacy',
+    );
+    $this->assertInstanceOf(ContentEntityInterface::class, $this->target(1));
     $this->assertSame('legacy', $authority->get('workforce'));
     $this->assertSame('legacy', $authority->get('recruiting'));
     $this->assertMinimizedMigrateEvidence('lineage_batch');
+    $events = $this->assertMinimizedMigrateEvidence('agency_read_refused');
+    $this->assertCount(2, $events);
+    $by_domain = [];
+    foreach ($events as $event) {
+      $by_domain[$event['domain']] = $event;
+      $this->assertSame('legacy', $event['reason']);
+      $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $event['actor_hash']);
+    }
+    $this->assertArrayHasKey('workforce', $by_domain);
+    $this->assertArrayHasKey('recruiting', $by_domain);
   }
 
   /**

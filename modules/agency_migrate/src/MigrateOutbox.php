@@ -25,14 +25,22 @@ final class MigrateOutbox {
    * Records one allowlisted operation. Duplicate fingerprints are ignored.
    *
    * @param string $operation
-   *   One of lineage_batch, authority_change, rollback or unmapped_marking.
+   *   One of lineage_batch, authority_change, rollback,
+   *   unmapped_marking or agency_read_refused.
    * @param array<string, mixed> $metadata
    *   Minimized public metadata. No record payloads or personal data.
    * @param string $fingerprint
    *   Idempotency key for this intent.
    */
   public function record(string $operation, array $metadata, string $fingerprint): string {
-    if (!in_array($operation, ['lineage_batch', 'authority_change', 'rollback', 'unmapped_marking'], TRUE)) {
+    $allowed = [
+      'lineage_batch',
+      'authority_change',
+      'rollback',
+      'unmapped_marking',
+      'agency_read_refused',
+    ];
+    if (!in_array($operation, $allowed, TRUE)) {
       throw new \InvalidArgumentException('Invalid evidence metadata.');
     }
     if ($this->database->select('agency_migrate_outbox', 'o')
