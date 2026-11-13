@@ -206,14 +206,18 @@ fingerprints include the operational generation. This boundary is verified on
 MySQL and PostgreSQL; unavailable schema or unsupported database engines refuse
 with `authority_storage_unavailable`.
 
-Changing state is an operator action with a required reason. New installations
-start with an empty operational table. Upgrade `agency_migrate_update_10002`
-validates and imports existing authority configuration once, preserving state,
-actor, reason and time while assigning the first operational version. A marker
-in an explicitly SQL-backed key/value collection shares that import transaction.
-The retained `agency_migrate.authority` configuration is deprecated migration
-input; later configuration imports cannot register or change runtime authority.
-Invalid historical entries stop the upgrade instead of being dropped.
+Changing state is an operator action with a required reason. A new install
+records `workforce` and `recruiting` at `legacy` through `hook_install`.
+Upgrade `agency_migrate_update_10002` validates and imports existing authority
+configuration once, preserving state, actor, reason and time while assigning
+the first operational version. A marker in an explicitly SQL-backed key/value
+collection shares that import transaction. Upgrade
+`agency_migrate_update_10003` then inserts missing `workforce` and `recruiting`
+rows at `legacy` without changing already recorded domains or their states.
+Creation of those two domains in any other state is refused. The retained
+`agency_migrate.authority` configuration is deprecated migration input; later
+configuration imports cannot register or change runtime authority. Invalid
+historical entries stop the upgrade instead of being dropped.
 
 The public `register()`, `get()`, `status()`, `transition()` and read-only
 `assertTransition()` methods remain. `status()` includes each recorded version.
