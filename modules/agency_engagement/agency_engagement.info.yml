@@ -1,0 +1,7 @@
+name: Agency Engagement
+type: module
+description: 'Scaffolding for engagement and time ports. Slice 4 G1 is open.'
+core_version_requirement: ^10.6 || ^11.3
+package: Agency
+dependencies:
+  - agency:agency
