@@ -1,0 +1,7 @@
+name: Agency Intake
+type: module
+description: 'Provides refusing business-intake dispatch ports. Enabling it creates no intake records and transfers no intake authority.'
+core_version_requirement: ^10.6 || ^11.3
+package: Agency
+dependencies:
+  - agency:agency

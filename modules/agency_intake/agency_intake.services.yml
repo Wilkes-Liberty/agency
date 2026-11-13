@@ -1,0 +1,5 @@
+services:
+  agency_intake.dispatch_gateway:
+    class: Drupal\agency_intake\UnavailableIntakeDispatchGateway
+  agency_intake.dispatch_keys:
+    class: Drupal\agency_intake\UnavailableDispatchKeyStore

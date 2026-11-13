@@ -1,0 +1,7 @@
+name: Agency Commercial
+type: module
+description: 'Provides refusing commercial contact-policy ports. Enabling it creates no commercial records and transfers no CRM authority.'
+core_version_requirement: ^10.6 || ^11.3
+package: Agency
+dependencies:
+  - agency:agency
