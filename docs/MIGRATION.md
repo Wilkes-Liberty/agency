@@ -42,7 +42,8 @@ Observed in the kernel suite against synthetic entity types:
 - Historical Audit Chain rows are never rewritten. One minimized lineage event
   per batch is recorded through Agency's outbox and drained with Audit Chain's
   public `logKeyed()` contract so a verifier can resolve a legacy reference to
-  its Agency counterpart. The unmapped-marking stop uses the same outbox.
+  its Agency counterpart. The unmapped-marking stop and a refused
+  Agency-side load at non-agency authority use the same outbox.
 - A reconciler reports counts, per-field digests, integer-reference integrity
   and access-decision parity (same principal token, same allow/deny on both
   sides) as JSON with a pass/fail and explained exceptions.
@@ -224,6 +225,18 @@ historical entries stop the upgrade instead of being dropped.
 
 The public `register()`, `get()`, `status()`, `transition()` and read-only
 `assertTransition()` methods remain. `status()` includes each recorded version.
+
+Host adapters load Agency-side records through
+`agency_migrate.authority_reader`. That reader is deny-first: only `agency`
+authority returns a row. At `legacy`, `shadow` or `removed`, or when the
+domain is unregistered, it refuses with the recorded state (or
+`invalid_transition`) rather than `not_found`, records a minimized
+`agency_read_refused` outbox intent, and does not open storage. Entity API
+can still load planted Agency rows; hosts must consult the reader. The
+intent carries domain, entity type, integer id, hashed actor and the
+operator-visible reason. Drain uses the same `logKeyed()` path as
+`unmapped_marking`.
+
 The internal service constructor now takes the writer-fence service instead of
 the configuration factory. A recorded `agency` state imported from an older
 installation does not certify that its writers are covered.
