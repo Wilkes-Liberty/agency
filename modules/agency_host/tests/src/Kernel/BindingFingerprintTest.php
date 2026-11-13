@@ -14,7 +14,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Live fingerprint stays stable on the reviewed Externalauth 2.0.13 writers.
+ * Live fingerprint stays stable on the reviewed Externalauth 2.0.15 writers.
  *
  * Findings live in docs/EXTERNALAUTH_2.0.15.md.
  *
@@ -65,11 +65,11 @@ final class BindingFingerprintTest extends KernelTestBase {
   }
 
   /**
-   * The reviewed 2.0.13 install still produces a stable, mapping-sensitive digest.
+   * The reviewed 2.0.15 install still produces a stable, mapping-sensitive digest.
    */
   public function testFingerprintStableAcrossReviewedTwoOhWriters(): void {
     $this->assertTrue(InstalledVersions::isInstalled('drupal/externalauth'));
-    $this->assertSame('2.0.13', InstalledVersions::getReference('drupal/externalauth'));
+    $this->assertSame('2.0.15', InstalledVersions::getReference('drupal/externalauth'));
     $root = InstalledVersions::getInstallPath('drupal/externalauth');
     $writers = (new \ReflectionClass(BindingHistory::class))->getConstant('REVIEWED_WRITERS');
     $this->assertIsArray($writers);
