@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * @file
+ * Install hooks for Agency Engagement. Scaffolding ships no schema.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function agency_engagement_schema(): array {
+  return [];
+}

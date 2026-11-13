@@ -1,0 +1,9 @@
+services:
+  agency_engagement.unavailable_ports:
+    class: Drupal\agency_engagement\UnavailableEngagementPorts
+  agency_engagement.engagement_assignment_reader:
+    alias: agency_engagement.unavailable_ports
+  agency_engagement.time_submission_review:
+    alias: agency_engagement.unavailable_ports
+  agency_engagement.statement_snapshot_reader:
+    alias: agency_engagement.unavailable_ports
