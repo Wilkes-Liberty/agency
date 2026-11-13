@@ -234,7 +234,7 @@ jobs:
             'drupal/config_ignore:^3.4' \
             'drupal/consumers:^1.24' \
             'drupal/entity:^1.8' \
-            'drupal/externalauth:2.0.13' \
+            'drupal/externalauth:2.0.15' \
             'drupal/openid_connect:3.0.0-alpha9' \
             'drupal/simple_oauth:^6.1' \
             'drush/drush:^12.5 || ^13' \

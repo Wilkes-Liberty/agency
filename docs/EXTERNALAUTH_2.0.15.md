@@ -1,9 +1,10 @@
 # Externalauth 2.0.15 binding-writer review
 
-**Observed review**, not a qualification or release decision. The reviewed
-binding fingerprint stays on Externalauth **2.0.13**. This record does not
-approve moving that pin, requalifying coverage, or changing host Composer
-constraints.
+**Observed review**, then an operator pin move. Writer bytes on 2.0.14 and
+2.0.15 match the hashes already bound on 2.0.13. On 2026-11-13 the operator
+moved the reviewed reference to Externalauth **2.0.15** and requalified.
+This record does not approve a later unreviewed 2.0.x, a host Composer
+constraint change outside this package, or production qualification.
 
 Source review: [agency#30](https://github.com/Wilkes-Liberty/agency/issues/30).
 Host dependency qualification is separate.
@@ -13,7 +14,7 @@ Host dependency qualification is separate.
 `BindingHistory::fingerprint()` fails closed unless:
 
 - `Composer\InstalledVersions::getReference('drupal/externalauth')` is exactly
-  `2.0.13` (OpenID Connect remains `3.0.0-alpha9`)
+  `2.0.15` (OpenID Connect remains `3.0.0-alpha9`)
 - SHA-256 of the installed writer files matches `REVIEWED_WRITERS`
   (`src/Authmap.php` and `src/Form/AuthmapDeleteForm.php`)
 - Externalauth schema is at least `8104` when the module is enabled
@@ -22,8 +23,9 @@ Host dependency qualification is separate.
   `chronicle-agency-history-key-v1`
 
 The digest therefore changes if the reviewed reference string changes, even
-when the writer bytes are identical. Bumping the pin to 2.0.15 would
-invalidate already-qualified coverage. This review does not do that.
+when the writer bytes are identical. Moving the pin from 2.0.13 to 2.0.15
+changes the digest and requires fresh qualification of already-qualified
+coverage. That is the 2026-11-13 operator decision recorded below.
 
 ## Method
 
@@ -49,7 +51,8 @@ added. Schema floor `8104` is unchanged.
 
 ### Writer hashes (SHA-256)
 
-These match `BindingHistory::REVIEWED_WRITERS` on every listed 2.0.x tag:
+These match `BindingHistory::REVIEWED_WRITERS` on every listed 2.0.x tag.
+Reconfirmed after the pin move: the hashes did not change.
 
 | File | SHA-256 |
 | --- | --- |
@@ -70,28 +73,33 @@ These match `BindingHistory::REVIEWED_WRITERS` on every listed 2.0.x tag:
   every autowired `Psr\Log\LoggerInterface`. It does not change authmap
   writes.
 
-Installing 2.0.15 on a disposable host still fails closed with
-`Binding writer dependency requires review.` because
-`InstalledVersions::getReference()` is `2.0.15`, not `2.0.13`. That is the
-intended unreviewed-release refusal. It is not 2.0.15 compatibility.
-
 ## Decision recorded here
 
-Keep the reviewed reference, `REVIEWED_WRITERS` hashes, CI pin
-`drupal/externalauth:2.0.13`, and host Composer constraints unchanged.
-2.0.15 writer bytes are the same as 2.0.13; moving the pin is a later
-operator choice because it would change the fingerprint digest and require
-fresh qualification.
+**2026-10 review.** Writer bytes on 2.0.14 and 2.0.15 match the hashes bound
+to 2.0.13. The reviewed reference stayed 2.0.13 because the version string is
+part of the digest. Installing 2.0.15 then failed closed with
+`Binding writer dependency requires review.` That was the intended
+unreviewed-release refusal, not 2.0.15 compatibility.
 
-`BindingHistoryFingerprintTest` pins the reviewed source string and installed
-writer bytes (that hash assertion is not skippable). `BindingFingerprintTest`
-proves a live 2.0.13 digest. `BindingHistoryFingerprintDenyTest` executes the
-fail-closed throws: unreviewed `InstalledVersions::getReference()` (including
-`2.0.15`), a writer file that does not match `REVIEWED_WRITERS`, and enabled
-Externalauth below schema `8104`. Removing the unreviewed-reference throw
-while leaving `'drupal/externalauth' => '2.0.13'` in the reviewed array makes
-that deny test fail.
+**2026-11-13 operator decision.** Move the reviewed reference from 2.0.13 to
+2.0.15 and requalify. `REVIEWED_WRITERS` hashes stay. CI pin is
+`drupal/externalauth:2.0.15`. This package has no Composer constraint that
+pins Externalauth; `fingerprint()` is the authority. OpenID Connect remains
+`3.0.0-alpha9`. Already-qualified 2.0.13 coverage must be requalified against
+the new digest.
+
+`BindingHistoryFingerprintTest` pins the reviewed source string `2.0.15` and
+installed writer bytes (that hash assertion is not skippable).
+`BindingFingerprintTest` proves a live 2.0.15 digest.
+`BindingHistoryFingerprintDenyTest` executes the fail-closed throws:
+unreviewed `InstalledVersions::getReference()` (including `2.0.16` and the
+previous `2.0.13` pin), a writer file that does not match `REVIEWED_WRITERS`,
+and enabled Externalauth below schema `8104`. Removing the
+unreviewed-reference throw while leaving `'drupal/externalauth' => '2.0.15'`
+in the reviewed array makes that deny test fail. Mutating the reviewed string
+to `2.0.13` fails the pin test.
 
 Fingerprint hashing stays PHP `hash()` / `hash_hmac()` / `hash_file()`
-SHA-256, not the OpenSSL FIPS provider. That is pre-existing; this review
-does not change the digest. Host dependency upgrades still require separate acceptance.
+SHA-256, not the OpenSSL FIPS provider. That is pre-existing; this pin move
+changes the digest only because the reviewed reference string changed. Host
+dependency upgrades still require separate acceptance.
