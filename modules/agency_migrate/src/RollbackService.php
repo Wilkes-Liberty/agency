@@ -77,8 +77,14 @@ final class RollbackService {
     $metadata = ['reason' => 'restore_refused'];
     // Only registered domain names may enter evidence. Never copy an unknown
     // input, operator reason, backup path or record payload into the intent.
-    if (isset($this->authority->status()[$domain])) {
-      $metadata['domain'] = $domain;
+    try {
+      if ($this->authority->get($domain) !== NULL) {
+        $metadata['domain'] = $domain;
+      }
+    }
+    catch (\Throwable) {
+      // Optional context cannot suppress a refusal when evidence storage is
+      // healthy. Unverified domain input must never enter the audit record.
     }
     $this->outbox->record('restore_refused', $metadata, hash('sha256', random_bytes(32)));
     throw new MigrateRefusal('restore_refused');

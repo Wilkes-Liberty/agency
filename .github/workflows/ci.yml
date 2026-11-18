@@ -118,6 +118,7 @@ jobs:
           composer config repositories.agency --json '{"type":"path","url":"../module","options":{"symlink":true,"versions":{"drupal/agency":"1.x-dev"}}}'
           retry composer require -W --dev --no-interaction --no-progress \
             'drupal/agency:1.x-dev' \
+            'drush/drush:^13' \
             'drupal/core-dev:~11.4.0' \
             'phpstan/phpstan:^2' \
             'phpstan/extension-installer:^1.4' \
@@ -312,6 +313,8 @@ jobs:
             if ($xml === false) { exit(1); }
             $required = ["testConcurrentDrainersCommit", "testConcurrentDrainersRollback", "testConcurrentDomainCommit", "testConcurrentDomainRollback", "testInterruptedDrainRetainsIntent", "testDeliveryMarkerFailure", "testSummarySavepointFailure", "testEvidenceHealthAgeAndRollback", "testEvidenceHealthUpgrade", "testEvidenceHealthUnavailable", "testEvidenceHealthTransactionBoundary", "testEvidenceHealthSlowFailure", "testPolicyWriterWaitsForCommit", "testPolicyWriterWaitsForRollback", "testDomainInventoryAfterWaitingWriter", "testDomainInventoryAfterRolledBackWriter", "testCompleteRemovalAndAuthorizedReplay", "testInterruptedBatchLeavesCompletedRemovals", "testWithdrawnRetentionUsesCurrentPolicy", "testConcurrentReferenceCommit", "testConcurrentReferenceRollback", "testConcurrentPolicyCommit", "testEvidenceFailureRollsBackRemoval", "testLostApplicationResponse"];
             $required = array_merge($required, [
+              "testDiscoveredCommandsUseTypedOptions",
+              "testRestoreFailureBoundaries",
               "testHistoryAndDefaultSelectionSurviveCopyAndReplay",
               "testHistoricalRevisionCollisionRefusesAtomically",
               "testExistingSameUuidWithoutLineageRefuses",

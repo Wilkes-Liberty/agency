@@ -34,6 +34,10 @@ final class MigrateRestoreRefusalTest extends MigrateKernelTestBase {
     $before = $authority->status();
     $reason = 'private-operator-reason-must-not-be-logged';
     $generation = $before['synthetic']['version'];
+    $database = $this->container->get('database');
+    if ($entry === 'unavailable authority') {
+      $database->schema()->renameTable('agency_migrate_authority_state', 'agency_migrate_authority_unavailable');
+    }
     $this->assertRefused(
       fn () => $entry === 'service'
         ? $this->container->get('agency_migrate.rollback')->rollback('synthetic', $reason, $execute, $generation, TRUE)
@@ -49,10 +53,12 @@ final class MigrateRestoreRefusalTest extends MigrateKernelTestBase {
         ]),
       'restore_refused',
     );
+    if ($entry === 'unavailable authority') {
+      $database->schema()->renameTable('agency_migrate_authority_unavailable', 'agency_migrate_authority_state');
+    }
     $this->assertSame($before, $authority->status());
     $this->assertSame('body-a', $this->source(1)->get('payload')->value);
     $this->assertSame('body-a', $this->target(1)->get('payload')->value);
-    $database = $this->container->get('database');
     $this->assertSame(0, (int) $database->select('agency_migrate_rollback_receipt', 'r')->countQuery()->execute()->fetchField());
     $rows = $database->select('agency_migrate_outbox', 'o')->fields('o')
       ->condition('operation', 'restore_refused')->execute()->fetchAll();
@@ -61,11 +67,11 @@ final class MigrateRestoreRefusalTest extends MigrateKernelTestBase {
     $keys = array_keys($metadata);
     sort($keys);
     $expected_keys = ['effective_at', 'event_id', 'reason'];
-    if ($entry !== 'status') {
+    if (!in_array($entry, ['status', 'unavailable authority'], TRUE)) {
       array_unshift($expected_keys, 'domain');
     }
     $this->assertSame($expected_keys, $keys);
-    if ($entry !== 'status') {
+    if (!in_array($entry, ['status', 'unavailable authority'], TRUE)) {
       $this->assertSame('synthetic', $metadata['domain']);
     }
     $this->assertSame('restore_refused', $metadata['reason']);
@@ -132,6 +138,7 @@ final class MigrateRestoreRefusalTest extends MigrateKernelTestBase {
       'command status' => ['status', FALSE],
       'command register' => ['register', TRUE],
       'command transition' => ['transition', TRUE],
+      'unavailable authority' => ['unavailable authority', TRUE],
     ];
   }
 
