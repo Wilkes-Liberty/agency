@@ -28,12 +28,15 @@ A time actor is never derived from a Discovery entitlement.
 ## Statement preservation preflight
 
 Use `StatementPreflight` with a reviewed `StatementSourceInterface` adapter
-inside a stable writer-fenced snapshot. It qualifies one already-issued
-statement by source namespace, kind and serial ID. The inverse returns the
-original statement row, including exact JSON bytes, and the sorted engagement
-membership identifies the index rows. The typed projection retains source-list
+inside a stable writer-fenced snapshot. Bind the reviewed source namespace
+when constructing the preflight. It qualifies an issued statement by its
+original kind and serial ID and checks the namespace before reading replay
+slots. The inverse returns the original statement row, including exact JSON
+bytes. The sorted engagement membership identifies the index rows. The typed
+projection retains source-list
 order independently from group and line order. It requires historical approval
-and bill-to evidence for the actual pinned revisions.
+and bill-to evidence for the actual pinned revisions, including client
+Profile ownership at issuance.
 
 The preflight recognizes absent presentation and frozen presentation versions
 1 and 2. It checks their structure and keeps the stored prose and formatting.

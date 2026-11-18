@@ -2,4 +2,5 @@
 section: Added
 ---
 Qualify issued statement snapshots and challenge receipts in a read-only
-preflight with exact source identities, inverse rows and historical approvals.
+preflight with source-scoped replay checks, exact inverse rows and historical
+approval and client ownership evidence.

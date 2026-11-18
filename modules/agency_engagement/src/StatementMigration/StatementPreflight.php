@@ -12,26 +12,35 @@ namespace Drupal\agency_engagement\StatementMigration;
 final class StatementPreflight {
 
   /**
-   * The adapter reads exclusively within the caller's stable source snapshot.
+   * Binds a stable source adapter to its reviewed namespace.
    */
-  public function __construct(private readonly StatementSourceInterface $source) {}
+  public function __construct(
+    private readonly StatementSourceInterface $source,
+    private readonly string $namespace,
+  ) {
+    self::require(trim($namespace) !== '', 'source namespace');
+  }
 
   /**
    * Qualifies the exact original row, ordered pins and membership set.
    */
-  public function qualify(string $namespace, int $id): StatementProjection {
+  public function qualify(int $id): StatementProjection {
+    self::require($id > 0, 'document');
     $row = $this->source->document($id);
-    self::require(trim($namespace) !== '' && $id > 0 && $row !== NULL && ($row['kind'] ?? NULL) === 'statement', 'document');
+    self::require($row !== NULL && ($row['kind'] ?? NULL) === 'statement', 'document');
     self::shape($row, ['id', 'kind', 'actor', 'client_user', 'client_profile', 'created', 'body', 'sources'], 'document');
     self::require($row['id'] === $id && is_int($row['created']) && $row['created'] >= 0 && is_string($row['body']) && is_string($row['sources']), 'document');
     $subjects = [];
-    foreach (['client_user' => 'user', 'client_profile' => 'profile', 'actor' => 'user'] as $field => $type) {
+    foreach (['client_user', 'actor'] as $field) {
       self::require(is_int($row[$field]) && $row[$field] > 0, 'anchors');
-      $uuid = $this->source->identity($type, $row[$field]);
+      $uuid = $this->source->identity('user', $row[$field]);
       self::require(is_string($uuid) && $uuid !== '', 'anchors');
       $subjects[$field] = $uuid;
     }
-    self::require($this->source->ownsProfile($row['client_profile'], $row['client_user']), 'anchors');
+    self::require(is_int($row['client_profile']) && $row['client_profile'] > 0, 'anchors');
+    $profile = $this->source->clientProfileAt($row['client_profile'], $row['client_user'], $row['created']);
+    self::require($profile !== NULL && $profile !== '', 'anchors');
+    $subjects['client_profile'] = $profile;
 
     $body = self::json($row['body'], 'body');
     $keys = ['groups', 'used_seconds', 'included_seconds', 'remaining_seconds', 'budget_reference'];
@@ -107,13 +116,14 @@ final class StatementPreflight {
       'body' => $row['body'],
       'sources' => $row['sources'],
     ];
-    return new StatementProjection([$namespace, 'statement', $id], $original, $subjects, $body, array_values($sources), $membership, $engagements);
+    return new StatementProjection([$this->namespace, 'statement', $id], $original, $subjects, $body, array_values($sources), $membership, $engagements);
   }
 
   /**
    * Qualifies a separate receipt using its statement's original client anchor.
    */
   public function qualifyChallenge(StatementProjection $statement, int $id): ChallengeProjection {
+    self::require($statement->identity[0] === $this->namespace, 'source namespace');
     $row = $this->source->challenge($id);
     $document = $statement->inverse();
     self::require($id > 0 && $row !== NULL, 'challenge');
@@ -142,6 +152,7 @@ final class StatementPreflight {
    * Accepts an empty identity slot or a completely equal statement inverse.
    */
   public function checkDocumentReplay(StatementProjection $statement): void {
+    self::require($statement->identity[0] === $this->namespace, 'source namespace');
     $id = $statement->identity[2];
     $existing = $this->source->document($id);
     $membership = self::canonicalMembership($this->source->membership($id));
@@ -156,6 +167,7 @@ final class StatementPreflight {
    * Checks both receipt keys together before a future inverse can replay.
    */
   public function checkChallengeReplay(ChallengeProjection $challenge): void {
+    self::require($challenge->statement[0] === $this->namespace, 'source namespace');
     $row = $challenge->inverse();
     $id = $this->source->challenge($row['id']);
     $key = $this->source->challengeByRetry($row['actor'], $row['retry_key']);

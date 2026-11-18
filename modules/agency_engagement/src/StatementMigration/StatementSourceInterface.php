@@ -25,14 +25,14 @@ interface StatementSourceInterface {
   public function membership(int $document): array;
 
   /**
-   * Resolves an unambiguous source user or Profile ID to its source UUID.
+   * Resolves an unambiguous source user ID to its source UUID.
    */
   public function identity(string $type, int $id): ?string;
 
   /**
-   * Verifies that the Profile is a client Profile with the specified owner.
+   * Resolves a client Profile owned by the specified user at issuance.
    */
-  public function ownsProfile(int $profile, int $user): bool;
+  public function clientProfileAt(int $profile, int $user, int $issued): ?string;
 
   /**
    * Resolves an exact pinned revision with approved evidence at issuance.
