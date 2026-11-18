@@ -19,10 +19,12 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 final class RecruitingIdentityTest extends RecruitingKernelTestBase {
 
   /**
-   * Create keeps integer id, UUID, revision id, timestamps and owner.
+   * Restore keeps the identifiers and contents of a historical posting.
    */
   public function testExplicitIdentifiersArePreserved(): void {
     $uuid = '00000000-0000-4000-8000-000000000017';
+    $now = $this->container->get('datetime.time')->getRequestTime();
+    $close = $now - 7 * 86400;
     $posting = $this->createPosting([
       'id' => 17,
       'uuid' => $uuid,
@@ -31,6 +33,9 @@ final class RecruitingIdentityTest extends RecruitingKernelTestBase {
       'changed' => 1700000001,
       'owner_uid' => 9,
       'revision_created' => 1700000002,
+      'status' => 'published',
+      'hiring_status' => 'open',
+      'valid_through' => $close,
     ]);
     $posting->enforceIsNew(TRUE);
     $posting->isDefaultRevision(TRUE);
@@ -52,6 +57,15 @@ final class RecruitingIdentityTest extends RecruitingKernelTestBase {
     $this->assertSame(1700000001, (int) $loaded->get('changed')->value);
     $this->assertSame(9, (int) $loaded->get('owner_uid')->value);
     $this->assertSame(1700000002, (int) $loaded->get('revision_created')->value);
+    $this->assertSame('published', $loaded->get('status')->value);
+    $this->assertSame('open', $loaded->get('hiring_status')->value);
+    $this->assertSame($close, (int) $loaded->get('valid_through')->value);
+    $violations = $loaded->validate();
+    $this->assertCount(1, $violations);
+    $this->assertSame(
+      'A published posting cannot have a past close date.',
+      (string) $violations[0]->getMessage(),
+    );
   }
 
   /**
