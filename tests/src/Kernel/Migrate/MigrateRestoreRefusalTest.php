@@ -38,8 +38,9 @@ final class MigrateRestoreRefusalTest extends MigrateKernelTestBase {
       fn () => $entry === 'service'
         ? $this->container->get('agency_migrate.rollback')->rollback('synthetic', $reason, $execute, $generation, TRUE)
         : $this->container->get('agency_migrate.commands')->authority([
-          'domain' => 'synthetic',
-          'set' => 'legacy',
+          'domain' => $entry === 'status' ? '' : 'synthetic',
+          'set' => $entry === 'status' ? '' : ($entry === 'transition' ? 'removed' : 'legacy'),
+          'register' => $entry === 'register',
           'rollback' => TRUE,
           'restore-from-backup' => TRUE,
           'reason' => $reason,
@@ -59,8 +60,14 @@ final class MigrateRestoreRefusalTest extends MigrateKernelTestBase {
     $metadata = json_decode($rows[0]->metadata, TRUE, 16, JSON_THROW_ON_ERROR);
     $keys = array_keys($metadata);
     sort($keys);
-    $this->assertSame(['domain', 'effective_at', 'event_id', 'reason'], $keys);
-    $this->assertSame('synthetic', $metadata['domain']);
+    $expected_keys = ['effective_at', 'event_id', 'reason'];
+    if ($entry !== 'status') {
+      array_unshift($expected_keys, 'domain');
+    }
+    $this->assertSame($expected_keys, $keys);
+    if ($entry !== 'status') {
+      $this->assertSame('synthetic', $metadata['domain']);
+    }
     $this->assertSame('restore_refused', $metadata['reason']);
     $this->assertStringNotContainsString($reason, json_encode($rows, JSON_THROW_ON_ERROR));
 
@@ -87,6 +94,33 @@ final class MigrateRestoreRefusalTest extends MigrateKernelTestBase {
   }
 
   /**
+   * Untrusted input, ambient transactions and broken evidence cannot leak data.
+   */
+  public function testRestoreFailureBoundaries(): void {
+    $rollback = $this->container->get('agency_migrate.rollback');
+    $database = $this->container->get('database');
+    $private = 'unknown-private-record-or-backup-location';
+    $this->container->get('current_user')->setAccount($this->author);
+    $this->assertRefused(fn () => $rollback->rollback($private, $private, TRUE, NULL, TRUE), 'forbidden');
+    $this->assertSame(0, (int) $database->select('agency_migrate_outbox', 'o')->countQuery()->execute()->fetchField());
+    $this->container->get('current_user')->setAccount($this->operator);
+    $transaction = $database->startTransaction();
+    $this->assertRefused(fn () => $rollback->rollback($private, $private, FALSE, NULL, TRUE), 'writer_transaction_owned');
+    $this->assertSame(0, (int) $database->select('agency_migrate_outbox', 'o')->countQuery()->execute()->fetchField());
+    $transaction->rollBack();
+    unset($transaction);
+    $this->assertRefused(fn () => $rollback->rollback($private, $private, TRUE, NULL, TRUE), 'restore_refused');
+    $rows = $database->select('agency_migrate_outbox', 'o')->fields('o')->execute()->fetchAll();
+    $this->assertCount(1, $rows);
+    $this->assertStringNotContainsString($private, json_encode($rows, JSON_THROW_ON_ERROR));
+    $this->assertArrayNotHasKey('domain', json_decode($rows[0]->metadata, TRUE, 16, JSON_THROW_ON_ERROR));
+    $database->schema()->dropTable('agency_migrate_outbox');
+    $this->assertRefused(fn () => $rollback->rollback($private, $private, TRUE, NULL, TRUE), 'rollback_failed');
+    $this->assertSame([], $this->container->get('agency_migrate.authority')->status());
+    $this->assertSame(0, (int) $database->select('agency_migrate_rollback_receipt', 'r')->countQuery()->execute()->fetchField());
+  }
+
+  /**
    * Every operator entry point refuses even a previewed restore request.
    */
   public static function entryPoints(): array {
@@ -95,6 +129,9 @@ final class MigrateRestoreRefusalTest extends MigrateKernelTestBase {
       'service execute' => ['service', TRUE],
       'command preview' => ['command', FALSE],
       'command execute' => ['command', TRUE],
+      'command status' => ['status', FALSE],
+      'command register' => ['register', TRUE],
+      'command transition' => ['transition', TRUE],
     ];
   }
 

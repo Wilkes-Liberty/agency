@@ -113,6 +113,7 @@ final class AgencyMigrateCommands {
    * @option register Register a new domain at legacy. Requires --execute.
    * @option rollback Use the agency-to-legacy rollback edge with --set=legacy.
    * @option generation Expected Agency generation for an executing replay.
+   * @option restore-from-backup Refuse backup restoration and record evidence, including without --execute.
    * @usage agency:migrate:authority
    * @usage agency:migrate:authority --domain=workforce --set=shadow --reason=rehearsal --execute
    */
@@ -125,10 +126,16 @@ final class AgencyMigrateCommands {
       'register' => FALSE,
       'rollback' => FALSE,
       'generation' => '',
+      'restore-from-backup' => FALSE,
     ];
     $domain = (string) $options['domain'];
     $set = (string) $options['set'];
     $execute = $this->flag($options['execute']);
+    if ($this->flag($options['restore-from-backup'])) {
+      // Dispatch before status, registration or transitions: restoration must
+      // never fall through to a normal authority operation.
+      return $this->emit($this->rollback->rollback($domain, '', $execute, NULL, TRUE));
+    }
     if ($domain === '' && $set === '') {
       return $this->emit(['domains' => $this->authority->status()]);
     }

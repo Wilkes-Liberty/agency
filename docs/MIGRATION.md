@@ -347,6 +347,17 @@ committed receipt or safely retry. A stale generation refuses after further
 authority changes. Authority `removed` has no rollback edge. Production replay
 requires a qualified host fence and an operator-controlled rehearsal.
 
+Backup restoration is not journal replay. Passing `--restore-from-backup` to
+`agency:migrate:authority`, or the fifth `restore_from_backup` argument to
+`RollbackService::rollback()`, refuses with `restore_refused` before any
+registration, transition or replay. Authorized requests append a minimized
+durable refusal intent, including in preview mode. The intent contains only a
+fixed reason, a registered domain when known, and event identity/time; operator
+reasons and backup locations are not recorded. A caller-owned transaction
+refuses before that append, and unavailable evidence storage returns a fixed
+failure instead of claiming an evidenced refusal. Backup recovery remains a
+separate reviewed procedure.
+
 ## Removal and retained records
 
 Routine uninstall refuses while lineage, run receipts, evidence intents, write
@@ -360,7 +371,8 @@ or writer fence.
 
 ## Commands
 
-Drush entry points are read-only unless `--execute` is passed:
+Drush entry points are read-only unless `--execute` is passed, except that an
+authorized `--restore-from-backup` request always records a refusal intent:
 
 - `agency:migrate:run PLUGIN` — plan or copy
 - `agency:migrate:resume RUN_ID` — plan or continue
