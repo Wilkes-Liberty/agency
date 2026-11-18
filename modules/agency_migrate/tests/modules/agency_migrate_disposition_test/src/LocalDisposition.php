@@ -7,6 +7,7 @@ namespace Drupal\agency_migrate_disposition_test;
 use Drupal\agency_migrate\AuthorityRegister;
 use Drupal\agency_migrate\RollbackDispositionInterface;
 use Drupal\agency_migrate\RollbackDispositionPlan;
+use Drupal\agency_migrate\TransactionBoundary;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\Transaction;
 
@@ -36,6 +37,11 @@ final class LocalDisposition implements RollbackDispositionInterface {
   private ?Transaction $replacement = NULL;
 
   /**
+   * Represents an accidentally retained participant savepoint.
+   */
+  private ?Transaction $child = NULL;
+
+  /**
    * Observes transaction membership without mutating persistence.
    *
    * @var list<array{string, bool}>
@@ -54,7 +60,7 @@ final class LocalDisposition implements RollbackDispositionInterface {
    */
   public function qualifyCutover(Connection $connection, string $domain, int $prospectiveGeneration): void {
     $this->check($connection, 'cutover', TRUE);
-    $this->authority->assertLockedCutover($domain, $prospectiveGeneration);
+    $this->attest($connection, fn () => $this->authority->assertLockedCutover($domain, $prospectiveGeneration));
     if ($this->fault === 'cutover' || $domain !== 'synthetic' || $prospectiveGeneration < 3) {
       throw new \LogicException('Synthetic cutover qualification failure.');
     }
@@ -63,6 +69,9 @@ final class LocalDisposition implements RollbackDispositionInterface {
     }
     if ($this->fault === 'native_cutover') {
       $this->client($connection)->commit();
+    }
+    if (str_starts_with($this->fault, 'child_cutover')) {
+      $this->retainChild($connection, $domain, $prospectiveGeneration);
     }
   }
 
@@ -92,7 +101,7 @@ final class LocalDisposition implements RollbackDispositionInterface {
       ->condition('id', $this->expectedLegacyId)->countQuery()->execute()->fetchField()) {
       throw new \LogicException('Missing legacy replay before disposition.');
     }
-    $this->authority->assertLockedRollback($plan->domain, $plan->generation);
+    $this->attest($connection, fn () => $this->authority->assertLockedRollback($plan->domain, $plan->generation));
     foreach ($plan->resourceIds() as $id) {
       $updates = $connection->update('agency_migrate_test_resource')->fields(['authority' => 'legacy'])
         ->condition('domain', $plan->domain)->condition('generation', $plan->generation)
@@ -128,7 +137,50 @@ final class LocalDisposition implements RollbackDispositionInterface {
     if ($this->fault === 'native_ddl') {
       $this->client($connection)->exec($connection->prefixTables('ALTER TABLE {agency_migrate_test_resource} ADD COLUMN disposition_ddl_probe INT'));
     }
+    if (str_starts_with($this->fault, 'child_rollback')) {
+      $this->retainChild($connection, $plan->domain, $plan->generation);
+    }
     return $this->fault === 'digest' ? 'invalid-proof' : $digest;
+  }
+
+  /**
+   * Exercises attestation within a legitimate short-lived savepoint.
+   */
+  private function attest(Connection $connection, callable $assertion): void {
+    if ($this->fault !== 'nested_attestation') {
+      $assertion();
+      return;
+    }
+    $transaction = $connection->startTransaction('synthetic_attestation');
+    try {
+      $assertion();
+    }
+    finally {
+      TransactionBoundary::commit($transaction);
+    }
+  }
+
+  /**
+   * Releases the retained fixture handle without making it undo any effects.
+   */
+  public function disposeChild(): void {
+    $this->child = NULL;
+  }
+
+  /**
+   * Writes a synthetic child effect and retains the live savepoint.
+   */
+  private function retainChild(Connection $connection, string $domain, int $generation): void {
+    $this->child = $connection->startTransaction('synthetic_retained_child');
+    $connection->insert('agency_migrate_test_resource')->fields([
+      'domain' => $domain,
+      'generation' => $generation,
+      'id' => 2,
+      'authority' => 'legacy',
+    ])->execute();
+    if (str_ends_with($this->fault, '_throw')) {
+      throw new \LogicException('Synthetic retained child failure.');
+    }
   }
 
   /**

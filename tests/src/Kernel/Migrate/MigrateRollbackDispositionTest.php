@@ -11,6 +11,7 @@ use Drupal\agency_migrate\RollbackDispositionRegistry;
 use Drupal\agency_migrate\RollbackService;
 use Drupal\agency_migrate_disposition_test\LocalDisposition;
 use Drupal\agency_migrate_rollback_test\RollbackTestStorage;
+use Drupal\Core\Database\Database;
 use Drupal\Core\DependencyInjection\ContainerBuilder;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
@@ -111,6 +112,7 @@ final class MigrateRollbackDispositionTest extends MigrateKernelTestBase {
    * Zero entity replay still processes a fresh, fully fenced resource plan.
    */
   public function testGrantOnlyRollbackRequiresExplicitGeneration(): void {
+    $this->provider()->fault = 'nested_attestation';
     $generation = $this->prepare();
     $this->resource($generation, 1);
     $rollback = $this->rollback();
@@ -328,6 +330,95 @@ final class MigrateRollbackDispositionTest extends MigrateKernelTestBase {
     $this->assertFalse($this->container->get('database')->inTransaction());
     $this->assertInstanceOf(MigrateRefusal::class, $refusal);
     $this->assertSame('rollback_commit_uncertain', $refusal->reason);
+  }
+
+  /**
+   * Failure or return with a retained child cannot commit partial effects.
+   *
+   * @dataProvider retainedChildFaults
+   */
+  #[DataProvider('retainedChildFaults')]
+  public function testProviderCannotRetainChildTransaction(string $operation, string $ending): void {
+    $authority = $this->authority();
+    if ($operation === 'cutover') {
+      $authority->register(self::DOMAIN, 'Register sample');
+      $authority->requireDisposition(self::DOMAIN, self::PROVIDER);
+      $authority->transition(self::DOMAIN, 'shadow', 'Prepare sample');
+      $attempt = fn () => $authority->transition(self::DOMAIN, 'agency', 'Promote sample');
+      $reason = 'rollback_unqualified';
+    }
+    else {
+      $generation = $this->prepare();
+      $this->resource($generation, 1);
+      $this->container->get('agency_migrate.post_cutover_writer')->create(self::DOMAIN, $generation, $this->container->get('uuid')->generate(), 'agency_migrate_agency_item', [
+        'title' => 'Uncommitted journal replay',
+      ]);
+      $attempt = fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation);
+      $reason = $ending === 'throw' ? 'rollback_failed' : 'rollback_unqualified';
+    }
+
+    $tables = [
+      self::AUTHORITY, self::BINDING, self::RESOURCE, self::HOST_RECEIPT, self::RECEIPT,
+      'agency_migrate_legacy_item', 'agency_migrate_rollback_record', 'agency_migrate_write_log', 'agency_migrate_outbox',
+    ];
+    $before = $this->committedRows($tables);
+    $this->provider()->fault = 'child_' . $operation . '_' . $ending;
+    $refusal = NULL;
+    try {
+      $attempt();
+    }
+    catch (\Throwable $exception) {
+      $refusal = $exception;
+    }
+    $this->provider()->disposeChild();
+
+    $this->assertSame($before, $this->committedRows($tables));
+    $this->assertFalse($this->container->get('database')->inTransaction());
+    $this->assertInstanceOf(MigrateRefusal::class, $refusal);
+    $this->assertSame($reason, $refusal->reason);
+  }
+
+  /**
+   * Covers both provider boundaries and both control-flow outcomes.
+   */
+  public static function retainedChildFaults(): array {
+    return [
+      'cutover throw' => ['cutover', 'throw'],
+      'rollback throw' => ['rollback', 'throw'],
+      'cutover return' => ['cutover', 'return'],
+      'rollback return' => ['rollback', 'return'],
+    ];
+  }
+
+  /**
+   * Reads committed database state using a separate connection.
+   *
+   * @param list<string> $tables
+   *   The fixture relations to compare.
+   *
+   * @return array<string, list<string>>
+   *   Stable snapshots of each committed relation.
+   */
+  private function committedRows(array $tables): array {
+    $database = $this->container->get('database');
+    Database::addConnectionInfo('disposition_probe', 'default', $database->getConnectionOptions());
+    try {
+      $probe = Database::getConnection('default', 'disposition_probe');
+      $this->assertNotSame($database->getClientConnection(), $probe->getClientConnection());
+      $result = [];
+      foreach ($tables as $table) {
+        $result[$table] = [];
+        $rows = $probe->select($table, 'r')->fields('r')->execute();
+        while ($row = $rows->fetchAssoc()) {
+          $result[$table][] = json_encode($row, JSON_THROW_ON_ERROR);
+        }
+        sort($result[$table]);
+      }
+      return $result;
+    }
+    finally {
+      Database::removeConnection('disposition_probe');
+    }
   }
 
   /**

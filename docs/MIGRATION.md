@@ -386,7 +386,9 @@ host receipt digest before returning authority. The public `replayed` count
 covers entities. If a participant ends the original transaction, Agency
 refuses to seal the receipt or advance authority. An interrupted rollback
 with an early SQL commit reports `rollback_commit_uncertain`. The guard
-checks the original Drupal scope and native PDO transaction. A raw PDO
+checks the original Drupal stack IDs and native PDO transaction. A retained
+savepoint causes refusal. Agency rolls back the retained children before
+rolling back its own scope. A raw PDO
 commit followed by a raw begin can leave both checks appearing active.
 Trusted participants must leave transaction control and DDL outside their
 callbacks.

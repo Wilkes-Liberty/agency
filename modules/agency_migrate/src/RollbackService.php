@@ -169,9 +169,10 @@ final class RollbackService {
     }
     $this->authority->assertLockedRollback($domain, $generation);
     [$operations, $copiers, $targets, $changes, $effective] = $this->preflight($domain, $generation);
+    $this->authority->assertRollbackBoundary($domain);
     $disposition = $this->planDisposition($domain, $generation);
     if ($disposition !== NULL) {
-      $this->authority->assertLockedRollback($domain, $generation);
+      $this->authority->assertRollbackBoundary($domain);
     }
     if (!$expected && ($operations !== [] || ($disposition['plan']->pendingCount ?? 0) > 0)) {
       throw new MigrateRefusal('rollback_generation_required');
@@ -181,6 +182,7 @@ final class RollbackService {
       $attempt->effects = $operations;
       $this->planner->replay($targets, $operations);
       $this->planner->verifyReplayed($copiers, $changes, $effective);
+      $this->authority->assertRollbackBoundary($domain);
     }
     $digest = NULL;
     if ($disposition !== NULL) {
@@ -191,6 +193,7 @@ final class RollbackService {
         throw new MigrateRefusal('rollback_failed');
       }
     }
+    $this->authority->assertRollbackBoundary($domain);
     $this->authority->assertLockedRollback($domain, $generation);
     return $this->writes->seal($domain, $generation, $reason, $operations, $changes, $disposition['id'] ?? NULL, $digest);
   }
