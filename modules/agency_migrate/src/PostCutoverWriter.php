@@ -9,6 +9,7 @@ use Drupal\agency_migrate\Plugin\CopierManager;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Component\Uuid\Uuid;
 use Drupal\Core\Database\Connection;
+use Drupal\Core\Database\Transaction;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\ContentEntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -91,16 +92,21 @@ final class PostCutoverWriter {
       return $existing;
     }
     $storage = NULL;
-    $transaction = $this->database->startTransaction();
+    $transaction = NULL;
     $committing = FALSE;
     try {
-      $this->authority->lockForAgencyWrite($this->database, $domain, $generation);
+      $transaction = $this->database->startTransaction();
+      $authority = $this->authority->lockOperationAuthority($this->database, $domain);
+      // An intervening transition may have won the lock after the original
+      // operation committed. A valid historical receipt survives that change.
       $existing = $this->existing($domain, $generation, $operationId, $requestHash, TRUE);
       if ($existing !== NULL) {
         $committing = TRUE;
-        TransactionBoundary::commit($transaction);
-        $transaction = NULL;
+        $this->commit($transaction);
         return $existing;
+      }
+      if ($authority === NULL || $authority['state'] !== 'agency' || $authority['version'] !== $generation) {
+        throw new MigrateRefusal('agency_writer_refused');
       }
       $this->copiers->copierForTarget($entityType, $domain);
       $storage = $this->entities->getStorage($entityType);
@@ -205,13 +211,7 @@ final class PostCutoverWriter {
       ];
       $receipt = $this->append($envelope);
       $committing = TRUE;
-      TransactionBoundary::commit($transaction);
-      // Newer core also runs post-transaction callbacks on destruction. Keep
-      // that release inside this catch boundary before returning a receipt.
-      $transaction = NULL;
-      if ($this->database->inTransaction()) {
-        throw new \LogicException('Root operation commit did not complete.');
-      }
+      $this->commit($transaction);
       return $receipt;
     }
     catch (\Throwable $exception) {
@@ -234,6 +234,21 @@ final class PostCutoverWriter {
     }
     finally {
       $storage?->resetCache();
+    }
+  }
+
+  /**
+   * Finishes the root transaction and any post-transaction callbacks.
+   *
+   * @param-out null $transaction
+   */
+  private function commit(?Transaction &$transaction): void {
+    // @phpstan-ignore paramOut.type (The next assignment clears the reference.)
+    TransactionBoundary::commit($transaction);
+    // Keep callbacks from transaction destruction inside the caller's catch.
+    $transaction = NULL;
+    if ($this->database->inTransaction()) {
+      throw new \LogicException('Root operation commit did not complete.');
     }
   }
 
@@ -290,7 +305,7 @@ final class PostCutoverWriter {
     $journalQuery->forUpdate();
     $journal = $journalQuery->execute()->fetchAssoc();
     if (!$journal || $row['wid'] < 1 || $journal['envelope'] !== $row['envelope']
-      || $journal['replayed'] !== NULL) {
+      || (int) $journal['recorded'] !== $row['recorded'] || $journal['replayed'] !== NULL) {
       throw new MigrateRefusal('operation_journal_conflict');
     }
     $validated = PostCutoverOperationEnvelope::decode($journal, $this->history);
@@ -298,19 +313,21 @@ final class PostCutoverWriter {
       ->condition('id', $intentId);
     $intentQuery->forUpdate();
     $intent = $intentQuery->execute()->fetchAssoc();
-    if (!$intent || $intent['operation'] !== 'post_cutover_write'
-      || $intent['fingerprint'] !== $fingerprint || $intent['delivered'] !== NULL) {
+    if (!$intent || $intent['id'] !== $intentId || $intent['operation'] !== 'post_cutover_write'
+      || $intent['fingerprint'] !== $fingerprint || $intent['delivered'] !== NULL
+      || (int) $intent['attempts'] !== 0 || $intent['last_attempt_at'] !== NULL
+      || $intent['last_error_at'] !== NULL) {
       throw new MigrateRefusal('operation_evidence_conflict');
     }
+    $expectedMetadata = $metadata + ['event_id' => $intentId, 'effective_at' => (int) $intent['recorded']];
     $storedMetadata = json_decode($intent['metadata'], TRUE, 16, JSON_THROW_ON_ERROR);
-    foreach ($metadata as $key => $value) {
+    if (!is_array($storedMetadata) || count($storedMetadata) !== count($expectedMetadata)) {
+      throw new MigrateRefusal('operation_evidence_conflict');
+    }
+    foreach ($expectedMetadata as $key => $value) {
       if (($storedMetadata[$key] ?? NULL) !== $value) {
         throw new MigrateRefusal('operation_evidence_conflict');
       }
-    }
-    if (($storedMetadata['event_id'] ?? NULL) !== $intentId
-      || !is_int($storedMetadata['effective_at'] ?? NULL)) {
-      throw new MigrateRefusal('operation_evidence_conflict');
     }
     return PostCutoverOperationEnvelope::receipt($journal, $validated);
   }

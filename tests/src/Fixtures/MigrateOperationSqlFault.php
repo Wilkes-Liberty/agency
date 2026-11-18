@@ -19,7 +19,7 @@ final class MigrateOperationSqlFault {
   public function __construct(
     private readonly Connection $database,
     private readonly string $table,
-    private readonly bool $alter = FALSE,
+    private readonly string $fault,
   ) {
     if (!in_array($table, ['agency_migrate_write_log', 'agency_migrate_outbox'], TRUE)) {
       throw new \InvalidArgumentException('Unknown operation fault.');
@@ -34,16 +34,20 @@ final class MigrateOperationSqlFault {
     $options = ['allow_delimiter_in_query' => TRUE];
     $column = $this->table === 'agency_migrate_write_log' ? 'envelope' : 'metadata';
     if ($this->database->driver() === 'pgsql') {
-      $body = $this->alter
-        ? "BEGIN NEW.$column := ''{}''; RETURN NEW; END"
-        : "BEGIN RAISE EXCEPTION ''synthetic operation boundary failure''; END";
+      $body = match ($this->fault) {
+        'outbox_extra' => "BEGIN NEW.metadata := (NEW.metadata::jsonb || jsonb_build_object(''unexpected'', TRUE))::text; RETURN NEW; END",
+        'journal_alter', 'outbox_alter' => "BEGIN NEW.$column := ''{}''; RETURN NEW; END",
+        default => "BEGIN RAISE EXCEPTION ''synthetic operation boundary failure''; END",
+      };
       $this->database->query("CREATE FUNCTION $this->name() RETURNS trigger LANGUAGE plpgsql AS '$body'", [], $options);
       $this->database->query("CREATE TRIGGER $this->name BEFORE INSERT ON {{$this->table}} FOR EACH ROW EXECUTE FUNCTION $this->name()");
     }
     else {
-      $body = $this->alter
-        ? "SET NEW.$column = '{}'"
-        : "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'synthetic operation boundary failure'";
+      $body = match ($this->fault) {
+        'outbox_extra' => "SET NEW.metadata = JSON_SET(NEW.metadata, '$.unexpected', TRUE)",
+        'journal_alter', 'outbox_alter' => "SET NEW.$column = '{}'",
+        default => "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'synthetic operation boundary failure'",
+      };
       $this->database->query("CREATE TRIGGER $this->name BEFORE INSERT ON {{$this->table}} FOR EACH ROW $body", [], $options);
     }
   }

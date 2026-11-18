@@ -7,13 +7,9 @@
 
 declare(strict_types=1);
 
-use Drupal\agency_migrate\Exception\MigrateRefusal;
-use Drupal\Core\Config\DatabaseStorage;
-use Drupal\Core\Config\MemoryStorage;
 use Drupal\Core\Database\Database;
-use Drupal\Core\DependencyInjection\ContainerBuilder;
+use Drupal\Tests\agency\Fixtures\MigrateOperationWorker;
 use Drupal\Core\Site\Settings;
-use Drupal\KernelTests\KernelTestBase;
 
 if (PHP_SAPI !== 'cli') {
   exit(1);
@@ -24,80 +20,21 @@ chdir($root);
 require_once $root . '/core/includes/bootstrap.inc';
 $loader->addPsr4('Drupal\\KernelTests\\', $root . '/core/tests/Drupal/KernelTests');
 $loader->addPsr4('Drupal\\Tests\\', $root . '/core/tests/Drupal/Tests');
+$loader->addPsr4('Drupal\\TestTools\\', $root . '/core/tests/Drupal/TestTools');
 $input = json_decode(stream_get_contents(STDIN), TRUE, 64, JSON_THROW_ON_ERROR);
 $prefix = $input['database']['prefix'] ?? '';
 $prefix = is_array($prefix) ? ($prefix['default'] ?? '') : $prefix;
-if (!preg_match('/^test[0-9]+/D', $prefix)) {
+if (!preg_match('/^(?:test[0-9]+)+$/D', $prefix)) {
   throw new RuntimeException('An isolated kernel-test site is required.');
 }
 $input['test_prefix'] = $prefix;
+drupal_valid_test_ua($prefix);
 foreach (['mysql', 'pgsql'] as $driver) {
   $loader->addPsr4('Drupal\\' . $driver . '\\', $root . '/core/modules/' . $driver . '/src');
 }
 Database::addConnectionInfo('default', 'default', $input['database']);
 new Settings(['hash_salt' => 'synthetic-operation-worker']);
 
-$worker = new class('operationWorker') extends KernelTestBase {
-
-  /**
-   * {@inheritdoc}
-   */
-  protected static $modules = [
-    'system', 'user', 'field', 'text', 'filter', 'key', 'encrypt', 'audit_chain',
-    'agency', 'agency_migrate', 'agency_migrate_test', 'agency_migrate_operation_test',
-  ];
-
-  /**
-   * Copies configuration for isolated boot; never mutates coordinator config.
-   */
-  public function register(ContainerBuilder $container) {
-    parent::register($container);
-    $memory = new MemoryStorage();
-    $database = new DatabaseStorage(Database::getConnection(), 'config');
-    foreach ($database->listAll() as $name) {
-      $memory->write($name, $database->read($name));
-    }
-    $container->set('config.storage.active', $memory);
-    $container->getDefinition('config.storage.active')->setSynthetic(TRUE);
-  }
-
-  /**
-   * Shares only SQL records; services, config, caches and files are isolated.
-   */
-  public function runWorker(array $input, $loader, string $root): array {
-    $this->root = $root;
-    $this->classLoader = $loader;
-    $this->databasePrefix = $input['test_prefix'];
-    $this->setUpFilesystem();
-    $this->setSetting('agency_migrate_copier_domains', ['synthetic' => ['synthetic_item']]);
-    $this->bootKernel();
-    $repository = $this->container->get('entity.last_installed_schema.repository');
-    foreach (['user', 'agency_migrate_legacy_item', 'agency_migrate_agency_item'] as $type) {
-      $repository->setLastInstalledDefinition($this->container->get('entity_type.manager')->getDefinition($type));
-      $repository->setLastInstalledFieldStorageDefinitions($type, $this->container->get('entity_field.manager')->getFieldStorageDefinitions($type));
-    }
-    $database = $this->container->get('database');
-    $pid = $database->query($database->driver() === 'pgsql' ? 'SELECT pg_backend_pid()' : 'SELECT CONNECTION_ID()')->fetchField();
-    file_put_contents($input['ready'], (string) $pid);
-    $deadline = microtime(TRUE) + 20;
-    while (!is_file($input['release'])) {
-      if (microtime(TRUE) > $deadline) {
-        throw new RuntimeException('Coordinator did not release operation worker.');
-      }
-      usleep(20000);
-    }
-    try {
-      if ($input['mode'] === 'transition') {
-        $this->container->get('current_user')->setAccount($this->container->get('entity_type.manager')->getStorage('user')->load(2));
-        $this->container->get('agency_migrate.authority')->transition('synthetic', 'removed', 'Synthetic concurrent transition');
-        return ['status' => 'transitioned'];
-      }
-      return $this->container->get('agency_migrate.post_cutover_writer')->create('synthetic', 3, $input['operation_id'], 'agency_migrate_agency_item', ['title' => 'Concurrent once']);
-    }
-    catch (MigrateRefusal $exception) {
-      return ['status' => 'refused', 'reason' => $exception->reason];
-    }
-  }
-
-};
+require dirname(__DIR__, 2) . '/src/Fixtures/MigrateOperationWorker.php';
+$worker = new MigrateOperationWorker('operationWorker');
 print json_encode($worker->runWorker($input, $loader, $root), JSON_THROW_ON_ERROR);

@@ -66,12 +66,12 @@ final class AuthorityRegister {
   }
 
   /**
-   * Locks an Agency operation's exact current generation before entity reads.
+   * Locks current authority while the operation writer checks for a receipt.
    *
-   * The calling domain must already authorize its business operation. This
-   * check does not grant entity access or certify independent host writers.
+   * @return array{state: string, version: int}|null
+   *   The locked state and generation, or NULL for an unregistered domain.
    */
-  public function lockForAgencyWrite(Connection $connection, string $domain, int $expectedGeneration): void {
+  public function lockOperationAuthority(Connection $connection, string $domain): ?array {
     $this->assertDomain($domain);
     if ($connection !== $this->database) {
       throw new MigrateRefusal('writer_connection_mismatch');
@@ -80,10 +80,7 @@ final class AuthorityRegister {
       throw new MigrateRefusal('writer_transaction_required');
     }
     $row = $this->row($domain, TRUE);
-    if ($row === NULL || $row['state'] !== 'agency'
-      || $expectedGeneration < 1 || $row['version'] !== $expectedGeneration) {
-      throw new MigrateRefusal('agency_writer_refused');
-    }
+    return $row === NULL ? NULL : ['state' => $row['state'], 'version' => $row['version']];
   }
 
   /**

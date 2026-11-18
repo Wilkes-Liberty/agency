@@ -42,9 +42,8 @@ final class OperationTestStorage extends OperationSqlContentEntityStorage {
       return SAVED_UPDATED;
     }
     $result = parent::save($entity);
-    $ready = $this->operationState->get('agency_operation.worker_ready');
-    $release = $this->operationState->get('agency_operation.worker_release');
-    if (is_string($ready) && is_string($release)) {
+    $workers = $this->operationState->get('agency_operation.workers', []);
+    foreach ($workers as $ready => $release) {
       touch($release);
       $pid = (int) file_get_contents($ready);
       $deadline = microtime(TRUE) + 10;
@@ -65,7 +64,9 @@ final class OperationTestStorage extends OperationSqlContentEntityStorage {
         throw new \RuntimeException('Independent operation did not wait on fresh authority.');
       }
       usleep(300000);
-      $this->operationState->set('agency_operation.observed_wait', TRUE);
+    }
+    if ($workers !== []) {
+      $this->operationState->set('agency_operation.observed_waits', count($workers));
     }
     if ($fault === 'commit_ack') {
       $this->database->transactionManager()->addPostTransactionCallback(static function (bool $success): void {

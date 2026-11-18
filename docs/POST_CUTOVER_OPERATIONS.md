@@ -47,8 +47,10 @@ with changed values, kind, identity or generation refuses.
 An exact retry returns the original scalar historical receipt, even after the
 record was deleted or authority moved away. This first receipt lookup occurs
 outside a new transaction so MySQL cannot retain a stale snapshot while waiting
-for authority. A second locking/current lookup after the authority lock handles
-concurrent misses. No historical receipt lookup loads the current entity.
+for authority. After locking the current authority row, the writer checks again for a
+committed receipt before qualifying authority for a new mutation. This covers a
+concurrent miss followed by a transition. Historical receipt lookup leaves live
+entities unread.
 
 The service returns `completed` only after root commit. A lost commit
 acknowledgement reports `operation_commit_uncertain`, with no success receipt.

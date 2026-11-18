@@ -163,10 +163,10 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
     $database = $this->container->get('database');
     $table = match ($fault) {
       'journal', 'journal_alter' => 'agency_migrate_write_log',
-      'outbox', 'outbox_alter' => 'agency_migrate_outbox',
+      'outbox', 'outbox_alter', 'outbox_extra' => 'agency_migrate_outbox',
       default => NULL,
     };
-    $sqlFault = $table !== NULL ? new MigrateOperationSqlFault($database, $table, str_ends_with($fault, '_alter')) : NULL;
+    $sqlFault = $table !== NULL ? new MigrateOperationSqlFault($database, $table, $fault) : NULL;
     $sqlFault?->install();
     try {
       $this->assertRefused(fn () => $this->writer()->update('synthetic', 3, $this->container->get('uuid')->generate(), self::TYPE, $created['entity_id'], $created['entity_uuid'], ['payload' => 'Uncommitted']), $reason);
@@ -197,6 +197,7 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
       'required outbox unavailable' => ['outbox', 'operation_failed'],
       'altered journal insert' => ['journal_alter', 'operation_journal_conflict'],
       'altered evidence insert' => ['outbox_alter', 'operation_evidence_conflict'],
+      'extra evidence metadata' => ['outbox_extra', 'operation_evidence_conflict'],
     ];
   }
 
@@ -337,14 +338,68 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
   }
 
   /**
-   * Exercises two independent real entity kernels sharing only isolated SQL.
+   * A transition between original commit and retry cannot hide the receipt.
    */
-  private function concurrentOperation(string $mode): void {
+  public function testOperationConcurrentTransitionBeforeRetryKeepsReceipt(): void {
+    $this->concurrentOperation('transition', 'duplicate');
+  }
+
+  /**
+   * Exercises independent real entity kernels sharing only isolated SQL.
+   */
+  private function concurrentOperation(string ...$modes): void {
     $this->authority('agency', 3);
     $operation = $this->container->get('uuid')->generate();
-    $prefix = sys_get_temp_dir() . '/agency-operation-' . bin2hex(random_bytes(8));
-    $ready = $prefix . '-ready';
-    $release = $prefix . '-release';
+    $workers = [];
+    try {
+      foreach ($modes as $mode) {
+        $prefix = sys_get_temp_dir() . '/agency-operation-' . bin2hex(random_bytes(8));
+        $ready = $prefix . '-ready';
+        $release = $prefix . '-release';
+        $process = $this->operationWorker($operation, $mode, $ready, $release);
+        $workers[$mode] = ['process' => $process, 'ready' => $ready, 'release' => $release];
+        $process->start();
+        $deadline = microtime(TRUE) + 20;
+        while (!is_file($ready)) {
+          if (!$process->isRunning() || microtime(TRUE) > $deadline) {
+            $this->fail('Independent kernel did not boot: ' . $process->getOutput() . $process->getErrorOutput());
+          }
+          usleep(20000);
+        }
+      }
+      $this->container->get('state')->set('agency_operation.workers', array_column($workers, 'release', 'ready'));
+      $receipt = $this->completed(fn () => $this->writer()->create('synthetic', 3, $operation, self::TYPE, ['title' => 'Concurrent once']));
+      $this->assertSame(count($workers), $this->container->get('state')->get('agency_operation.observed_waits'));
+      foreach ($workers as $mode => $worker) {
+        $process = $worker['process'];
+        $this->assertSame(0, $process->wait(), $process->getErrorOutput() . $process->getOutput());
+        $other = json_decode($process->getOutput(), TRUE, 32, JSON_THROW_ON_ERROR);
+        if ($mode === 'duplicate') {
+          $this->assertSame($receipt, $other);
+        }
+        else {
+          $this->assertSame('transitioned', $other['status']);
+          $this->assertSame('removed', $this->container->get('agency_migrate.authority')->get('synthetic'));
+        }
+      }
+      $this->assertSame(1, $this->rows('agency_migrate_agency_item'));
+      $this->assertSame(1, $this->rows('agency_migrate_write_log'));
+      $this->assertSame(1, (int) $this->container->get('database')->select('agency_migrate_outbox', 'o')->condition('operation', 'post_cutover_write')->countQuery()->execute()->fetchField());
+    }
+    finally {
+      foreach ($workers as $worker) {
+        touch($worker['release']);
+        $worker['process']->stop(1);
+        @unlink($worker['ready']);
+        @unlink($worker['release']);
+      }
+    }
+  }
+
+  /**
+   * Prepares a worker with the existing kernel's isolated SQL prefix.
+   */
+  private function operationWorker(string $operation, string $mode, string $ready, string $release): Process {
     $vendor = dirname($this->root) . '/vendor';
     if (!is_file($vendor . '/autoload.php')) {
       $vendor = $this->root . '/vendor';
@@ -362,39 +417,7 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
       'ready' => $ready,
       'release' => $release,
     ], JSON_THROW_ON_ERROR));
-    $process->setTimeout(35);
-    try {
-      $process->start();
-      $deadline = microtime(TRUE) + 20;
-      while (!is_file($ready)) {
-        if (!$process->isRunning() || microtime(TRUE) > $deadline) {
-          $this->fail('Independent kernel did not boot: ' . $process->getOutput() . $process->getErrorOutput());
-        }
-        usleep(20000);
-      }
-      $this->container->get('state')->set('agency_operation.worker_ready', $ready);
-      $this->container->get('state')->set('agency_operation.worker_release', $release);
-      $receipt = $this->completed(fn () => $this->writer()->create('synthetic', 3, $operation, self::TYPE, ['title' => 'Concurrent once']));
-      $this->assertTrue($this->container->get('state')->get('agency_operation.observed_wait'));
-      $this->assertSame(0, $process->wait(), $process->getErrorOutput() . $process->getOutput());
-      $other = json_decode($process->getOutput(), TRUE, 32, JSON_THROW_ON_ERROR);
-      if ($mode === 'duplicate') {
-        $this->assertSame($receipt, $other);
-      }
-      else {
-        $this->assertSame('transitioned', $other['status']);
-        $this->assertSame('removed', $this->container->get('agency_migrate.authority')->get('synthetic'));
-      }
-      $this->assertSame(1, $this->rows('agency_migrate_agency_item'));
-      $this->assertSame(1, $this->rows('agency_migrate_write_log'));
-      $this->assertSame(1, (int) $this->container->get('database')->select('agency_migrate_outbox', 'o')->condition('operation', 'post_cutover_write')->countQuery()->execute()->fetchField());
-    }
-    finally {
-      touch($release);
-      $process->stop(1);
-      @unlink($ready);
-      @unlink($release);
-    }
+    return $process->setTimeout(35);
   }
 
   /**
