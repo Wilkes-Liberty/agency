@@ -447,6 +447,47 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
   }
 
   /**
+   * A delete hook cannot tighten policy and leave a disallowed preimage.
+   *
+   * @dataProvider deletePolicyChanges
+   */
+  #[DataProvider('deletePolicyChanges')]
+  public function testOperationJournalQualificationRechecksDeletedHistory(string $case): void {
+    $this->authority('agency', 3);
+    $operation = $this->container->get('uuid');
+    $createId = $operation->generate();
+    $values = ['title' => 'Original', 'access_class' => 'Synthetic confidential preimage'];
+    $create = fn () => $this->writer()->create('synthetic', 3, $createId, self::TYPE, $values);
+    $receipt = $this->completed($create);
+    $id = $receipt['entity_id'];
+    $uuid = $receipt['entity_uuid'];
+    $this->writer()->update('synthetic', 3, $operation->generate(), self::TYPE, $id, $uuid, ['title' => 'Updated']);
+    $history = $this->container->get('agency_migrate.identity_writer');
+    $before = $history->captureHistory($this->target($id));
+    $this->assertCount(2, $before['revisions']);
+
+    $state = $this->container->get('state');
+    $state->set('agency_operation.delete_policy_case', $case);
+    $this->assertRefused(fn () => $this->writer()->delete('synthetic', 3, $operation->generate(), self::TYPE, $id, $uuid), 'operation_unqualified');
+    $this->assertSame($before, $history->captureHistory($this->target($id)));
+    $this->assertSame(1, $this->rows('agency_migrate_agency_item'));
+    $this->assertSame(2, $this->rows('agency_migrate_write_log'));
+    $this->assertSame(2, $this->rows('agency_migrate_outbox'));
+    $state->set('agency_operation.policy_case', 'throws');
+    $this->assertSame($receipt, $create());
+  }
+
+  /**
+   * An unavailable or different protection contract invalidates the delete.
+   */
+  public static function deletePolicyChanges(): array {
+    return [
+      'policy revoked' => ['missing'],
+      'policy changed' => ['changed_contract'],
+    ];
+  }
+
+  /**
    * Qualified retries stay historical and unqualified typed rows stay closed.
    */
   public function testOperationJournalQualificationPreservesScalarRetry(): void {

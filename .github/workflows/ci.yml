@@ -462,6 +462,8 @@ jobs:
               "testOperationJournalPolicyRefusesBeforeSave with data set \"policy failure\"",
               "testOperationJournalQualificationCoversHistoricalTranslation",
               "testOperationJournalQualificationRechecksSavedBundle",
+              "testOperationJournalQualificationRechecksDeletedHistory with data set \"policy revoked\"",
+              "testOperationJournalQualificationRechecksDeletedHistory with data set \"policy changed\"",
               "testOperationJournalQualificationPreservesScalarRetry",
               "testOperationEnvelopeIndexMismatchRefuses",
               "testOperationNullableUpgradeDoesNotQualifyOldRows",

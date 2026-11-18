@@ -181,9 +181,6 @@ final class PostCutoverWriter {
           throw new MigrateRefusal('operation_identity_mismatch');
         }
         $after = $this->history->captureHistory($fresh);
-        if (!hash_equals($qualification, $this->qualification->assertSnapshot($domain, $entityType, $after))) {
-          throw new MigrateRefusal('operation_unqualified');
-        }
         $actual = $this->history->canonicalize($fresh);
         foreach (array_keys($values) as $field) {
           if (($expected[$field] ?? NULL) !== ($actual[$field] ?? NULL)) {
@@ -207,6 +204,11 @@ final class PostCutoverWriter {
             }
           }
         }
+      }
+      // Save and delete hooks can change what the host permits retaining.
+      $currentQualification = $this->qualification->assertSnapshot($domain, $entityType, $after ?? $before);
+      if (!hash_equals($qualification, $currentQualification)) {
+        throw new MigrateRefusal('operation_unqualified');
       }
       $envelope = [
         'version' => PostCutoverOperationEnvelope::VERSION,

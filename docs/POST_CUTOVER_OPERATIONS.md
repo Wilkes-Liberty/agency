@@ -47,10 +47,10 @@ preimage after verifying the record and its revisions are absent. Entity caches
 are cleared when the mutation attempt exits.
 
 Qualification checks the complete stored preimage before update or delete and
-checks the candidate layout before save. The writer rechecks the reloaded
-persisted history before journaling. A changed bundle, stored property coverage
-or policy rolls the operation back. A refusal reports `operation_unqualified`
-without field values or provider details.
+checks the candidate layout before save. Before journaling, the writer rechecks
+the reloaded history after save or the retained preimage after delete. A changed
+bundle, stored property coverage or policy rolls the operation back. A refusal
+reports `operation_unqualified` without field values or provider details.
 
 Entity mutation, immutable version 2 operation envelope and minimized evidence
 intent commit together. The envelope stores typed before/after histories and a

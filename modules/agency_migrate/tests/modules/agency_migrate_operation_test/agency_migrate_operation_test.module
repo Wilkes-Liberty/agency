@@ -45,3 +45,14 @@ function agency_migrate_operation_test_entity_presave(EntityInterface $entity): 
     $entity->set('journal_bundle', 'journal_other');
   }
 }
+
+/**
+ * Implements hook_entity_delete().
+ */
+function agency_migrate_operation_test_entity_delete(EntityInterface $entity): void {
+  $state = \Drupal::state();
+  $case = $state->get('agency_operation.delete_policy_case');
+  if ($entity->getEntityTypeId() === 'agency_migrate_agency_item' && is_string($case)) {
+    $state->set('agency_operation.policy_case', $case);
+  }
+}
