@@ -1,4 +1,4 @@
-# Workforce invitations
+# Workforce services
 
 This module provides invitation issuance, inspection, acceptance and recovery
 services. It supplies no public route, mail delivery, login ceremony or positive
@@ -47,6 +47,41 @@ collection and digest. This module does not register
 `agency_staff_invitation`. Existing sites that already enabled the module
 gain the new types through `agency_workforce_update_10001`. Enabling the
 types does not transfer workforce authority.
+
+## Own-profile read
+
+`agency_workforce.profile_reader` reads a display name by workforce Person
+UUID. The optional requested subject restricts the read to that exact
+authenticated subject. The service has no route and both ports refuse by
+default.
+
+- `agency_workforce.read_authority` supplies the verified issuer, subject and
+  tenant and checks the current own-profile workforce entitlement. Resolve
+  these from authenticated context and current policy on each call.
+- `agency_workforce.profile_source` supplies an explicit workforce Person
+  binding. Look up binding metadata before loading profile data. A new
+  workforce Person resolves to the eligible authenticated user's reviewed
+  account ID and UUID. Profile and editorial records supply projections.
+  A Discovery Person is eligible only through a reviewed same-tenant link.
+  Ambiguous mappings and identifier collisions refuse.
+
+The service checks the full identity and tenant, then rechecks current
+authority before and after projection. The projection adapter verifies the
+binding and entitlement together at the protected read, under a consistent
+storage snapshot or writer exclusion. Complete any adapter-owned transaction
+before returning. Unauthorized and missing profiles and provider failures
+each return only `{"outcome":"refused","reason":"not_found"}`.
+
+Audit Chain commits a signed event before the service returns. Failed audit
+appends give a generic unavailable error. Call outside a
+database transaction so the receipt cannot be rolled back by the caller.
+`person.profile_refused` records person and subject refusals, and
+`paladin_agent.denied` records a foreign-tenant binding refusal. Each has
+only `reason=not_found` as application metadata. The `person.profile_listed`
+success event has empty application metadata. All three omit tenant and
+identity values, profile data and request contents from application metadata.
+
+## Invitation operation recovery
 
 Successful operations return only after root commit. An uncertain result must
 be reconciled rather than retried automatically. Acceptance recovery requires
