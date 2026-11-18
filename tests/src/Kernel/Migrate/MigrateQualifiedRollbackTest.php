@@ -129,7 +129,7 @@ final class MigrateQualifiedRollbackTest extends MigrateKernelTestBase {
   }
 
   /**
-   * Relabeling effective provenance cannot create a new reconciliation baseline.
+   * Changed provenance cannot create a new reconciliation baseline.
    */
   public function testReconciliationRefusesAlteredEffectiveProvenance(): void {
     $generation = $this->prepareDomain();

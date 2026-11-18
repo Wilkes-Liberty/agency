@@ -123,7 +123,8 @@ final class RollbackReplayStore {
    * Includes delivered intents and refuses mismatched or unpaired operations.
    */
   private function matchIntents(string $domain, array $expected, ?int $generation = NULL): void {
-    $intents = $this->database->select('agency_migrate_outbox', 'o')->fields('o', ['id', 'fingerprint', 'metadata', 'recorded'])
+    $intents = $this->database->select('agency_migrate_outbox', 'o')
+      ->fields('o', ['id', 'fingerprint', 'metadata', 'recorded'])
       ->condition('operation', 'post_cutover_write')->execute();
     while ($intent = $intents->fetchAssoc()) {
       try {
@@ -232,7 +233,8 @@ final class RollbackReplayStore {
       }
       $operations[(int) $row['wid']] = $operation;
       $fingerprint = hash('sha256', 'operation:' . $domain . ':' . $operation['operation_id']);
-      $expected[$fingerprint] = array_intersect_key($operation, array_flip(['domain', 'generation', 'operation_id', 'kind']));
+      $keys = array_flip(['domain', 'generation', 'operation_id', 'kind']);
+      $expected[$fingerprint] = array_intersect_key($operation, $keys);
     }
     if (count($operations) !== (int) $receipt['replayed'] || self::digest($operations) !== $receipt['journal_digest']) {
       throw new MigrateRefusal('rollback_unqualified');
@@ -252,7 +254,10 @@ final class RollbackReplayStore {
       || $record['delete_wid'] !== ($snapshot === NULL ? $record['last_wid'] : NULL)) {
       throw new MigrateRefusal('rollback_unqualified');
     }
-    $origin_keys = array_flip(['source_type', 'target_type', 'entity_uuid', 'origin', 'lineage_id', 'lineage_digest', 'origin_wid']);
+    $origin_keys = array_flip([
+      'source_type', 'target_type', 'entity_uuid', 'origin',
+      'lineage_id', 'lineage_digest', 'origin_wid',
+    ]);
     if ($previous !== NULL) {
       if ($previous['snapshot'] === NULL || $first['before'] !== $previous['snapshot']
         || array_intersect_key($record, $origin_keys) !== array_intersect_key($previous, $origin_keys)) {
@@ -404,7 +409,8 @@ final class RollbackReplayStore {
    * Hashes all provenance in a stable copier and identity order.
    */
   private static function provenanceDigest(array $records): string {
-    usort($records, static fn (array $left, array $right): int => [$left['copier'], $left['entity_id']] <=> [$right['copier'], $right['entity_id']]);
+    usort($records, static fn (array $left, array $right): int =>
+      [$left['copier'], $left['entity_id']] <=> [$right['copier'], $right['entity_id']]);
     return self::digest($records);
   }
 

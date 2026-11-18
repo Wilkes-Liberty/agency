@@ -75,7 +75,9 @@ final class RollbackService {
     if ($expected_generation !== NULL && $execute && ($state['state'] ?? NULL) === 'legacy') {
       return $this->existingReceipt($domain, $reason, $expected_generation);
     }
-    $this->authority->assertTransition($domain, 'legacy', $reason, TRUE);
+    if (!$execute || $state === NULL) {
+      $this->authority->assertTransition($domain, 'legacy', $reason, TRUE);
+    }
     $generation = $expected_generation ?? $state['version'] ?? NULL;
     if ($generation === NULL || $generation !== ($state['version'] ?? NULL)) {
       throw new MigrateRefusal('rollback_stale_generation');

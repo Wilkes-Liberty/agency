@@ -200,7 +200,11 @@ final class QualifiedRollbackPlanner {
   private function effectiveProjections(array $effective): array {
     $records = [];
     foreach ($effective as $id => $record) {
-      $records[$id] = ['before' => $record['snapshot'], 'after' => $record['snapshot'], 'preimage' => $record['preimage']];
+      $records[$id] = [
+        'before' => $record['snapshot'],
+        'after' => $record['snapshot'],
+        'preimage' => $record['preimage'],
+      ];
     }
     return $records;
   }
