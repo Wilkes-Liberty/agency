@@ -36,12 +36,12 @@ final class RollbackReplayStore {
     $pending = [];
     $expected_intents = [];
     $historical = [];
-    foreach ($rows as $row) {
+    while ($row = $rows->fetchAssoc()) {
       $copier = $targets[$row['entity_type']] ?? NULL;
       if ($copier === NULL) {
         throw new MigrateRefusal('rollback_unqualified');
       }
-      if ($row['envelope_version'] === NULL) {
+      if (($row['envelope_version'] ?? NULL) === NULL) {
         // Preserve the identity-conflict reason for old four-argument rows.
         $entity = $copier->loadTarget((int) $row['entity_id']);
         if ($entity === NULL || (int) $entity->id() !== (int) $row['entity_id']
@@ -81,10 +81,14 @@ final class RollbackReplayStore {
         throw new MigrateRefusal('rollback_unqualified');
       }
     }
-    foreach ($historical as $old_generation => $operations) {
-      $receipt = $this->receipt($domain, $old_generation);
-      if ($receipt === NULL || $receipt['journal_digest'] !== self::digest($operations)
-        || $receipt['replayed'] !== count($operations)) {
+    $receipts = $this->database->select('agency_migrate_rollback_receipt', 'r')->fields('r')
+      ->condition('domain', $domain)->execute();
+    while ($receipt = $receipts->fetchAssoc()) {
+      $old_generation = (int) $receipt['generation'];
+      $operations = $historical[$old_generation] ?? [];
+      if ($old_generation < 1 || $old_generation >= $generation
+        || $receipt['journal_digest'] !== self::digest($operations)
+        || (int) $receipt['replayed'] !== count($operations)) {
         throw new MigrateRefusal('rollback_unqualified');
       }
     }
@@ -98,7 +102,7 @@ final class RollbackReplayStore {
   private function matchIntents(string $domain, array $expected): void {
     $intents = $this->database->select('agency_migrate_outbox', 'o')->fields('o', ['id', 'fingerprint', 'metadata'])
       ->condition('operation', 'post_cutover_write')->execute();
-    foreach ($intents as $intent) {
+    while ($intent = $intents->fetchAssoc()) {
       try {
         $metadata = json_decode($intent['metadata'], TRUE, 16, JSON_THROW_ON_ERROR);
       }
@@ -176,7 +180,15 @@ final class RollbackReplayStore {
         $persisted = $this->database->select('agency_migrate_rollback_record', 'r')->fields('r')
           ->condition('domain', $domain)->condition('generation', $generation)
           ->condition('copier', $copier)->condition('entity_id', $id)->execute()->fetchAssoc();
-        if (!$persisted || $persisted != $values) {
+        if (!$persisted) {
+          throw new MigrateRefusal('rollback_unqualified');
+        }
+        foreach (['generation', 'entity_id', 'lineage_id', 'first_wid', 'last_wid', 'delete_wid'] as $field) {
+          if ($persisted[$field] !== NULL) {
+            $persisted[$field] = (int) $persisted[$field];
+          }
+        }
+        if ($persisted !== $values) {
           throw new MigrateRefusal('rollback_unqualified');
         }
       }
@@ -186,6 +198,12 @@ final class RollbackReplayStore {
         ->condition('wid', $wid)->condition('domain', $domain)->condition('authority_generation', $generation)
         ->condition('operation_id', $operation['operation_id'])->isNull('replayed')->execute();
       if ($updated !== 1) {
+        throw new MigrateRefusal('rollback_unqualified');
+      }
+      $row = $this->database->select('agency_migrate_write_log', 'w')->fields('w')
+        ->condition('wid', $wid)->execute()->fetchAssoc();
+      if (!$row || $row['replayed'] === NULL || (int) $row['replayed'] !== $recorded
+        || PostCutoverOperationEnvelope::decode($row, $this->history) !== $operation) {
         throw new MigrateRefusal('rollback_unqualified');
       }
     }

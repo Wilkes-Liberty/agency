@@ -50,6 +50,7 @@ final class QualifiedRollbackPlanner {
     }
     $changes = [];
     $owners = [];
+    $uuid_owners = [];
     $defaults = [];
     foreach ($operations as $wid => $operation) {
       $copier = $targets[$operation['entity_type']];
@@ -59,6 +60,10 @@ final class QualifiedRollbackPlanner {
       $before = $operation['before'];
       $after = $operation['after'];
       $storage = $this->storage($copier->sourceEntityType());
+      if (isset($uuid_owners[$plugin][$uuid]) && $uuid_owners[$plugin][$uuid] !== $id) {
+        throw new MigrateRefusal('rollback_conflict');
+      }
+      $uuid_owners[$plugin][$uuid] = $id;
       if (!isset($changes[$plugin][$id])) {
         $changes[$plugin][$id] = [
           'uuid' => $uuid,
@@ -108,6 +113,9 @@ final class QualifiedRollbackPlanner {
       $records = $changes[$plugin] ?? [];
       foreach ($records as $id => $record) {
         $this->assertSnapshot($copier->loadTarget($id), $record['after'], $copier->targetEntityType());
+        if ($record['after'] === NULL) {
+          $this->assertDeletedHistory($copier->targetEntityType(), $operations[$record['last_wid']]['before']);
+        }
       }
       $inventory[$plugin] = $this->reconciler->assertReplayCoverage($copier, $records, FALSE);
     }
@@ -226,15 +234,23 @@ final class QualifiedRollbackPlanner {
         $storage->delete([$legacy]);
         $storage->resetCache([$id]);
         $this->assertSnapshot($copier->loadSource($id), NULL, $type);
-        foreach ($operation['before']['revisions'] as $revision) {
-          if ($storage->loadRevision($revision['revision_id']) !== NULL) {
-            throw new MigrateRefusal('rollback_conflict');
-          }
-        }
+        $this->assertDeletedHistory($type, $operation['before']);
       }
       else {
         $merged = $this->history->mergeHistory($operation['after'], $type);
         $this->assertSnapshot($merged, $operation['after'], $type);
+      }
+    }
+  }
+
+  /**
+   * Requires absence of the deleted default and its archived revision rows.
+   */
+  private function assertDeletedHistory(string $type, array $before): void {
+    $storage = $this->storage($type);
+    foreach ($before['revisions'] as $revision) {
+      if ($storage->loadRevision($revision['revision_id']) !== NULL) {
+        throw new MigrateRefusal('rollback_conflict');
       }
     }
   }
