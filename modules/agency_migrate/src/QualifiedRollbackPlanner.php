@@ -62,6 +62,7 @@ final class QualifiedRollbackPlanner {
     $changes = [];
     $owners = [];
     $defaults = [];
+    $unloaded = [];
     foreach ($operations as $wid => $operation) {
       $copier = $targets[$operation['entity_type']];
       $plugin = $copier->getPluginId();
@@ -90,8 +91,11 @@ final class QualifiedRollbackPlanner {
       if ($operation['kind'] === 'update') {
         $this->assertAppendOnly($before, $after);
       }
-      if ($operation['kind'] === 'create' && $after['revision_count'] !== 1) {
-        throw new MigrateRefusal('rollback_unqualified');
+      if ($operation['kind'] === 'create') {
+        if ($after['revision_count'] !== 1) {
+          throw new MigrateRefusal('rollback_unqualified');
+        }
+        $this->reconciler->assertDeletedHistory($copier->sourceEntityType(), $after);
       }
       foreach ([$before, $after] as $snapshot) {
         if ($snapshot === NULL) {
@@ -106,9 +110,12 @@ final class QualifiedRollbackPlanner {
           }
           $owners[$plugin][$revision_id] = $identity;
           $occupied = $storage->loadRevision($revision_id);
-          if ($occupied !== NULL && (!$occupied instanceof ContentEntityInterface
+          if ($occupied === NULL) {
+            $unloaded[$copier->sourceEntityType()][$revision_id] = $revision_id;
+          }
+          elseif (!$occupied instanceof ContentEntityInterface
             || (int) $occupied->id() !== $id || $occupied->uuid() !== $uuid
-            || RevisionHistorySnapshot::fields($occupied) !== $revision['fields'])) {
+            || RevisionHistorySnapshot::fields($occupied) !== $revision['fields']) {
             throw new MigrateRefusal('rollback_conflict');
           }
         }
@@ -117,7 +124,11 @@ final class QualifiedRollbackPlanner {
         }
       }
       $changes[$plugin][$id]['after'] = $after;
+      $changes[$plugin][$id]['preimage'] = $after === NULL ? $before : NULL;
       $changes[$plugin][$id]['last_wid'] = $wid;
+    }
+    foreach ($unloaded as $type => $vids) {
+      $this->reconciler->assertUnusedRevisionIds($type, array_values($vids));
     }
     $inventory = [];
     foreach ($copiers as $plugin => $copier) {
@@ -129,10 +140,9 @@ final class QualifiedRollbackPlanner {
           $this->assertSnapshot($copier->loadSource($id), $record['before'], $copier->sourceEntityType());
         }
         if ($record['after'] === NULL) {
-          $preimage = isset($current[$id]) ? $operations[$record['last_wid']]['before'] : $record['preimage'];
-          $this->reconciler->assertDeletedHistory($copier->targetEntityType(), $preimage);
+          $this->reconciler->assertDeletedHistory($copier->targetEntityType(), $record['preimage']);
           if (!isset($current[$id])) {
-            $this->reconciler->assertDeletedHistory($copier->sourceEntityType(), $preimage);
+            $this->reconciler->assertDeletedHistory($copier->sourceEntityType(), $record['preimage']);
           }
         }
       }
@@ -298,6 +308,10 @@ final class QualifiedRollbackPlanner {
       foreach ($records as $id => $record) {
         $this->assertSnapshot($copier->loadSource($id), $record['after'], $copier->sourceEntityType());
         $this->assertSnapshot($copier->loadTarget($id), $record['after'], $copier->targetEntityType());
+        if ($record['after'] === NULL) {
+          $this->reconciler->assertDeletedHistory($copier->sourceEntityType(), $record['preimage']);
+          $this->reconciler->assertDeletedHistory($copier->targetEntityType(), $record['preimage']);
+        }
       }
       $this->reconciler->assertReplayCoverage($copier, $records, TRUE);
     }

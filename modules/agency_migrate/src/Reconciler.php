@@ -235,6 +235,22 @@ final class Reconciler {
    * @internal
    */
   public function assertDeletedHistory(string $type, array $preimage): void {
+    $this->assertStoredAbsence($type, $preimage['id'], array_column($preimage['revisions'], 'revision_id'));
+  }
+
+  /**
+   * Confirms that detached incoming revision IDs have no physical row.
+   *
+   * @internal
+   */
+  public function assertUnusedRevisionIds(string $type, array $vids): void {
+    $this->assertStoredAbsence($type, NULL, $vids);
+  }
+
+  /**
+   * Uses the replay connection and supported SQL storage table mapping.
+   */
+  private function assertStoredAbsence(string $type, ?int $id, array $vids): void {
     $storage = $this->entityTypeManager->getStorage($type);
     if (!$storage instanceof SqlEntityStorageInterface || !$storage instanceof OperationStorageParticipantInterface
       || $storage->operationConnection() !== $this->database) {
@@ -247,26 +263,32 @@ final class Reconciler {
     if (!$mapping instanceof DefaultTableMapping || !$mapping->getRevisionTable() || !$id_key || !$revision_key) {
       throw new MigrateRefusal('rollback_unqualified');
     }
-    $vids = array_column($preimage['revisions'], 'revision_id');
     $shared_tables = array_filter([
       $mapping->getBaseTable(), $mapping->getDataTable(),
       $mapping->getRevisionTable(), $mapping->getRevisionDataTable(),
     ]);
     foreach (array_unique($shared_tables) as $table) {
       $columns = $mapping->getAllColumns($table);
-      $this->assertNoStoredIdentity($table, $id_key, in_array($revision_key, $columns, TRUE) ? $revision_key : NULL, $preimage['id'], $vids);
+      $vid_column = in_array($revision_key, $columns, TRUE) ? $revision_key : NULL;
+      $this->assertNoStoredIdentity($table, $id_key, $vid_column, $id, $vids);
     }
     foreach ($mapping->getDedicatedTableNames() as $table) {
-      $this->assertNoStoredIdentity($table, 'entity_id', 'revision_id', $preimage['id'], $vids);
+      $this->assertNoStoredIdentity($table, 'entity_id', 'revision_id', $id, $vids);
     }
   }
 
   /**
-   * Detects every stored row for the identity or its exact preimage revision ids.
+   * Detects stored rows for the identity or the supplied revision IDs.
    */
-  private function assertNoStoredIdentity(string $table, string $id_key, ?string $revision_key, int $id, array $vids): void {
+  private function assertNoStoredIdentity(string $table, string $id_key, ?string $revision_key, ?int $id, array $vids): void {
+    if ($id === NULL && $revision_key === NULL) {
+      return;
+    }
     $query = $this->database->select($table, 'r')->range(0, 1);
-    $conditions = $query->orConditionGroup()->condition($id_key, $id);
+    $conditions = $query->orConditionGroup();
+    if ($id !== NULL) {
+      $conditions->condition($id_key, $id);
+    }
     if ($revision_key !== NULL) {
       $conditions->condition($revision_key, $vids, 'IN');
     }

@@ -377,6 +377,7 @@ jobs:
               "testRollbackRefusesChangedJournalQualification",
               "testRollbackRejectsUntouchedCopierDrift",
               "testRollbackRejectsLaterRevisionCollisionBeforeLegacyWrites",
+              "testRollbackRejectsOrphanRevisionCollisionBeforeLegacyWrites",
               "testRollbackRefusesForwardReferenceBeforeReplay",
               "testRollbackAccessMismatchRestoresLegacy",
               "testRollbackRefusesInconsistentGenerationAndMarkers with data set \"old pending generation\"",
