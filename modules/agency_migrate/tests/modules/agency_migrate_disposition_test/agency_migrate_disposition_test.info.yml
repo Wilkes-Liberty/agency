@@ -1,0 +1,7 @@
+name: 'Agency migration disposition test'
+type: module
+description: 'Provides synthetic local resources for rollback qualification.'
+package: Testing
+core_version_requirement: ^10.6 || ^11.3
+dependencies:
+  - agency:agency_migrate_rollback_test

@@ -303,6 +303,10 @@ final class RollbackReplayStore {
   public function committedReceipt(string $domain, int $generation, string $reason): ?array {
     $query = $this->database->select('agency_migrate_rollback_receipt', 'r');
     $query->innerJoin('agency_migrate_authority_state', 'a', 'a.domain = r.domain');
+    $query->leftJoin('agency_migrate_disposition_binding', 'd', 'd.domain = r.domain AND d.generation = r.generation');
+    $query->addField('a', 'disposition_provider', 'required_disposition_provider');
+    $query->addField('a', 'disposition_required_after', 'disposition_required_after');
+    $query->addField('d', 'provider', 'bound_disposition_provider');
     $row = $query->fields('r')->condition('r.domain', $domain)
       ->condition('r.generation', $generation)->condition('r.reason_hash', hash('sha256', trim($reason)))
       ->condition('a.state', 'legacy')->condition('a.version', $generation + 1)->execute()->fetchAssoc();
@@ -311,6 +315,7 @@ final class RollbackReplayStore {
     }
     $row['generation'] = (int) $row['generation'];
     $row['replayed'] = (int) $row['replayed'];
+    $row['disposition_required_after'] = $row['disposition_required_after'] === NULL ? NULL : (int) $row['disposition_required_after'];
     return $row;
   }
 
@@ -327,9 +332,16 @@ final class RollbackReplayStore {
    *   Verified operations keyed by journal write id in their replay order.
    * @param array<string, array<int, array<string, mixed>>> $changes
    *   Verified per-copier identity chains, indexed by entity id.
+   * @param string|null $disposition_provider
+   *   The qualified immutable binding for this generation, if present.
+   * @param string|null $disposition_digest
+   *   The matching verified host receipt digest.
    */
-  public function seal(string $domain, int $generation, string $reason, array $operations, array $changes): array {
-    if (!$this->database->inTransaction()) {
+  public function seal(string $domain, int $generation, string $reason, array $operations, array $changes, ?string $disposition_provider = NULL, ?string $disposition_digest = NULL): array {
+    if (!$this->database->inTransaction()
+      || ($disposition_provider === NULL) !== ($disposition_digest === NULL)
+      || ($disposition_provider !== NULL && !RollbackDispositionRegistry::validProviderId($disposition_provider))
+      || ($disposition_digest !== NULL && !preg_match('/^[a-f0-9]{64}$/D', $disposition_digest))) {
       throw new MigrateRefusal('rollback_unqualified');
     }
     $recorded = $this->time->getCurrentTime();
@@ -388,6 +400,8 @@ final class RollbackReplayStore {
       'reason_hash' => hash('sha256', trim($reason)),
       'journal_digest' => self::digest($operations),
       'provenance_digest' => self::provenanceDigest($provenance),
+      'disposition_provider' => $disposition_provider,
+      'disposition_digest' => $disposition_digest,
       'replayed' => count($operations),
       'recorded' => $recorded,
     ];
