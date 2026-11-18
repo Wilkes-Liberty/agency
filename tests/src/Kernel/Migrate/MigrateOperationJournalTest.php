@@ -8,6 +8,7 @@ use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\agency_migrate\PostCutoverOperationEnvelope;
 use Drupal\Core\Database\Database;
 use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\Tests\agency\Fixtures\MigrateOperationSqlFault;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
@@ -338,6 +339,140 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
     $this->assertRefused(fn () => $this->writer()->create('synthetic', 3, $this->container->get('uuid')->generate(), self::TYPE, ['title' => 'Refused']), 'rollback_unqualified');
     $this->assertSame(0, $this->rows('agency_migrate_agency_item'));
     $this->assertSame(0, $this->rows('agency_migrate_write_log'));
+  }
+
+  /**
+   * Missing or unsafe journal policy refuses before a save can run.
+   *
+   * @dataProvider unqualifiedJournalPolicies
+   */
+  #[DataProvider('unqualifiedJournalPolicies')]
+  public function testOperationJournalPolicyRefusesBeforeSave(string $case): void {
+    $this->authority('agency', 3);
+    $state = $this->container->get('state');
+    $state->set('agency_operation.policy_case', $case);
+    $state->set('agency_operation.fault', 'save');
+    try {
+      $this->writer()->create('synthetic', 3, $this->container->get('uuid')->generate(), self::TYPE, [
+        'title' => 'Refused',
+        'access_class' => 'Synthetic private data',
+      ]);
+      $this->fail('Expected journal qualification to refuse before saving.');
+    }
+    catch (MigrateRefusal $exception) {
+      $this->assertSame('operation_unqualified', $exception->reason);
+      $this->assertSame('operation_unqualified', $exception->getMessage());
+      $this->assertNull($exception->getPrevious());
+    }
+    $this->assertSame(0, $this->rows('agency_migrate_agency_item'));
+    $this->assertSame(0, $this->rows('agency_migrate_write_log'));
+    $this->assertSame(0, $this->rows('agency_migrate_outbox'));
+  }
+
+  /**
+   * Independent reasons why an exact target may lack journal qualification.
+   */
+  public static function unqualifiedJournalPolicies(): array {
+    return [
+      'missing qualification' => ['missing'],
+      'missing property' => ['unmarked'],
+      'unknown marking' => ['unknown'],
+      'secret property' => ['secret'],
+      'broader access' => ['access'],
+      'unqualified recovery' => ['recovery'],
+      'incompatible retention' => ['retention'],
+      'policy failure' => ['throws'],
+    ];
+  }
+
+  /**
+   * Unrelated writes cannot journal an unmarked confidential prior revision.
+   */
+  public function testOperationJournalQualificationCoversHistoricalTranslation(): void {
+    $this->enableModules(['language']);
+    ConfigurableLanguage::createFromLangcode('fr')->save();
+    $this->authority('agency', 3);
+    $storage = $this->container->get('entity_type.manager')->getStorage(self::TYPE);
+    $target = $storage->create(['title' => 'Original', 'access_class' => 'Synthetic private historical value']);
+    $this->assertInstanceOf(ContentEntityInterface::class, $target);
+    $target->addTranslation('fr', ['payload' => 'Synthetic historical translation']);
+    $target->save();
+    $target->removeTranslation('fr');
+    $target->set('access_class', NULL);
+    $target->setNewRevision(TRUE);
+    $target->save();
+    $id = (int) $target->id();
+    $uuid = $target->uuid();
+    $history = $this->container->get('agency_migrate.identity_writer');
+    $before = $history->captureHistory($target);
+    $this->assertCount(2, $before['revisions']);
+    $this->assertSame('Synthetic historical translation', $before['revisions'][0]['fields']['payload']['fr'][0]['value']);
+    $this->assertSame('Synthetic private historical value', $before['revisions'][0]['fields']['access_class']['fr'][0]['value']);
+    $this->assertSame([], $before['revisions'][1]['fields']['access_class']['en']);
+    $this->assertArrayNotHasKey('fr', $before['revisions'][1]['fields']['payload']);
+
+    $this->container->get('state')->set('agency_operation.policy_case', 'unmarked_historical');
+    $operation = $this->container->get('uuid');
+    $this->assertRefused(fn () => $this->writer()->update('synthetic', 3, $operation->generate(), self::TYPE, $id, $uuid, ['title' => 'Unrelated']), 'operation_unqualified');
+    $this->assertRefused(fn () => $this->writer()->delete('synthetic', 3, $operation->generate(), self::TYPE, $id, $uuid), 'operation_unqualified');
+    $this->assertSame($before, $history->captureHistory($this->target($id)));
+    $this->assertSame(0, $this->rows('agency_migrate_write_log'));
+    $this->assertSame(0, $this->rows('agency_migrate_outbox'));
+  }
+
+  /**
+   * A save hook that moves the record out of its qualified bundle rolls back.
+   */
+  public function testOperationJournalQualificationRechecksSavedBundle(): void {
+    $this->authority('agency', 3);
+    $entities = $this->container->get('entity_type.manager');
+    $this->container->get('entity.definition_update_manager')->uninstallEntityType($entities->getDefinition(self::TYPE));
+    $state = $this->container->get('state');
+    $state->set('agency_operation.bundled_target', TRUE);
+    $entities->clearCachedDefinitions();
+    $this->container->get('entity_field.manager')->clearCachedFieldDefinitions();
+    $this->container->get('entity_type.bundle.info')->clearCachedBundles();
+    $this->installEntitySchema(self::TYPE);
+    $state->set('agency_operation.change_bundle', TRUE);
+
+    $operation = $this->container->get('uuid')->generate();
+    $attempt = fn () => $this->writer()->create('synthetic', 3, $operation, self::TYPE, ['title' => 'Bundle changed by a hook']);
+    $this->assertRefused($attempt, 'operation_unqualified');
+    $this->assertSame(0, $this->rows('agency_migrate_agency_item'));
+    $this->assertSame(0, $this->rows('agency_migrate_write_log'));
+    $this->assertSame(0, $this->rows('agency_migrate_outbox'));
+    $state->delete('agency_operation.change_bundle');
+    $receipt = $this->completed($attempt);
+    $this->assertSame('journal_fixture', $this->target($receipt['entity_id'])->bundle());
+  }
+
+  /**
+   * Qualified retries stay historical and unqualified typed rows stay closed.
+   */
+  public function testOperationJournalQualificationPreservesScalarRetry(): void {
+    $this->authority('agency', 3);
+    $operation = $this->container->get('uuid')->generate();
+    $attempt = fn () => $this->writer()->create('synthetic', 3, $operation, self::TYPE, [
+      'title' => 'Committed',
+      'access_class' => 'Synthetic private data',
+    ]);
+    $receipt = $this->completed($attempt);
+    $envelope = $this->envelope($operation);
+    $this->container->get('state')->set('agency_operation.policy_case', 'throws');
+    $this->assertSame($receipt, $attempt());
+    $this->assertSame(2, $envelope['version']);
+    $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/D', $envelope['qualification']);
+
+    $envelope['version'] = 1;
+    unset($envelope['qualification']);
+    $this->container->get('database')->update('agency_migrate_write_log')->fields([
+      'envelope_version' => 1,
+      'envelope' => json_encode($envelope, JSON_THROW_ON_ERROR),
+    ])->condition('operation_id', $operation)->execute();
+    $this->assertRefused($attempt, 'operation_legacy_unqualified');
+    $this->assertSame(1, $this->rows('agency_migrate_agency_item'));
+    $this->assertSame(1, $this->rows('agency_migrate_write_log'));
+    $this->assertSame(1, $this->rows('agency_migrate_outbox'));
   }
 
   /**

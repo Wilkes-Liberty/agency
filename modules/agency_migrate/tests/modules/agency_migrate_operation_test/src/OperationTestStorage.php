@@ -42,6 +42,16 @@ final class OperationTestStorage extends OperationSqlContentEntityStorage {
   /**
    * {@inheritdoc}
    */
+  public function create(array $values = []) {
+    if ($this->operationState->get('agency_operation.bundled_target')) {
+      $values += ['journal_bundle' => 'journal_fixture'];
+    }
+    return parent::create($values);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
   public function save(EntityInterface $entity) {
     $fault = $this->operationState->get('agency_operation.fault');
     if ($fault === 'save_noop') {

@@ -14,6 +14,23 @@ mutation connection. Ordinary SQL interface membership does not qualify a
 custom handler. The storage connection must be the exact writer connection.
 The explicit copier-domain registry must authorize that target type.
 
+The host must replace `agency_migrate.operation_journal_policy` with an
+`OperationJournalPolicyInterface` adapter. The default refuses new mutations.
+Qualify each exact domain, target entity type and bundle. The declaration must
+mark every stored field item property, including identity and revision metadata
+and fields that are empty on the current record. Use `public`, `internal`,
+`confidential`, `personal` or `financial`. Unmarked, unknown and secret
+properties refuse. A source copier's markings describe the copied source and
+cannot qualify a target journal.
+
+The host must verify that the journal gives the target's data equivalent access
+controls, recovery protections and retention, including older revisions,
+translations, backups, replicas, exports and the handling of deleted records.
+The journal stores full typed values in SQL. Qualify the actual storage and
+recovery paths before enabling writes and version the declaration's contract ID
+when the stored layout, verified controls or scope change. The package ships a positive
+declaration only for disposable synthetic tests.
+
 Every new mutation owns its root transaction and refuses an existing outer
 transaction. It locks fresh operational authority and requires Agency state at
 the caller's expected generation before loading entities. That authority lock
@@ -29,14 +46,23 @@ flags may change; stored revision metadata must not. Delete retains the complete
 preimage after verifying the record and its revisions are absent. Entity caches
 are cleared when the mutation attempt exits.
 
-Entity mutation, immutable version 1 operation envelope and minimized evidence
-intent commit together. Envelopes include operation kind, domain, generation,
-operation ID, target identity and complete before/after histories. The decoder
-checks payload identity against the indexed SQL columns. These fields are
-consistency checks, not signatures or authentication. The public four-argument
-`PostCutoverWriteLog::record()` remains readable as an unqualified historical
-format. Update 10004 adds nullable fields and does not invent envelopes for old
-rows. Only the replay marker is mutable through the existing log API.
+Qualification checks the complete stored preimage before update or delete and
+checks the candidate layout before save. The writer rechecks the reloaded
+persisted history before journaling. A changed bundle, stored property coverage
+or policy rolls the operation back. A refusal reports `operation_unqualified`
+without field values or provider details.
+
+Entity mutation, immutable version 2 operation envelope and minimized evidence
+intent commit together. The envelope stores typed before/after histories and a
+fingerprint of the approved domain, type, bundle, stored layout, markings and
+contract ID.
+The decoder checks payload identity against the indexed SQL columns. These
+fields are consistency checks. The four-argument
+`PostCutoverWriteLog::record()` format remains readable as an unqualified
+historical record. Unqualified version 1 typed envelopes refuse automated
+receipt recovery and replay with `operation_legacy_unqualified`. Update 10004
+adds nullable columns. Existing rows retain their recorded formats. Only the
+replay marker is mutable through the existing log API.
 
 Operation IDs are unique within a domain across generations. A deterministic
 request hash includes the original generation, kind, target identity and typed
@@ -50,7 +76,9 @@ outside a new transaction so MySQL cannot retain a stale snapshot while waiting
 for authority. After locking the current authority row, the writer checks again for a
 committed receipt before qualifying authority for a new mutation. This covers a
 concurrent miss followed by a transition. Historical receipt lookup leaves live
-entities unread.
+entities unread. An exact version 2 receipt retry also works after the host
+withdraws qualification for new mutations. Any future replay must match each
+stored fingerprint against current qualification before writing.
 
 The service returns `completed` only after root commit. A lost commit
 acknowledgement or a failed final cache reset after commit reports

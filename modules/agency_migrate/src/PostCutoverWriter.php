@@ -28,6 +28,7 @@ final class PostCutoverWriter {
     private readonly AuthorityRegister $authority,
     private readonly EntityTypeManagerInterface $entities,
     private readonly CopierManager $copiers,
+    private readonly OperationJournalQualification $qualification,
     private readonly IdentityPreservingWriter $history,
     private readonly MigrateOutbox $outbox,
     private readonly TimeInterface $time,
@@ -122,6 +123,7 @@ final class PostCutoverWriter {
       $storage->resetCache();
       $before = NULL;
       $after = NULL;
+      $qualification = NULL;
       if ($kind === 'create') {
         $entity = $storage->create($values);
       }
@@ -134,6 +136,7 @@ final class PostCutoverWriter {
           throw new MigrateRefusal('operation_history_unsupported');
         }
         $before = $this->history->captureHistory($entity);
+        $qualification = $this->qualification->assertSnapshot($domain, $entityType, $before);
       }
       if (!$entity instanceof ContentEntityInterface) {
         throw new MigrateRefusal('operation_history_unsupported');
@@ -160,6 +163,11 @@ final class PostCutoverWriter {
           $entity->setNewRevision(TRUE);
           $entity->isDefaultRevision(TRUE);
         }
+        $candidateQualification = $this->qualification->assertEntity($domain, $entity);
+        if ($qualification !== NULL && !hash_equals($qualification, $candidateQualification)) {
+          throw new MigrateRefusal('operation_unqualified');
+        }
+        $qualification = $candidateQualification;
         $expected = $this->history->canonicalize($entity);
         $entity->save();
         $id = (int) $entity->id();
@@ -172,13 +180,16 @@ final class PostCutoverWriter {
         if (!$fresh instanceof ContentEntityInterface || $fresh->uuid() !== $uuid) {
           throw new MigrateRefusal('operation_identity_mismatch');
         }
+        $after = $this->history->captureHistory($fresh);
+        if (!hash_equals($qualification, $this->qualification->assertSnapshot($domain, $entityType, $after))) {
+          throw new MigrateRefusal('operation_unqualified');
+        }
         $actual = $this->history->canonicalize($fresh);
         foreach (array_keys($values) as $field) {
           if (($expected[$field] ?? NULL) !== ($actual[$field] ?? NULL)) {
             throw new MigrateRefusal('operation_content_mismatch');
           }
         }
-        $after = $this->history->captureHistory($fresh);
         if ($before !== NULL) {
           $this->assertAppendOnly($before, $after);
         }
@@ -198,12 +209,13 @@ final class PostCutoverWriter {
         }
       }
       $envelope = [
-        'version' => 1,
+        'version' => PostCutoverOperationEnvelope::VERSION,
         'kind' => $kind,
         'domain' => $domain,
         'generation' => $generation,
         'operation_id' => $operationId,
         'request_hash' => $requestHash,
+        'qualification' => $qualification,
         'entity_type' => $entityType,
         'id' => $id,
         'uuid' => $uuid,
@@ -299,7 +311,7 @@ final class PostCutoverWriter {
       'entity_uuid' => $envelope['uuid'],
       'recorded' => $this->time->getCurrentTime(),
       'replayed' => NULL,
-      'envelope_version' => 1,
+      'envelope_version' => $envelope['version'],
       'authority_generation' => $envelope['generation'],
       'operation_id' => $envelope['operation_id'],
       'request_hash' => $envelope['request_hash'],

@@ -12,29 +12,35 @@ use Drupal\Component\Uuid\Uuid;
  */
 final class PostCutoverOperationEnvelope {
 
+  public const VERSION = 2;
+
   /**
    * Decodes a qualified row without loading its possibly deleted live entity.
    */
   public static function decode(array $row, IdentityPreservingWriter $history): array {
+    if ((int) ($row['envelope_version'] ?? 0) === 1) {
+      throw new MigrateRefusal('operation_legacy_unqualified');
+    }
     try {
       $envelope = json_decode($row['envelope'] ?? '', TRUE, 64, JSON_THROW_ON_ERROR);
       $keys = is_array($envelope) ? array_keys($envelope) : [];
       $expected = [
         'version', 'kind', 'domain', 'generation', 'operation_id', 'request_hash',
-        'entity_type', 'id', 'uuid', 'before', 'after',
+        'qualification', 'entity_type', 'id', 'uuid', 'before', 'after',
       ];
       sort($keys);
       sort($expected);
       if (!is_array($envelope)
         || $keys !== $expected
-        || (int) ($row['envelope_version'] ?? 0) !== 1
-        || ($envelope['version'] ?? NULL) !== 1
+        || (int) ($row['envelope_version'] ?? 0) !== self::VERSION
+        || ($envelope['version'] ?? NULL) !== self::VERSION
         || !in_array($envelope['kind'] ?? NULL, ['create', 'update', 'delete'], TRUE)
         || !is_string($envelope['domain'] ?? NULL)
         || !preg_match('/^[a-z][a-z0-9_]{0,62}$/D', $envelope['domain'])
         || !is_int($envelope['generation'] ?? NULL) || $envelope['generation'] < 1
         || !is_string($envelope['operation_id'] ?? NULL) || !Uuid::isValid($envelope['operation_id'])
         || !is_string($envelope['request_hash'] ?? NULL) || !preg_match('/^[a-f0-9]{64}$/D', $envelope['request_hash'])
+        || !is_string($envelope['qualification'] ?? NULL) || !preg_match('/^[a-f0-9]{64}$/D', $envelope['qualification'])
         || !is_string($envelope['entity_type'] ?? NULL)
         || !is_int($envelope['id'] ?? NULL) || $envelope['id'] < 1
         || !is_string($envelope['uuid'] ?? NULL) || !Uuid::isValid($envelope['uuid'])) {

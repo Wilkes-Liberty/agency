@@ -163,8 +163,24 @@ final class RevisionHistorySnapshot {
     if (($snapshot['layout']['keys']['bundle'] ?? NULL) !== $key) {
       throw new MigrateRefusal('incompatible_field_layout');
     }
-    if (!$key) {
+    $bundle = self::bundle($snapshot);
+    if ($bundle === NULL) {
       return [];
+    }
+    $bundles = \Drupal::service('entity_type.bundle.info')->getBundleInfo($storage->getEntityTypeId());
+    if (!isset($bundles[$bundle])) {
+      throw new MigrateRefusal('incompatible_field_layout');
+    }
+    return [$key => $bundle];
+  }
+
+  /**
+   * Reads the bundle from every revision and translation of a snapshot.
+   */
+  public static function bundle(array $snapshot): ?string {
+    $key = $snapshot['layout']['keys']['bundle'];
+    if (!$key) {
+      return NULL;
     }
     $bundle = NULL;
     foreach ($snapshot['revisions'] as $revision) {
@@ -184,11 +200,10 @@ final class RevisionHistorySnapshot {
         $bundle = $value;
       }
     }
-    $bundles = \Drupal::service('entity_type.bundle.info')->getBundleInfo($storage->getEntityTypeId());
-    if ($bundle === NULL || !isset($bundles[$bundle])) {
-      throw new MigrateRefusal('incompatible_field_layout');
+    if ($bundle === NULL) {
+      throw new MigrateRefusal('history_unverified');
     }
-    return [$key => $bundle];
+    return $bundle;
   }
 
   /**
@@ -231,7 +246,7 @@ final class RevisionHistorySnapshot {
    * @return array<string, mixed>
    *   Object-free stored field layout.
    */
-  private static function layout(ContentEntityInterface $entity): array {
+  public static function layout(ContentEntityInterface $entity): array {
     $type = $entity->getEntityType();
     if (!$type instanceof ContentEntityTypeInterface) {
       throw new MigrateRefusal('incompatible_field_layout');
