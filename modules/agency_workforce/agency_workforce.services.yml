@@ -31,3 +31,14 @@ services:
       - '@uuid'
       - '@agency_workforce.committer'
       - '@agency_workforce.outbox'
+  agency_workforce.read_authority:
+    class: Drupal\agency_workforce\Read\UnavailableWorkforceReadPorts
+  agency_workforce.profile_source:
+    class: Drupal\agency_workforce\Read\UnavailableWorkforceReadPorts
+  agency_workforce.profile_reader:
+    class: Drupal\agency_workforce\Read\WorkforceProfileReader
+    arguments:
+      - '@agency_workforce.read_authority'
+      - '@agency_workforce.profile_source'
+      - '@audit_chain.logger'
+      - '@database'
