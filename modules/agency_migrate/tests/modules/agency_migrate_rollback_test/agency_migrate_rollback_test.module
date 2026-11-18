@@ -1,0 +1,47 @@
+<?php
+
+/**
+ * @file
+ * Provides local transaction participants for synthetic rollback tests.
+ */
+
+declare(strict_types=1);
+
+use Drupal\agency_migrate_rollback_test\RollbackTestStorage;
+
+/**
+ * Implements hook_entity_type_alter().
+ */
+function agency_migrate_rollback_test_entity_type_alter(array &$entity_types): void {
+  $entity_types['agency_migrate_legacy_item']->setStorageClass(RollbackTestStorage::class);
+  if (!\Drupal::state()->get('agency_rollback.second_pair')) {
+    return;
+  }
+  $other_types = [
+    'agency_rollback_other_source' => 'agency_migrate_legacy_item',
+    'agency_rollback_other_target' => 'agency_migrate_agency_item',
+  ];
+  foreach ($other_types as $id => $original) {
+    $type = clone $entity_types[$original];
+    $type->set('id', $id);
+    $type->set('base_table', $id);
+    $type->set('data_table', $id . '_data');
+    $type->set('revision_table', $id . '_revision');
+    $type->set('revision_data_table', $id . '_revision_data');
+    $type->setStorageClass(RollbackTestStorage::class);
+    $entity_types[$id] = $type;
+  }
+}
+
+/**
+ * Implements hook_agency_migrate_copier_info_alter().
+ */
+function agency_migrate_rollback_test_agency_migrate_copier_info_alter(array &$definitions): void {
+  if (\Drupal::state()->get('agency_rollback.second_pair')) {
+    $definitions['synthetic_other'] = [
+      'id' => 'synthetic_other',
+      'source_type' => 'agency_rollback_other_source',
+      'target_type' => 'agency_rollback_other_target',
+    ] + $definitions['synthetic_item'];
+  }
+}

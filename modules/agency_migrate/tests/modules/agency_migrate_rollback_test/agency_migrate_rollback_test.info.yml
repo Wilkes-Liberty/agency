@@ -1,0 +1,7 @@
+name: 'Agency migration rollback test'
+type: module
+description: 'Qualifies synthetic legacy storage for ordered replay tests.'
+package: Testing
+core_version_requirement: ^10.6 || ^11.3
+dependencies:
+  - agency:agency_migrate_test
