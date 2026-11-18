@@ -158,10 +158,8 @@ final class RollbackService {
         throw new MigrateRefusal('rollback_unqualified');
       }
       if ($operations === []) {
-        foreach (array_keys($copiers) as $id) {
-          if (!$this->reconciler->compare($id)->fullPassed()) {
-            throw new MigrateRefusal('rollback_unqualified');
-          }
+        foreach ($copiers as $copier) {
+          $this->reconciler->assertEmptyRollback($copier);
         }
         $changes = [];
       }

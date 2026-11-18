@@ -290,7 +290,9 @@ rollback service and a reviewed code/data recovery procedure instead.
 
 The rollback service returns authority to legacy after whole-domain
 reconciliation. With an empty journal, every registered copier must pass its
-full reconciliation. With post-cutover operations, the service checks and
+full reconciliation. Opted-in rollback copiers also compare their declared
+access cases. Earlier copiers use the existing empty-journal reconciliation
+contract. With post-cutover operations, the service checks and
 replays the durable create, update and delete envelopes in write-id order.
 The original four-argument `PostCutoverWriteLog::record()` still writes legacy
 records. Those records lack operation and history evidence and cannot qualify
@@ -332,7 +334,8 @@ copy manifests and journal payloads retain their historical meaning.
 Ordinary reconciliation and subsequent rollback use the effective history from
 sealed receipts. A copied record keeps its original copy manifest. An identity
 created after cutover keeps its original create operation. A delete stays
-represented by both sides' absence and the retained tombstone. If an original
+represented by its retained tombstone and the verified absence of the identity
+and preimage revision IDs from both sides' mapped SQL tables. If an original
 copy row, receipt, journal endpoint or provenance record changes unexpectedly,
 the effective history cannot qualify reconciliation.
 

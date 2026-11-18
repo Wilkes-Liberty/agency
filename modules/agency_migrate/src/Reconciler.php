@@ -10,7 +10,11 @@ use Drupal\agency_migrate\Plugin\CopierManager;
 use Drupal\agency_migrate\Plugin\HistoryCopierInterface;
 use Drupal\agency_migrate\Plugin\InventoryCopierInterface;
 use Drupal\agency_migrate\Plugin\RollbackCopierInterface;
+use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\Sql\DefaultTableMapping;
+use Drupal\Core\Entity\Sql\SqlEntityStorageInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 
 /**
@@ -48,6 +52,8 @@ final class Reconciler {
     private readonly AccountProxyInterface $currentUser,
     private readonly RollbackReplayStore $replay,
     private readonly IdentityPreservingWriter $history,
+    private readonly EntityTypeManagerInterface $entityTypeManager,
+    private readonly Connection $database,
   ) {}
 
   /**
@@ -206,6 +212,10 @@ final class Reconciler {
             throw new MigrateRefusal('coverage_unverified');
           }
           $this->lineage->assertEffectiveAnchor($record);
+          if ($record['snapshot'] === NULL) {
+            $this->assertDeletedHistory($copier->sourceEntityType(), $record['preimage']);
+            $this->assertDeletedHistory($copier->targetEntityType(), $record['preimage']);
+          }
           $records[$id] = $record;
         }
       }
@@ -214,6 +224,90 @@ final class Reconciler {
     catch (\Throwable) {
       throw new MigrateRefusal('coverage_unverified');
     }
+  }
+
+  /**
+   * Verifies the exact tombstone in the mapped SQL tables, including orphans.
+   *
+   * Storage loaders join revisions through the base table. An orphan revision
+   * can be invisible to them even though its archived values remain stored.
+   *
+   * @internal
+   */
+  public function assertDeletedHistory(string $type, array $preimage): void {
+    $storage = $this->entityTypeManager->getStorage($type);
+    if (!$storage instanceof SqlEntityStorageInterface || !$storage instanceof OperationStorageParticipantInterface
+      || $storage->operationConnection() !== $this->database) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    $mapping = $storage->getTableMapping();
+    $entity_type = $storage->getEntityType();
+    $id_key = $entity_type->getKey('id');
+    $revision_key = $entity_type->getKey('revision');
+    if (!$mapping instanceof DefaultTableMapping || !$mapping->getRevisionTable() || !$id_key || !$revision_key) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    $vids = array_column($preimage['revisions'], 'revision_id');
+    $shared_tables = array_filter([
+      $mapping->getBaseTable(), $mapping->getDataTable(),
+      $mapping->getRevisionTable(), $mapping->getRevisionDataTable(),
+    ]);
+    foreach (array_unique($shared_tables) as $table) {
+      $columns = $mapping->getAllColumns($table);
+      $this->assertNoStoredIdentity($table, $id_key, in_array($revision_key, $columns, TRUE) ? $revision_key : NULL, $preimage['id'], $vids);
+    }
+    foreach ($mapping->getDedicatedTableNames() as $table) {
+      $this->assertNoStoredIdentity($table, 'entity_id', 'revision_id', $preimage['id'], $vids);
+    }
+  }
+
+  /**
+   * Detects every stored row for the identity or its exact preimage revision ids.
+   */
+  private function assertNoStoredIdentity(string $table, string $id_key, ?string $revision_key, int $id, array $vids): void {
+    $query = $this->database->select($table, 'r')->range(0, 1);
+    $conditions = $query->orConditionGroup()->condition($id_key, $id);
+    if ($revision_key !== NULL) {
+      $conditions->condition($revision_key, $vids, 'IN');
+    }
+    $query->addExpression('1');
+    if ($query->condition($conditions)->execute()->fetchField() !== FALSE) {
+      throw new MigrateRefusal('rollback_conflict');
+    }
+  }
+
+  /**
+   * Requires full parity before handing over an empty operation journal.
+   *
+   * Opted-in copiers supply their reviewed access cases. Older copiers retain
+   * their existing full reconciliation contract for the empty-journal path.
+   *
+   * @internal
+   */
+  public function assertEmptyRollback(CopierInterface $copier): void {
+    $principals = $copier instanceof RollbackCopierInterface ? $this->rollbackPrincipals($copier) : [];
+    if (!$this->compare($copier->getPluginId(), [], $principals)->fullPassed()) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+  }
+
+  /**
+   * Validates the explicit access cases for a qualified rollback copier.
+   *
+   * @return non-empty-list<string>
+   *   Validated principal tokens.
+   */
+  private function rollbackPrincipals(RollbackCopierInterface $copier): array {
+    $principals = $copier->rollbackPrincipals();
+    if ($principals === [] || !array_is_list($principals)) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    foreach ($principals as $principal) {
+      if (!is_string($principal) || $principal === '') {
+        throw new MigrateRefusal('rollback_unqualified');
+      }
+    }
+    return $principals;
   }
 
   /**
@@ -304,15 +398,7 @@ final class Reconciler {
     $source_count = $copier->countSource();
     $target_count = $copier->countTarget();
     $lineage_count = $this->lineage->countPair($source_type, $target_type);
-    $principals = $copier->rollbackPrincipals();
-    if ($principals === [] || !array_is_list($principals)) {
-      throw new MigrateRefusal('rollback_unqualified');
-    }
-    foreach ($principals as $principal) {
-      if (!is_string($principal) || $principal === '') {
-        throw new MigrateRefusal('rollback_unqualified');
-      }
-    }
+    $principals = $this->rollbackPrincipals($copier);
     $baseline = [];
     foreach ($this->lineageInventory($copier, $lineage_count) as $row) {
       $id = (int) $row['source_id'];

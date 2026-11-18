@@ -130,9 +130,9 @@ final class QualifiedRollbackPlanner {
         }
         if ($record['after'] === NULL) {
           $preimage = isset($current[$id]) ? $operations[$record['last_wid']]['before'] : $record['preimage'];
-          $this->assertDeletedHistory($copier->targetEntityType(), $preimage);
+          $this->reconciler->assertDeletedHistory($copier->targetEntityType(), $preimage);
           if (!isset($current[$id])) {
-            $this->assertDeletedHistory($copier->sourceEntityType(), $preimage);
+            $this->reconciler->assertDeletedHistory($copier->sourceEntityType(), $preimage);
           }
         }
       }
@@ -280,23 +280,11 @@ final class QualifiedRollbackPlanner {
         $storage->delete([$legacy]);
         $storage->resetCache([$id]);
         $this->assertSnapshot($copier->loadSource($id), NULL, $type);
-        $this->assertDeletedHistory($type, $operation['before']);
+        $this->reconciler->assertDeletedHistory($type, $operation['before']);
       }
       else {
         $merged = $this->history->mergeHistory($operation['after'], $type);
         $this->assertSnapshot($merged, $operation['after'], $type);
-      }
-    }
-  }
-
-  /**
-   * Requires absence of the deleted default and its archived revision rows.
-   */
-  private function assertDeletedHistory(string $type, array $before): void {
-    $storage = $this->storage($type);
-    foreach ($before['revisions'] as $revision) {
-      if ($storage->loadRevision($revision['revision_id']) !== NULL) {
-        throw new MigrateRefusal('rollback_conflict');
       }
     }
   }

@@ -58,6 +58,8 @@ services:
       - '@current_user'
       - '@agency_migrate.rollback_replay_store'
       - '@agency_migrate.identity_writer'
+      - '@entity_type.manager'
+      - '@database'
   agency_migrate.rollback_replay_store:
     class: Drupal\agency_migrate\RollbackReplayStore
     arguments:
