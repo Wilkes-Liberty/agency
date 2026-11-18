@@ -32,10 +32,14 @@ final class QualifiedRollbackPlanner {
    * @return array<string, array<int, array<string, mixed>>>
    *   Qualified identity chains keyed by copier id and original integer id.
    */
-  public function preflight(array $copiers, array $operations): array {
+  public function preflight(array $copiers, array $operations, array $effective): array {
     $sources = [];
     $targets = [];
-    foreach ($copiers as $copier) {
+    $uuid_owners = [];
+    if (array_diff_key($effective, $copiers) !== []) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    foreach ($copiers as $plugin => $copier) {
       if (!$copier instanceof RollbackCopierInterface
         || isset($sources[$copier->sourceEntityType()]) || isset($targets[$copier->targetEntityType()])) {
         throw new MigrateRefusal('rollback_unqualified');
@@ -44,13 +48,19 @@ final class QualifiedRollbackPlanner {
       $targets[$copier->targetEntityType()] = $copier;
       $this->storage($copier->sourceEntityType())->resetCache();
       $this->storage($copier->targetEntityType())->resetCache();
+      foreach ($effective[$plugin] ?? [] as $record) {
+        if ($record['source_type'] !== $copier->sourceEntityType() || $record['target_type'] !== $copier->targetEntityType()) {
+          throw new MigrateRefusal('rollback_conflict');
+        }
+        $this->lineage->assertEffectiveAnchor($record);
+        $uuid_owners[$plugin][$record['entity_uuid']] = $record['entity_id'];
+      }
     }
     if (array_intersect_key($sources, $targets) !== []) {
       throw new MigrateRefusal('rollback_unqualified');
     }
     $changes = [];
     $owners = [];
-    $uuid_owners = [];
     $defaults = [];
     foreach ($operations as $wid => $operation) {
       $copier = $targets[$operation['entity_type']];
@@ -69,8 +79,9 @@ final class QualifiedRollbackPlanner {
           'uuid' => $uuid,
           'before' => $before,
           'first_wid' => $wid,
-          'lineage_id' => $this->verifyBaseline($copier, $storage, $id, $uuid, $before),
-        ];
+          'source_type' => $copier->sourceEntityType(),
+          'target_type' => $copier->targetEntityType(),
+        ] + $this->verifyBaseline($copier, $storage, $id, $uuid, $before, $effective[$plugin][$id] ?? NULL, $wid);
       }
       elseif ($changes[$plugin][$id]['after'] === NULL || $changes[$plugin][$id]['after'] !== $before
         || $changes[$plugin][$id]['uuid'] !== $uuid) {
@@ -110,11 +121,19 @@ final class QualifiedRollbackPlanner {
     }
     $inventory = [];
     foreach ($copiers as $plugin => $copier) {
-      $records = $changes[$plugin] ?? [];
+      $current = $changes[$plugin] ?? [];
+      $records = $current + $this->effectiveProjections($effective[$plugin] ?? []);
       foreach ($records as $id => $record) {
         $this->assertSnapshot($copier->loadTarget($id), $record['after'], $copier->targetEntityType());
+        if (!isset($current[$id])) {
+          $this->assertSnapshot($copier->loadSource($id), $record['before'], $copier->sourceEntityType());
+        }
         if ($record['after'] === NULL) {
-          $this->assertDeletedHistory($copier->targetEntityType(), $operations[$record['last_wid']]['before']);
+          $preimage = isset($current[$id]) ? $operations[$record['last_wid']]['before'] : $record['preimage'];
+          $this->assertDeletedHistory($copier->targetEntityType(), $preimage);
+          if (!isset($current[$id])) {
+            $this->assertDeletedHistory($copier->sourceEntityType(), $preimage);
+          }
         }
       }
       $inventory[$plugin] = $this->reconciler->assertReplayCoverage($copier, $records, FALSE);
@@ -135,7 +154,7 @@ final class QualifiedRollbackPlanner {
   /**
    * Checks original lineage, or proves that a create owns a new identity.
    */
-  private function verifyBaseline(RollbackCopierInterface $copier, ContentEntityStorageInterface $storage, int $id, string $uuid, ?array $before): ?int {
+  private function verifyBaseline(RollbackCopierInterface $copier, ContentEntityStorageInterface $storage, int $id, string $uuid, ?array $before, ?array $previous, int $wid): array {
     $legacy = $copier->loadSource($id);
     $source_type = $copier->sourceEntityType();
     $target_type = $copier->targetEntityType();
@@ -143,11 +162,19 @@ final class QualifiedRollbackPlanner {
     $target_row = $this->lineage->byTarget($target_type, $id);
     $by_uuid = $storage->getQuery()->accessCheck(FALSE)
       ->condition($storage->getEntityType()->getKey('uuid'), $uuid)->execute();
+    if ($previous !== NULL) {
+      if ($before === NULL || $previous['snapshot'] !== $before || $previous['entity_uuid'] !== $uuid
+        || array_map('intval', array_values($by_uuid)) !== [$id]) {
+        throw new MigrateRefusal('rollback_conflict');
+      }
+      $this->assertSnapshot($legacy, $before, $source_type);
+      return array_intersect_key($previous, array_flip(['lineage_id', 'lineage_digest', 'origin_wid']));
+    }
     if ($before === NULL) {
       if ($legacy !== NULL || $source_row !== NULL || $target_row !== NULL || $by_uuid !== []) {
         throw new MigrateRefusal('rollback_conflict');
       }
-      return NULL;
+      return ['lineage_id' => NULL, 'lineage_digest' => NULL, 'origin_wid' => $wid];
     }
     $this->assertSnapshot($legacy, $before, $source_type);
     $manifest = $source_row === NULL ? NULL : $this->lineage->manifest($source_row);
@@ -160,7 +187,22 @@ final class QualifiedRollbackPlanner {
       || $manifest !== $copier->historyManifest($legacy) || $source_row['content_digest'] !== $copier->contentDigest($legacy)) {
       throw new MigrateRefusal('rollback_conflict');
     }
-    return (int) $source_row['lid'];
+    return [
+      'lineage_id' => (int) $source_row['lid'],
+      'lineage_digest' => $this->lineage->fingerprint($source_row),
+      'origin_wid' => NULL,
+    ];
+  }
+
+  /**
+   * Expands unchanged effective records into exact before and after endpoints.
+   */
+  private function effectiveProjections(array $effective): array {
+    $records = [];
+    foreach ($effective as $id => $record) {
+      $records[$id] = ['before' => $record['snapshot'], 'after' => $record['snapshot'], 'preimage' => $record['preimage']];
+    }
+    return $records;
   }
 
   /**
@@ -258,9 +300,9 @@ final class QualifiedRollbackPlanner {
   /**
    * Verifies exact live history or proven absence, for all domain copiers.
    */
-  public function verifyReplayed(array $copiers, array $changes): void {
+  public function verifyReplayed(array $copiers, array $changes, array $effective): void {
     foreach ($copiers as $plugin => $copier) {
-      $records = $changes[$plugin] ?? [];
+      $records = ($changes[$plugin] ?? []) + $this->effectiveProjections($effective[$plugin] ?? []);
       foreach ($records as $id => $record) {
         $this->assertSnapshot($copier->loadSource($id), $record['after'], $copier->sourceEntityType());
         $this->assertSnapshot($copier->loadTarget($id), $record['after'], $copier->targetEntityType());

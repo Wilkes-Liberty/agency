@@ -122,7 +122,7 @@ final class RollbackReplayStore {
   /**
    * Includes delivered intents and refuses mismatched or unpaired operations.
    */
-  private function matchIntents(string $domain, array $expected): void {
+  private function matchIntents(string $domain, array $expected, ?int $generation = NULL): void {
     $intents = $this->database->select('agency_migrate_outbox', 'o')->fields('o', ['id', 'fingerprint', 'metadata', 'recorded'])
       ->condition('operation', 'post_cutover_write')->execute();
     while ($intent = $intents->fetchAssoc()) {
@@ -136,7 +136,8 @@ final class RollbackReplayStore {
         throw new MigrateRefusal('rollback_unqualified');
       }
       $fingerprint = $intent['fingerprint'];
-      if ($metadata['domain'] !== $domain && !isset($expected[$fingerprint])) {
+      if (!isset($expected[$fingerprint]) && ($metadata['domain'] !== $domain
+        || ($generation !== NULL && ($metadata['generation'] ?? NULL) !== $generation))) {
         continue;
       }
       if (!isset($expected[$fingerprint]) || ($metadata['event_id'] ?? NULL) !== $intent['id']
@@ -155,6 +156,120 @@ final class RollbackReplayStore {
     if ($expected !== []) {
       throw new MigrateRefusal('rollback_unqualified');
     }
+  }
+
+  /**
+   * Reads the sealed effective history for one domain, including tombstones.
+   *
+   * @return array<string, array<int, array<string, mixed>>>
+   *   Verified latest provenance per copier and integer identity.
+   */
+  public function effectiveDomain(string $domain): array {
+    $records = $this->database->select('agency_migrate_rollback_record', 'r')->fields('r')
+      ->condition('domain', $domain)->orderBy('generation')->orderBy('copier')->orderBy('entity_id')->execute();
+    $by_generation = [];
+    while ($record = $records->fetchAssoc()) {
+      $normalized = self::normalizeRecord($record);
+      $by_generation[$normalized['generation']][] = $normalized;
+    }
+    $receipts = $this->database->select('agency_migrate_rollback_receipt', 'r')->fields('r')
+      ->condition('domain', $domain)->orderBy('generation')->execute();
+    $effective = [];
+    $authority = NULL;
+    while ($receipt = $receipts->fetchAssoc()) {
+      $generation = (int) $receipt['generation'];
+      $authority ??= (int) $this->database->select('agency_migrate_authority_state', 'a')->fields('a', ['version'])
+        ->condition('domain', $domain)->execute()->fetchField();
+      $provenance = $by_generation[$generation] ?? [];
+      unset($by_generation[$generation]);
+      if ($generation < 1 || $authority <= $generation || self::provenanceDigest($provenance) !== $receipt['provenance_digest']) {
+        throw new MigrateRefusal('rollback_unqualified');
+      }
+      $operations = $this->sealedOperations($domain, $generation, $receipt);
+      $chains = [];
+      foreach ($operations as $wid => $operation) {
+        $type = $operation['entity_type'];
+        $id = $operation['id'];
+        $chains[$type][$id][0] ??= $wid;
+        $chains[$type][$id][1] = $wid;
+      }
+      foreach ($provenance as $record) {
+        $plugin = $record['copier'];
+        $id = $record['entity_id'];
+        $type = $record['target_type'];
+        $first = $record['first_wid'];
+        $last = $record['last_wid'];
+        if (($chains[$type][$id] ?? NULL) !== [$first, $last]) {
+          throw new MigrateRefusal('rollback_unqualified');
+        }
+        unset($chains[$type][$id]);
+        $previous = $effective[$plugin][$id] ?? NULL;
+        $effective[$plugin][$id] = $this->sealedRecord($record, $operations[$first], $operations[$last], $previous);
+      }
+      foreach ($chains as $uncovered) {
+        if ($uncovered !== []) {
+          throw new MigrateRefusal('rollback_unqualified');
+        }
+      }
+    }
+    if ($by_generation !== []) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    return $effective;
+  }
+
+  /**
+   * Verifies the complete historical generation against its committed receipt.
+   */
+  private function sealedOperations(string $domain, int $generation, array $receipt): array {
+    $rows = $this->database->select('agency_migrate_write_log', 'w')->fields('w')
+      ->condition('domain', $domain)->condition('authority_generation', $generation)->orderBy('wid')->execute();
+    $operations = $expected = [];
+    while ($row = $rows->fetchAssoc()) {
+      $operation = PostCutoverOperationEnvelope::decode($row, $this->history);
+      if ($row['replayed'] === NULL || (int) $row['replayed'] !== (int) $receipt['recorded']) {
+        throw new MigrateRefusal('rollback_unqualified');
+      }
+      $operations[(int) $row['wid']] = $operation;
+      $fingerprint = hash('sha256', 'operation:' . $domain . ':' . $operation['operation_id']);
+      $expected[$fingerprint] = array_intersect_key($operation, array_flip(['domain', 'generation', 'operation_id', 'kind']));
+    }
+    if (count($operations) !== (int) $receipt['replayed'] || self::digest($operations) !== $receipt['journal_digest']) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    $this->matchIntents($domain, $expected, $generation);
+    return $operations;
+  }
+
+  /**
+   * Resolves a sealed row to its exact terminal history or retained preimage.
+   */
+  private function sealedRecord(array $record, array $first, array $last, ?array $previous): array {
+    $snapshot = $last['after'];
+    $history = $snapshot ?? $last['before'];
+    if ($first['uuid'] !== $record['entity_uuid'] || $last['uuid'] !== $record['entity_uuid']
+      || self::digest($history) !== $record['history_digest']
+      || $record['delete_wid'] !== ($snapshot === NULL ? $record['last_wid'] : NULL)) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    $origin_keys = array_flip(['source_type', 'target_type', 'entity_uuid', 'origin', 'lineage_id', 'lineage_digest', 'origin_wid']);
+    if ($previous !== NULL) {
+      if ($previous['snapshot'] === NULL || $first['before'] !== $previous['snapshot']
+        || array_intersect_key($record, $origin_keys) !== array_intersect_key($previous, $origin_keys)) {
+        throw new MigrateRefusal('rollback_unqualified');
+      }
+    }
+    elseif ($record['origin'] === 'create') {
+      if ($first['kind'] !== 'create' || $record['origin_wid'] !== $record['first_wid']
+        || $record['lineage_id'] !== NULL || $record['lineage_digest'] !== NULL) {
+        throw new MigrateRefusal('rollback_unqualified');
+      }
+    }
+    elseif ($record['origin'] !== 'copy' || $first['before'] === NULL || $record['lineage_id'] === NULL
+      || $record['lineage_digest'] === NULL || $record['origin_wid'] !== NULL) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    return $record + ['snapshot' => $snapshot, 'preimage' => $snapshot === NULL ? $history : NULL];
   }
 
   /**
@@ -208,6 +323,7 @@ final class RollbackReplayStore {
       throw new MigrateRefusal('rollback_unqualified');
     }
     $recorded = $this->time->getCurrentTime();
+    $provenance = [];
     foreach ($changes as $copier => $records) {
       foreach ($records as $id => $record) {
         $last = $operations[$record['last_wid']];
@@ -215,10 +331,14 @@ final class RollbackReplayStore {
           'domain' => $domain,
           'generation' => $generation,
           'copier' => $copier,
+          'source_type' => $record['source_type'],
+          'target_type' => $record['target_type'],
           'entity_id' => $id,
           'entity_uuid' => $record['uuid'],
           'origin' => $record['lineage_id'] === NULL ? 'create' : 'copy',
           'lineage_id' => $record['lineage_id'],
+          'lineage_digest' => $record['lineage_digest'],
+          'origin_wid' => $record['origin_wid'],
           'first_wid' => $record['first_wid'],
           'last_wid' => $record['last_wid'],
           'delete_wid' => $last['kind'] === 'delete' ? $record['last_wid'] : NULL,
@@ -231,14 +351,10 @@ final class RollbackReplayStore {
         if (!$persisted) {
           throw new MigrateRefusal('rollback_unqualified');
         }
-        foreach (['generation', 'entity_id', 'lineage_id', 'first_wid', 'last_wid', 'delete_wid'] as $field) {
-          if ($persisted[$field] !== NULL) {
-            $persisted[$field] = (int) $persisted[$field];
-          }
-        }
-        if ($persisted !== $values) {
+        if (self::normalizeRecord($persisted) !== $values) {
           throw new MigrateRefusal('rollback_unqualified');
         }
+        $provenance[] = $values;
       }
     }
     foreach ($operations as $wid => $operation) {
@@ -261,6 +377,7 @@ final class RollbackReplayStore {
       'generation' => $generation,
       'reason_hash' => hash('sha256', trim($reason)),
       'journal_digest' => self::digest($operations),
+      'provenance_digest' => self::provenanceDigest($provenance),
       'replayed' => count($operations),
       'recorded' => $recorded,
     ];
@@ -269,6 +386,26 @@ final class RollbackReplayStore {
       throw new MigrateRefusal('rollback_unqualified');
     }
     return $receipt;
+  }
+
+  /**
+   * Normalizes SQL numerics without conflating NULL with zero.
+   */
+  private static function normalizeRecord(array $record): array {
+    foreach (['generation', 'entity_id', 'lineage_id', 'origin_wid', 'first_wid', 'last_wid', 'delete_wid'] as $field) {
+      if ($record[$field] !== NULL) {
+        $record[$field] = (int) $record[$field];
+      }
+    }
+    return $record;
+  }
+
+  /**
+   * Hashes all provenance in a stable copier and identity order.
+   */
+  private static function provenanceDigest(array $records): string {
+    usort($records, static fn (array $left, array $right): int => [$left['copier'], $left['entity_id']] <=> [$right['copier'], $right['entity_id']]);
+    return self::digest($records);
   }
 
   /**

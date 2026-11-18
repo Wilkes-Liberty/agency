@@ -56,6 +56,8 @@ services:
       - '@plugin.manager.agency_migrate.copier'
       - '@agency_migrate.lineage'
       - '@current_user'
+      - '@agency_migrate.rollback_replay_store'
+      - '@agency_migrate.identity_writer'
   agency_migrate.rollback_replay_store:
     class: Drupal\agency_migrate\RollbackReplayStore
     arguments:

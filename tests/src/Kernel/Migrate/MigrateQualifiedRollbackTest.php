@@ -90,10 +90,56 @@ final class MigrateQualifiedRollbackTest extends MigrateKernelTestBase {
     $this->assertSame($original_lineage, $this->container->get('agency_migrate.lineage')->bySource(self::SOURCE, 2));
     $this->assertNull($this->container->get('agency_migrate.lineage')->bySource(self::SOURCE, $first['entity_id']));
     $this->assertSame([], $this->container->get('agency_migrate.writes')->pending(self::DOMAIN));
+    $this->assertTrue($this->container->get('agency_migrate.reconciler')->compare('synthetic_item')->fullPassed());
     $authority = $this->container->get('agency_migrate.authority');
     $authority->transition(self::DOMAIN, 'shadow', 'Return to shadow');
     $authority->transition(self::DOMAIN, 'agency', 'Second Agency generation');
     $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), 'rollback_stale_generation');
+  }
+
+  /**
+   * A second cutover and return uses the first sealed effective histories.
+   */
+  public function testEffectiveProvenanceSupportsSecondRollback(): void {
+    $generation = $this->prepareDomain();
+    $lineage = $this->container->get('agency_migrate.lineage');
+    $original = $lineage->bySource(self::SOURCE, 1);
+    $created = $this->create($generation, 'Created during first Agency generation');
+    $this->update($generation, $this->target(1), 'First rollback update');
+    $this->delete($generation, $this->target(2));
+    $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation);
+    $reconciler = $this->container->get('agency_migrate.reconciler');
+    $this->assertTrue($reconciler->compare('synthetic_item')->fullPassed());
+
+    $authority = $this->container->get('agency_migrate.authority');
+    $authority->transition(self::DOMAIN, 'shadow', 'Review effective histories');
+    $authority->transition(self::DOMAIN, 'agency', 'Second qualified cutover');
+    $next = $authority->status()[self::DOMAIN]['version'];
+    $this->update($next, $this->target($created['entity_id']), 'Changed after second cutover');
+    $this->delete($next, $this->target(1));
+    $new = $this->create($next, 'Created during second Agency generation');
+    $this->assertSame(3, $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $next)['replayed']);
+    $this->assertTrue($reconciler->compare('synthetic_item')->fullPassed());
+    $this->assertSame('Changed after second cutover', $this->source($created['entity_id'])->get('payload')->value);
+    $this->assertSame('Created during second Agency generation', $this->source($new['entity_id'])->get('title')->value);
+    $this->assertNull($this->target(1));
+    $this->assertNull($this->target(2));
+    $this->assertSame($original, $lineage->bySource(self::SOURCE, 1));
+    $this->assertNull($lineage->bySource(self::SOURCE, $created['entity_id']));
+  }
+
+  /**
+   * Relabeling effective provenance cannot create a new reconciliation baseline.
+   */
+  public function testReconciliationRefusesAlteredEffectiveProvenance(): void {
+    $generation = $this->prepareDomain();
+    $created = $this->create($generation, 'Covered by retained provenance');
+    $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation);
+    $reconciler = $this->container->get('agency_migrate.reconciler');
+    $this->assertTrue($reconciler->compare('synthetic_item')->fullPassed());
+    $this->container->get('database')->update('agency_migrate_rollback_record')->fields(['history_digest' => str_repeat('0', 64)])
+      ->condition('entity_id', $created['entity_id'])->execute();
+    $this->assertRefused(fn () => $reconciler->compare('synthetic_item'), 'coverage_unverified');
   }
 
   /**

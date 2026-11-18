@@ -365,6 +365,8 @@ jobs:
             ]);
             $required = array_merge($required, [
               "testOrderedReplayPreservesHistoryProvenanceAndReceipt",
+              "testEffectiveProvenanceSupportsSecondRollback",
+              "testReconciliationRefusesAlteredEffectiveProvenance",
               "testDeliveredIntentsExposeMissingCreateDeletePair",
               "testInvalidLaterOperationLeavesLegacyUntouched",
               "testRollbackMissingOperationIntentRefuses",

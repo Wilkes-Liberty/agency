@@ -329,6 +329,13 @@ copier and appends effective provenance, tombstones, replay markers, authority
 evidence and a durable handover receipt in that transaction. Original lineage,
 copy manifests and journal payloads retain their historical meaning.
 
+Ordinary reconciliation and subsequent rollback use the effective history from
+sealed receipts. A copied record keeps its original copy manifest. An identity
+created after cutover keeps its original create operation. A delete stays
+represented by both sides' absence and the retained tombstone. If an original
+copy row, receipt, journal endpoint or provenance record changes unexpectedly,
+the effective history cannot qualify reconciliation.
+
 Run `agency:migrate:authority --domain=example --set=legacy --rollback
 --reason='Reviewed rollback'` to preview. A nonempty execution also needs
 `--execute` and `--generation` set to the previewed Agency generation. Repeat

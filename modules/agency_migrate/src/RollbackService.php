@@ -39,6 +39,28 @@ final class RollbackService {
    *   Preview or a committed handover receipt with replayed count.
    */
   public function rollback(string $domain, string $reason, bool $execute = FALSE, ?int $expected_generation = NULL): array {
+    try {
+      return $this->rollbackCurrent($domain, $reason, $execute, $expected_generation);
+    }
+    catch (MigrateRefusal $exception) {
+      throw match ($exception->reason) {
+        'forbidden', 'writer_transaction_owned', 'authority_storage_unavailable',
+        'rollback_unqualified', 'rollback_conflict', 'rollback_ambiguous', 'rollback_failed',
+        'rollback_stale_generation', 'rollback_generation_required', 'rollback_commit_uncertain',
+        'invalid_transition', 'writer_fence_unavailable' => new MigrateRefusal($exception->reason),
+        'history_conflict', 'history_drift' => new MigrateRefusal('rollback_conflict'),
+        default => new MigrateRefusal('rollback_failed'),
+      };
+    }
+    catch (\Throwable) {
+      throw new MigrateRefusal('rollback_failed');
+    }
+  }
+
+  /**
+   * Dispatches only after establishing permissions and expected authority.
+   */
+  private function rollbackCurrent(string $domain, string $reason, bool $execute, ?int $expected_generation): array {
     if (!$this->currentUser->hasPermission('run agency migrate')) {
       throw new MigrateRefusal('forbidden');
     }
@@ -88,15 +110,7 @@ final class RollbackService {
         && $exception->reason === 'invalid_transition' && $this->authority->get($domain) === 'legacy') {
         return $this->existingReceipt($domain, $reason, $expected_generation);
       }
-      if ($exception instanceof MigrateRefusal) {
-        throw match ($exception->reason) {
-          'rollback_unqualified', 'rollback_conflict', 'rollback_ambiguous', 'rollback_stale_generation', 'rollback_generation_required',
-          'invalid_transition', 'writer_fence_unavailable' => $exception,
-          'history_conflict', 'history_drift' => new MigrateRefusal('rollback_conflict'),
-          default => new MigrateRefusal('rollback_failed'),
-        };
-      }
-      throw new MigrateRefusal('rollback_failed');
+      throw $exception;
     }
     finally {
       $this->activeAttempt = NULL;
@@ -113,7 +127,7 @@ final class RollbackService {
       throw new MigrateRefusal('rollback_unqualified');
     }
     $this->authority->assertLockedRollback($domain, $generation);
-    [$operations, $copiers, $targets, $changes] = $this->preflight($domain, $generation);
+    [$operations, $copiers, $targets, $changes, $effective] = $this->preflight($domain, $generation);
     if ($operations !== []) {
       if (!$expected) {
         throw new MigrateRefusal('rollback_generation_required');
@@ -121,7 +135,7 @@ final class RollbackService {
       $attempt->targets = $targets;
       $attempt->effects = $operations;
       $this->planner->replay($targets, $operations);
-      $this->planner->verifyReplayed($copiers, $changes);
+      $this->planner->verifyReplayed($copiers, $changes, $effective);
     }
     return $this->writes->seal($domain, $generation, $reason, $operations, $changes);
   }
@@ -137,6 +151,10 @@ final class RollbackService {
     }
     try {
       $operations = $this->writes->pending($domain, $generation, $targets);
+      $effective = $this->writes->effectiveDomain($domain);
+      if (array_diff_key($effective, $copiers) !== []) {
+        throw new MigrateRefusal('rollback_unqualified');
+      }
       if ($operations === []) {
         foreach (array_keys($copiers) as $id) {
           if (!$this->reconciler->compare($id)->fullPassed()) {
@@ -146,7 +164,7 @@ final class RollbackService {
         $changes = [];
       }
       else {
-        $changes = $this->planner->preflight($copiers, $operations);
+        $changes = $this->planner->preflight($copiers, $operations, $effective);
       }
     }
     catch (MigrateRefusal $exception) {
@@ -156,7 +174,7 @@ final class RollbackService {
     catch (\Throwable) {
       throw new MigrateRefusal('rollback_unqualified');
     }
-    return [$operations, $copiers, $targets, $changes];
+    return [$operations, $copiers, $targets, $changes, $effective];
   }
 
   /**
