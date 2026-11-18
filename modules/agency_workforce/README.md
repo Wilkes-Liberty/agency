@@ -64,6 +64,23 @@ the delivery marker share one transaction under an outbox row lock; `logKeyed()`
 alone does not provide retry protection. Evidence excludes bearer, digest,
 contact, preferred name and account binding.
 
+## Personnel evidence file qualification
+
+The optional protected file projector takes an exact parent revision edge and
+child revision binding from the host. The host authorizes both ends and verifies
+that the stored file points to a unique managed-file UUID with the
+expected download gate and grant class. Its read-only grant fingerprint
+covers existing grant identities and expiries. No grant is created or
+replayed as part of projection.
+
+The projection holds the original file ID, display and description for each
+source delta, including repeated references. It is private, request-local
+data. Inverse preflight re-reads the pinned source and compares ordered values,
+file identities and the host grant fingerprints. Unknown stored properties
+or stale protection refuse. A caller that writes after preflight must keep
+its own writer fence across qualification and the write. The projector
+provides no destination or authority transition.
+
 ## Removal and retained records
 
 Routine uninstall refuses while invitation receipts or evidence intents remain,
