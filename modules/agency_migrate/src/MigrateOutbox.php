@@ -26,7 +26,8 @@ final class MigrateOutbox {
    *
    * @param string $operation
    *   One of lineage_batch, authority_change, rollback,
-   *   unmapped_marking, agency_read_refused or post_cutover_write.
+   *   unmapped_marking, agency_read_refused, restore_refused or
+   *   post_cutover_write.
    * @param array<string, mixed> $metadata
    *   Minimized public metadata. No record payloads or personal data.
    * @param string $fingerprint
@@ -37,6 +38,7 @@ final class MigrateOutbox {
       'lineage_batch',
       'authority_change',
       'rollback',
+      'restore_refused',
       'unmapped_marking',
       'agency_read_refused',
       'post_cutover_write',

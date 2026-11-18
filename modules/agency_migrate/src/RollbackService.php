@@ -27,6 +27,7 @@ final class RollbackService {
     private readonly Reconciler $reconciler,
     private readonly QualifiedRollbackPlanner $planner,
     private readonly Connection $database,
+    private readonly MigrateOutbox $outbox,
   ) {}
 
   /**
@@ -34,12 +35,17 @@ final class RollbackService {
    *
    * A nonempty execution requires the expected Agency generation. Supply that
    * same generation and reason to read its receipt after an uncertain result.
+   * Backup restoration is never a replay operation. Requesting it records a
+   * minimized refusal even in preview mode, without changing domain records.
    *
    * @return array<string, mixed>
    *   Preview or a committed handover receipt with replayed count.
    */
-  public function rollback(string $domain, string $reason, bool $execute = FALSE, ?int $expected_generation = NULL): array {
+  public function rollback(string $domain, string $reason, bool $execute = FALSE, ?int $expected_generation = NULL, bool $restore_from_backup = FALSE): array {
     try {
+      if ($restore_from_backup) {
+        $this->refuseRestore($domain);
+      }
       return $this->rollbackCurrent($domain, $reason, $execute, $expected_generation);
     }
     catch (MigrateRefusal $exception) {
@@ -47,7 +53,7 @@ final class RollbackService {
         'forbidden', 'writer_transaction_owned', 'authority_storage_unavailable',
         'rollback_unqualified', 'rollback_conflict', 'rollback_ambiguous', 'rollback_failed',
         'rollback_stale_generation', 'rollback_generation_required', 'rollback_commit_uncertain',
-        'invalid_transition', 'writer_fence_unavailable' => new MigrateRefusal($exception->reason),
+        'invalid_transition', 'writer_fence_unavailable', 'restore_refused' => new MigrateRefusal($exception->reason),
         'history_conflict', 'history_drift' => new MigrateRefusal('rollback_conflict'),
         default => new MigrateRefusal('rollback_failed'),
       };
@@ -55,6 +61,34 @@ final class RollbackService {
     catch (\Throwable) {
       throw new MigrateRefusal('rollback_failed');
     }
+  }
+
+  /**
+   * Persists refusal only outside a caller-owned transaction.
+   */
+  private function refuseRestore(string $domain): never {
+    if (!$this->currentUser->hasPermission('run agency migrate')) {
+      throw new MigrateRefusal('forbidden');
+    }
+    $this->authority->assertPermission('administer agency migrate authority');
+    if ($this->database->inTransaction()) {
+      throw new MigrateRefusal('writer_transaction_owned');
+    }
+    $metadata = ['reason' => 'restore_refused'];
+    // Only registered domain names may enter evidence. Never copy an unknown
+    // input, operator reason, backup path or record payload into the intent.
+    try {
+      if (preg_match('/^[a-z][a-z0-9_]{0,62}$/D', $domain)
+        && $this->authority->get($domain) !== NULL) {
+        $metadata['domain'] = $domain;
+      }
+    }
+    catch (\Throwable) {
+      // Optional context cannot suppress a refusal when evidence storage is
+      // healthy. Unverified domain input must never enter the audit record.
+    }
+    $this->outbox->record('restore_refused', $metadata, hash('sha256', random_bytes(32)));
+    throw new MigrateRefusal('restore_refused');
   }
 
   /**
