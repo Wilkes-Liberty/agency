@@ -1,0 +1,17 @@
+<?php
+
+/**
+ * @file
+ * Provides local transaction participants for synthetic rollback tests.
+ */
+
+declare(strict_types=1);
+
+use Drupal\agency_migrate\OperationSqlContentEntityStorage;
+
+/**
+ * Implements hook_entity_type_alter().
+ */
+function agency_migrate_rollback_test_entity_type_alter(array &$entity_types): void {
+  $entity_types['agency_migrate_legacy_item']->setStorageClass(OperationSqlContentEntityStorage::class);
+}

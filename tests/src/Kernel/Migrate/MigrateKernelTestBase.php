@@ -62,6 +62,8 @@ abstract class MigrateKernelTestBase extends KernelTestBase {
       'agency_migrate_run',
       'agency_migrate_outbox',
       'agency_migrate_write_log',
+      'agency_migrate_rollback_receipt',
+      'agency_migrate_rollback_record',
       'agency_migrate_authority_event',
       'agency_migrate_authority_state',
     ]);

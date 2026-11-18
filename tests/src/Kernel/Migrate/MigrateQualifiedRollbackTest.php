@@ -23,7 +23,7 @@ final class MigrateQualifiedRollbackTest extends MigrateKernelTestBase {
   /**
    * {@inheritdoc}
    */
-  protected static $modules = ['agency_migrate_operation_test'];
+  protected static $modules = ['agency_migrate_operation_test', 'agency_migrate_rollback_test'];
 
   private const DOMAIN = 'synthetic';
   private const SOURCE = 'agency_migrate_legacy_item';

@@ -9,6 +9,7 @@ use Drupal\agency_migrate\Plugin\CopierInterface;
 use Drupal\agency_migrate\Plugin\CopierManager;
 use Drupal\agency_migrate\Plugin\HistoryCopierInterface;
 use Drupal\agency_migrate\Plugin\InventoryCopierInterface;
+use Drupal\agency_migrate\Plugin\RollbackCopierInterface;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Session\AccountProxyInterface;
 
@@ -210,6 +211,105 @@ final class Reconciler {
       $exceptions,
       $coverage,
     );
+  }
+
+  /**
+   * Reconciles whole rollback inventories against original and replay lineage.
+   *
+   * Changed histories are checked against their full snapshots by the planner.
+   * Inventory, references and access also cover records outside the journal.
+   *
+   * @param array<int, array<string, mixed>> $changes
+   *   Planned baseline and final snapshots for affected source identities.
+   *
+   * @return array<int, array{uuid: string, revision_id: int}>
+   *   The actual legacy side inventory at this stage.
+   *
+   * @internal
+   */
+  public function assertReplayCoverage(RollbackCopierInterface $copier, array $changes, bool $applied): array {
+    $source_type = $copier->sourceEntityType();
+    $target_type = $copier->targetEntityType();
+    $source_count = $copier->countSource();
+    $target_count = $copier->countTarget();
+    $lineage_count = $this->lineage->countPair($source_type, $target_type);
+    $principals = $copier->rollbackPrincipals();
+    if ($principals === [] || !array_is_list($principals)) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    foreach ($principals as $principal) {
+      if (!is_string($principal) || $principal === '') {
+        throw new MigrateRefusal('rollback_unqualified');
+      }
+    }
+    $baseline = [];
+    foreach ($this->lineageInventory($copier, $lineage_count) as $row) {
+      $id = (int) $row['source_id'];
+      if ($id < 1 || $id !== (int) $row['target_id'] || isset($baseline[$id])
+        || $row['source_uuid'] !== $row['target_uuid']
+        || (int) $row['source_revision_id'] !== (int) $row['target_revision_id']) {
+        throw new MigrateRefusal('rollback_conflict');
+      }
+      $baseline[$id] = ['uuid' => $row['source_uuid'], 'revision_id' => (int) $row['source_revision_id']];
+    }
+    $expected_source = $expected_target = $baseline;
+    foreach ($changes as $id => $change) {
+      $this->projectIdentity($expected_source, $id, $applied ? $change['after'] : $change['before']);
+      $this->projectIdentity($expected_target, $id, $change['after']);
+    }
+    ksort($expected_source, SORT_NUMERIC);
+    ksort($expected_target, SORT_NUMERIC);
+    $sources = $this->entityInventory($copier->loadSourceBatch(...), $source_type, $source_count);
+    $targets = $this->entityInventory($copier->loadTargetBatch(...), $target_type, $target_count);
+    if ($sources !== $expected_source || $targets !== $expected_target) {
+      throw new MigrateRefusal('rollback_conflict');
+    }
+    foreach ($sources as $id => $identity) {
+      $source = $copier->loadSource($id);
+      if ($source === NULL || $this->referenceExceptions($copier, $source, 'source') !== []) {
+        throw new MigrateRefusal('rollback_conflict');
+      }
+      if (!isset($changes[$id])) {
+        $target = $copier->loadTarget($id);
+        $row = $this->lineage->bySource($source_type, $id);
+        $manifest = $row === NULL ? NULL : $this->lineage->manifest($row);
+        if ($target === NULL || $manifest === NULL
+          || $manifest !== $copier->historyManifest($source) || $manifest !== $copier->historyManifest($target)
+          || $row['content_digest'] !== $copier->contentDigest($source)
+          || $row['content_digest'] !== $copier->contentDigest($target)) {
+          throw new MigrateRefusal('rollback_conflict');
+        }
+      }
+      if ($applied || !isset($changes[$id])) {
+        foreach ($principals as $principal) {
+          if ($copier->accessDecision($principal, 'source', $id) !== $copier->accessDecision($principal, 'target', $id)) {
+            throw new MigrateRefusal('rollback_conflict');
+          }
+        }
+      }
+    }
+    foreach ($targets as $id => $identity) {
+      $target = $copier->loadTarget($id);
+      if ($target === NULL || $this->referenceExceptions($copier, $target, 'target') !== []) {
+        throw new MigrateRefusal('rollback_conflict');
+      }
+    }
+    if ($source_count !== $copier->countSource() || $target_count !== $copier->countTarget()
+      || $lineage_count !== $this->lineage->countPair($source_type, $target_type)) {
+      throw new MigrateRefusal('rollback_conflict');
+    }
+    return $sources;
+  }
+
+  /**
+   * Projects a live identity, or removes the identity for a qualified delete.
+   */
+  private function projectIdentity(array &$inventory, int $id, ?array $snapshot): void {
+    if ($snapshot === NULL) {
+      unset($inventory[$id]);
+      return;
+    }
+    $inventory[$id] = ['uuid' => $snapshot['uuid'], 'revision_id' => $snapshot['default_revision_id']];
   }
 
   /**

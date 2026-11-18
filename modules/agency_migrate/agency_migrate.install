@@ -268,6 +268,35 @@ function agency_migrate_schema(): array {
         'pending' => ['domain', 'replayed'],
       ],
     ],
+    'agency_migrate_rollback_receipt' => [
+      'description' => 'Committed generation handovers with replay counts and journal fingerprints.',
+      'fields' => [
+        'domain' => ['type' => 'varchar', 'length' => 63, 'not null' => TRUE],
+        'generation' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
+        'reason_hash' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'journal_digest' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'replayed' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
+        'recorded' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
+      ],
+      'primary key' => ['domain', 'generation'],
+    ],
+    'agency_migrate_rollback_record' => [
+      'description' => 'Append-only effective provenance and tombstone references for replayed records.',
+      'fields' => [
+        'domain' => ['type' => 'varchar', 'length' => 63, 'not null' => TRUE],
+        'generation' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
+        'copier' => ['type' => 'varchar_ascii', 'length' => 128, 'not null' => TRUE],
+        'entity_id' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
+        'entity_uuid' => ['type' => 'varchar_ascii', 'length' => 36, 'not null' => TRUE],
+        'origin' => ['type' => 'varchar_ascii', 'length' => 8, 'not null' => TRUE],
+        'lineage_id' => ['type' => 'int', 'size' => 'big', 'not null' => FALSE],
+        'first_wid' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
+        'last_wid' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
+        'delete_wid' => ['type' => 'int', 'size' => 'big', 'not null' => FALSE],
+        'history_digest' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+      ],
+      'primary key' => ['domain', 'generation', 'copier', 'entity_id'],
+    ],
     'agency_migrate_authority_state' => [
       'description' => 'Operational authority generations independent of configuration import.',
       'fields' => [
@@ -474,5 +503,18 @@ function agency_migrate_update_10004(): void {
   }
   if (!$unique_exists) {
     $schema->addUniqueKey('agency_migrate_write_log', 'domain_operation', $definition['unique keys']['domain_operation']);
+  }
+}
+
+/**
+ * Adds retained handover receipts and effective replay provenance.
+ */
+function agency_migrate_update_10005(): void {
+  $schema = \Drupal::database()->schema();
+  $definitions = agency_migrate_schema();
+  foreach (['agency_migrate_rollback_receipt', 'agency_migrate_rollback_record'] as $table) {
+    if (!$schema->tableExists($table)) {
+      $schema->createTable($table, $definitions[$table]);
+    }
   }
 }
