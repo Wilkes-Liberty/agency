@@ -97,7 +97,9 @@ final class PostCutoverWriter {
       $this->authority->lockForAgencyWrite($this->database, $domain, $generation);
       $existing = $this->existing($domain, $generation, $operationId, $requestHash, TRUE);
       if ($existing !== NULL) {
+        $committing = TRUE;
         TransactionBoundary::commit($transaction);
+        $transaction = NULL;
         return $existing;
       }
       $this->copiers->copierForTarget($entityType, $domain);
@@ -204,6 +206,9 @@ final class PostCutoverWriter {
       $receipt = $this->append($envelope);
       $committing = TRUE;
       TransactionBoundary::commit($transaction);
+      // Newer core also runs post-transaction callbacks on destruction. Keep
+      // that release inside this catch boundary before returning a receipt.
+      $transaction = NULL;
       if ($this->database->inTransaction()) {
         throw new \LogicException('Root operation commit did not complete.');
       }
@@ -212,7 +217,9 @@ final class PostCutoverWriter {
     catch (\Throwable $exception) {
       $rollbackFailed = FALSE;
       try {
-        $transaction?->rollBack();
+        if ($this->database->inTransaction()) {
+          $transaction?->rollBack();
+        }
       }
       catch (\Throwable) {
         $rollbackFailed = TRUE;
@@ -278,15 +285,19 @@ final class PostCutoverWriter {
     ];
     $fingerprint = hash('sha256', 'operation:' . $envelope['domain'] . ':' . $envelope['operation_id']);
     $intentId = $this->outbox->record('post_cutover_write', $metadata, $fingerprint);
-    $journal = $this->database->select('agency_migrate_write_log', 'w')->fields('w')
-      ->condition('wid', $row['wid'])->forUpdate()->execute()->fetchAssoc();
+    $journalQuery = $this->database->select('agency_migrate_write_log', 'w')->fields('w')
+      ->condition('wid', $row['wid']);
+    $journalQuery->forUpdate();
+    $journal = $journalQuery->execute()->fetchAssoc();
     if (!$journal || $row['wid'] < 1 || $journal['envelope'] !== $row['envelope']
       || $journal['replayed'] !== NULL) {
       throw new MigrateRefusal('operation_journal_conflict');
     }
     $validated = PostCutoverOperationEnvelope::decode($journal, $this->history);
-    $intent = $this->database->select('agency_migrate_outbox', 'o')->fields('o')
-      ->condition('id', $intentId)->forUpdate()->execute()->fetchAssoc();
+    $intentQuery = $this->database->select('agency_migrate_outbox', 'o')->fields('o')
+      ->condition('id', $intentId);
+    $intentQuery->forUpdate();
+    $intent = $intentQuery->execute()->fetchAssoc();
     if (!$intent || $intent['operation'] !== 'post_cutover_write'
       || $intent['fingerprint'] !== $fingerprint || $intent['delivered'] !== NULL) {
       throw new MigrateRefusal('operation_evidence_conflict');
@@ -308,7 +319,8 @@ final class PostCutoverWriter {
    * Verifies old stored payloads and inventory after a forced new revision.
    */
   private function assertAppendOnly(array $before, array $after): void {
-    if (count($after['revisions']) !== count($before['revisions']) + 1
+    if ($before['layout'] !== $after['layout']
+      || count($after['revisions']) !== count($before['revisions']) + 1
       || $after['default_revision_id'] === $before['default_revision_id']) {
       throw new MigrateRefusal('operation_history_conflict');
     }

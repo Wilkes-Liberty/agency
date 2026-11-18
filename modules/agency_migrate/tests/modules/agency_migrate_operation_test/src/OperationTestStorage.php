@@ -8,6 +8,7 @@ use Drupal\agency_migrate\OperationSqlContentEntityStorage;
 use Drupal\Core\Database\Database;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
+use Drupal\Core\State\StateInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -16,10 +17,16 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 final class OperationTestStorage extends OperationSqlContentEntityStorage {
 
   /**
+   * In-process synthetic fault and worker coordination controls.
+   */
+  protected StateInterface $operationState;
+
+  /**
    * {@inheritdoc}
    */
   public static function createInstance(ContainerInterface $container, EntityTypeInterface $entity_type): static {
     $storage = parent::createInstance($container, $entity_type);
+    $storage->operationState = $container->get('state');
     if ($container->get('state')->get('agency_operation.foreign_connection')) {
       $storage->database = Database::getConnection('default', 'operation_foreign');
     }
@@ -30,18 +37,17 @@ final class OperationTestStorage extends OperationSqlContentEntityStorage {
    * {@inheritdoc}
    */
   public function save(EntityInterface $entity) {
-    $fault = \Drupal::state()->get('agency_operation.fault');
+    $fault = $this->operationState->get('agency_operation.fault');
     if ($fault === 'save_noop') {
       return SAVED_UPDATED;
     }
     $result = parent::save($entity);
-    $ready = \Drupal::state()->get('agency_operation.worker_ready');
-    $release = \Drupal::state()->get('agency_operation.worker_release');
+    $ready = $this->operationState->get('agency_operation.worker_ready');
+    $release = $this->operationState->get('agency_operation.worker_release');
     if (is_string($ready) && is_string($release)) {
       touch($release);
       $pid = (int) file_get_contents($ready);
       $deadline = microtime(TRUE) + 10;
-      $blocked = FALSE;
       do {
         if ($this->database->driver() === 'pgsql') {
           $this->database->query('SELECT pg_stat_clear_snapshot()');
@@ -59,7 +65,7 @@ final class OperationTestStorage extends OperationSqlContentEntityStorage {
         throw new \RuntimeException('Independent operation did not wait on fresh authority.');
       }
       usleep(300000);
-      \Drupal::state()->set('agency_operation.observed_wait', TRUE);
+      $this->operationState->set('agency_operation.observed_wait', TRUE);
     }
     if ($fault === 'commit_ack') {
       $this->database->transactionManager()->addPostTransactionCallback(static function (bool $success): void {
@@ -71,7 +77,7 @@ final class OperationTestStorage extends OperationSqlContentEntityStorage {
     if ($fault === 'save') {
       throw new \RuntimeException('Synthetic post-save failure.');
     }
-    $old = \Drupal::state()->get('agency_operation.old_revision');
+    $old = $this->operationState->get('agency_operation.old_revision');
     if ($fault === 'history_delete') {
       $this->deleteRevision($old);
     }

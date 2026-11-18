@@ -7,6 +7,7 @@ namespace Drupal\Tests\agency\Kernel\Migrate;
 use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\agency_migrate\PostCutoverOperationEnvelope;
 use Drupal\Core\Database\Database;
+use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Tests\agency\Fixtures\MigrateOperationSqlFault;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
@@ -43,6 +44,12 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
     $this->assertSame(1, $this->rows('agency_migrate_agency_item'));
     $this->assertSame(1, $this->rows('agency_migrate_write_log'));
     $this->assertSame(1, $this->rows('agency_migrate_outbox'));
+    $metadata = $this->container->get('database')->select('agency_migrate_outbox', 'o')->fields('o', ['metadata'])->execute()->fetchField();
+    $keys = array_keys(json_decode($metadata, TRUE, 16, JSON_THROW_ON_ERROR));
+    sort($keys);
+    $this->assertSame(['domain', 'effective_at', 'event_id', 'generation', 'kind', 'operation_id'], $keys);
+    $this->assertStringNotContainsString('Synthetic payload', $metadata);
+    $this->assertStringNotContainsString($receipt['entity_uuid'], $metadata);
     $this->authority('legacy', 4);
     $this->assertSame($receipt, $this->writer()->create('synthetic', 3, $operation, self::TYPE, $values));
     $this->assertRefused(fn () => $this->writer()->create('synthetic', 4, $operation, self::TYPE, $values), 'operation_conflict');
@@ -170,6 +177,7 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
     }
     $this->assertFalse($database->inTransaction());
     $reloaded = $this->container->get('entity_type.manager')->getStorage(self::TYPE)->load($created['entity_id']);
+    $this->assertInstanceOf(ContentEntityInterface::class, $reloaded);
     $this->assertSame('Before', $reloaded->get('payload')->value, 'Failure must clear mutated entity caches without caller reset.');
     $this->assertSame($before, $history->captureHistory($reloaded));
     $this->assertSame(1, $this->rows('agency_migrate_write_log'));
@@ -349,7 +357,6 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
     ]);
     $process->setInput(json_encode([
       'database' => $this->container->get('database')->getConnectionOptions(),
-      'site' => $this->siteDirectory,
       'mode' => $mode,
       'operation_id' => $operation,
       'ready' => $ready,

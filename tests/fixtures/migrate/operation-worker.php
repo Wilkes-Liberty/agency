@@ -8,7 +8,10 @@
 declare(strict_types=1);
 
 use Drupal\agency_migrate\Exception\MigrateRefusal;
+use Drupal\Core\Config\DatabaseStorage;
+use Drupal\Core\Config\MemoryStorage;
 use Drupal\Core\Database\Database;
+use Drupal\Core\DependencyInjection\ContainerBuilder;
 use Drupal\Core\Site\Settings;
 use Drupal\KernelTests\KernelTestBase;
 
@@ -24,10 +27,10 @@ $loader->addPsr4('Drupal\\Tests\\', $root . '/core/tests/Drupal/Tests');
 $input = json_decode(stream_get_contents(STDIN), TRUE, 64, JSON_THROW_ON_ERROR);
 $prefix = $input['database']['prefix'] ?? '';
 $prefix = is_array($prefix) ? ($prefix['default'] ?? '') : $prefix;
-if (!preg_match('/^test[0-9]+/D', $prefix)
-  || !str_starts_with($input['site'], 'sites/simpletest/')) {
+if (!preg_match('/^test[0-9]+/D', $prefix)) {
   throw new RuntimeException('An isolated kernel-test site is required.');
 }
+$input['test_prefix'] = $prefix;
 foreach (['mysql', 'pgsql'] as $driver) {
   $loader->addPsr4('Drupal\\' . $driver . '\\', $root . '/core/modules/' . $driver . '/src');
 }
@@ -45,12 +48,27 @@ $worker = new class('operationWorker') extends KernelTestBase {
   ];
 
   /**
-   * Reuses installed tables with independent services, caches and connection.
+   * Copies configuration for isolated boot; never mutates coordinator config.
+   */
+  public function register(ContainerBuilder $container) {
+    parent::register($container);
+    $memory = new MemoryStorage();
+    $database = new DatabaseStorage(Database::getConnection(), 'config');
+    foreach ($database->listAll() as $name) {
+      $memory->write($name, $database->read($name));
+    }
+    $container->set('config.storage.active', $memory);
+    $container->getDefinition('config.storage.active')->setSynthetic(TRUE);
+  }
+
+  /**
+   * Shares only SQL records; services, config, caches and files are isolated.
    */
   public function runWorker(array $input, $loader, string $root): array {
     $this->root = $root;
     $this->classLoader = $loader;
-    $this->siteDirectory = $input['site'];
+    $this->databasePrefix = $input['test_prefix'];
+    $this->setUpFilesystem();
     $this->setSetting('agency_migrate_copier_domains', ['synthetic' => ['synthetic_item']]);
     $this->bootKernel();
     $repository = $this->container->get('entity.last_installed_schema.repository');

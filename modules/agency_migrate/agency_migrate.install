@@ -459,14 +459,20 @@ function agency_migrate_update_10003(): void {
  * Adds nullable operation envelopes without qualifying historical write rows.
  */
 function agency_migrate_update_10004(): void {
-  $schema = \Drupal::database()->schema();
+  $database = \Drupal::database();
+  $schema = $database->schema();
   $definition = agency_migrate_schema()['agency_migrate_write_log'];
   foreach (['envelope_version', 'authority_generation', 'operation_id', 'request_hash', 'envelope'] as $field) {
     if (!$schema->fieldExists('agency_migrate_write_log', $field)) {
       $schema->addField('agency_migrate_write_log', $field, $definition['fields'][$field]);
     }
   }
-  if (!$schema->indexExists('agency_migrate_write_log', 'domain_operation')) {
+  $unique_exists = $schema->indexExists('agency_migrate_write_log', 'domain_operation');
+  // PostgreSQL distinguishes a unique constraint from an ordinary index.
+  if (!$unique_exists && $database->driver() === 'pgsql' && method_exists($schema, 'constraintExists')) {
+    $unique_exists = $schema->constraintExists('agency_migrate_write_log', 'domain_operation__key');
+  }
+  if (!$unique_exists) {
     $schema->addUniqueKey('agency_migrate_write_log', 'domain_operation', $definition['unique keys']['domain_operation']);
   }
 }

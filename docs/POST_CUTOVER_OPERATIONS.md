@@ -35,7 +35,7 @@ operation ID, target identity and complete before/after histories. The decoder
 checks payload identity against the indexed SQL columns. These fields are
 consistency checks, not signatures or authentication. The public four-argument
 `PostCutoverWriteLog::record()` remains readable as an unqualified historical
-format. Update 10003 adds nullable fields and does not invent envelopes for old
+format. Update 10004 adds nullable fields and does not invent envelopes for old
 rows. Only the replay marker is mutable through the existing log API.
 
 Operation IDs are unique within a domain across generations. A deterministic
