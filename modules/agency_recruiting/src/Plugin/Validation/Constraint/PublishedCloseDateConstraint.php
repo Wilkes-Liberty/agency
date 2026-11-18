@@ -9,7 +9,7 @@ use Drupal\Core\Validation\Attribute\Constraint;
 use Symfony\Component\Validator\Constraint as SymfonyConstraint;
 
 /**
- * Requires a future close date before a posting may be published.
+ * Requires an upcoming close deadline to publish an open posting.
  *
  * Drupal 10 uses the annotation; Drupal 11 uses the attribute below.
  *
@@ -27,12 +27,12 @@ use Symfony\Component\Validator\Constraint as SymfonyConstraint;
 final class PublishedCloseDateConstraint extends SymfonyConstraint {
 
   /**
-   * Message when a published posting has no close date.
+   * Message when a published open posting has no close date.
    */
   public string $missingCloseDate = 'A published posting requires a close date.';
 
   /**
-   * Message when a published posting's close date is in the past.
+   * Message when a published open posting's close deadline has passed.
    */
   public string $pastCloseDate = 'A published posting cannot have a past close date.';
 

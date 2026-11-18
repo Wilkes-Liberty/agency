@@ -12,7 +12,7 @@ use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ConstraintValidator;
 
 /**
- * Refuses published postings with no close date or a past close date.
+ * Refuses published open postings without an upcoming close deadline.
  */
 final class PublishedCloseDateConstraintValidator extends ConstraintValidator implements ContainerInjectionInterface {
 
@@ -40,7 +40,8 @@ final class PublishedCloseDateConstraintValidator extends ConstraintValidator im
     if (!$value instanceof CareerPosting || !$constraint instanceof PublishedCloseDateConstraint) {
       return;
     }
-    if ((string) $value->get('status')->value !== 'published') {
+    if ((string) $value->get('status')->value !== 'published'
+      || (string) $value->get('hiring_status')->value !== 'open') {
       return;
     }
     $close = $value->get('valid_through')->value;
