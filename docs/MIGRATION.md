@@ -383,7 +383,9 @@ when either the entity journal or the additional resource plan has pending
 work. It builds a fresh plan after entity preflight under the existing locks,
 applies and verifies it after successful entity replay, and seals the private
 host receipt digest before returning authority. The public `replayed` count
-covers entities.
+covers entities. If a participant ends the original transaction, Agency
+refuses to seal the receipt or advance authority. An interrupted rollback
+with an early SQL commit reports `rollback_commit_uncertain`.
 
 The provider owns its immutable receipt and verifies it without using live
 resource counts when an operator reconciles an uncertain handover. A missing

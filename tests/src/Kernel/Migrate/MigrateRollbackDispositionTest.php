@@ -216,6 +216,47 @@ final class MigrateRollbackDispositionTest extends MigrateKernelTestBase {
   }
 
   /**
+   * Cutover does not stamp a binding in a replacement transaction.
+   */
+  public function testProviderCannotReplaceCutoverTransaction(): void {
+    $authority = $this->authority();
+    $authority->register(self::DOMAIN, 'Register sample');
+    $authority->requireDisposition(self::DOMAIN, self::PROVIDER);
+    $authority->transition(self::DOMAIN, 'shadow', 'Prepare sample');
+    $this->provider()->fault = 'replace_cutover';
+    try {
+      $this->assertRefused(fn () => $authority->transition(self::DOMAIN, 'agency', 'Promote sample'), 'rollback_unqualified');
+      $this->assertTrue($this->container->get('database')->inTransaction());
+      $this->assertSame('shadow', $authority->get(self::DOMAIN));
+      $this->assertSame([], $this->rows(self::BINDING));
+    }
+    finally {
+      $this->provider()->discardReplacement();
+    }
+  }
+
+  /**
+   * An early host commit cannot lead to a later seal or authority advance.
+   */
+  public function testProviderCannotReplaceRollbackTransaction(): void {
+    $generation = $this->prepare();
+    $this->resource($generation, 1);
+    $this->provider()->fault = 'replace_apply';
+    try {
+      $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), 'rollback_commit_uncertain');
+      $this->assertTrue($this->container->get('database')->inTransaction());
+      $this->assertSame('agency', $this->authority()->get(self::DOMAIN));
+      $this->assertSame([], $this->rows(self::RECEIPT));
+    }
+    finally {
+      $this->provider()->discardReplacement();
+    }
+    // The coerced early SQL commit cannot be undone by the coordinator.
+    $this->assertCount(1, $this->rows(self::HOST_RECEIPT));
+    $this->assertSame('agency', $this->authority()->get(self::DOMAIN));
+  }
+
+  /**
    * Runtime service removal cannot erase the persisted need for the provider.
    */
   public function testRemovedProviderCannotBypassRollbackOrRecovery(): void {

@@ -8,6 +8,7 @@ use Drupal\agency_migrate\AuthorityRegister;
 use Drupal\agency_migrate\RollbackDispositionInterface;
 use Drupal\agency_migrate\RollbackDispositionPlan;
 use Drupal\Core\Database\Connection;
+use Drupal\Core\Database\Transaction;
 
 /**
  * Reverses synthetic SQL resources on the real rollback transaction.
@@ -28,6 +29,11 @@ final class LocalDisposition implements RollbackDispositionInterface {
    * Optional entity expected in legacy storage before resource effects.
    */
   public ?int $expectedLegacyId = NULL;
+
+  /**
+   * Holds a deliberate violation open for assertion and fixture cleanup.
+   */
+  private ?Transaction $replacement = NULL;
 
   /**
    * Observes transaction membership without mutating persistence.
@@ -51,6 +57,9 @@ final class LocalDisposition implements RollbackDispositionInterface {
     $this->authority->assertLockedCutover($domain, $prospectiveGeneration);
     if ($this->fault === 'cutover' || $domain !== 'synthetic' || $prospectiveGeneration < 3) {
       throw new \LogicException('Synthetic cutover qualification failure.');
+    }
+    if ($this->fault === 'replace_cutover') {
+      $this->replaceTransaction($connection);
     }
   }
 
@@ -107,7 +116,28 @@ final class LocalDisposition implements RollbackDispositionInterface {
         }
       });
     }
+    if ($this->fault === 'replace_apply') {
+      $this->replaceTransaction($connection);
+    }
     return $this->fault === 'digest' ? 'invalid-proof' : $digest;
+  }
+
+  /**
+   * Drops a replacement that the production coordinator does not own.
+   */
+  public function discardReplacement(): void {
+    if ($this->replacement !== NULL) {
+      $this->replacement->rollBack();
+      $this->replacement = NULL;
+    }
+  }
+
+  /**
+   * Deliberately violates the transaction ownership contract on real SQL.
+   */
+  private function replaceTransaction(Connection $connection): void {
+    $connection->commitAll();
+    $this->replacement = $connection->startTransaction();
   }
 
   /**

@@ -170,6 +170,9 @@ final class RollbackService {
     $this->authority->assertLockedRollback($domain, $generation);
     [$operations, $copiers, $targets, $changes, $effective] = $this->preflight($domain, $generation);
     $disposition = $this->planDisposition($domain, $generation);
+    if ($disposition !== NULL) {
+      $this->authority->assertLockedRollback($domain, $generation);
+    }
     if (!$expected && ($operations !== [] || ($disposition['plan']->pendingCount ?? 0) > 0)) {
       throw new MigrateRefusal('rollback_generation_required');
     }

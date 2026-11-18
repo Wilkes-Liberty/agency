@@ -8,6 +8,7 @@ use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\IntegrityConstraintViolationException;
+use Drupal\Core\Database\Transaction;
 use Drupal\Core\Session\AccountProxyInterface;
 
 /**
@@ -18,9 +19,9 @@ final class AuthorityRegister {
   private const STATES = ['legacy', 'shadow', 'agency', 'removed'];
 
   /**
-   * Domains currently inside this instance's fenced callback.
+   * Root lifetime checks for this instance's currently fenced domains.
    *
-   * @var array<string, bool>
+   * @var array<string, \Closure(): bool>
    */
   private array $fencedDomains = [];
 
@@ -162,9 +163,7 @@ final class AuthorityRegister {
       TransactionBoundary::commit($transaction);
     }
     catch (\Throwable $exception) {
-      if ($this->database->inTransaction()) {
-        $transaction->rollBack();
-      }
+      $this->rollbackActive($transaction);
       throw $exception;
     }
   }
@@ -270,7 +269,8 @@ final class AuthorityRegister {
    * Asserts the existing fenced cutover still owns the shadow generation.
    */
   public function assertLockedCutover(string $domain, int $prospectiveGeneration): void {
-    if (!isset($this->fencedDomains[$domain]) || !$this->database->inTransaction() || $prospectiveGeneration < 2) {
+    $this->assertActiveFence($domain, FALSE);
+    if ($prospectiveGeneration < 2) {
       throw new MigrateRefusal('rollback_unqualified');
     }
     $row = $this->lockOperationAuthority($this->database, $domain);
@@ -285,12 +285,23 @@ final class AuthorityRegister {
    * @internal
    */
   public function assertLockedRollback(string $domain, int $generation): void {
-    if (!isset($this->fencedDomains[$domain])) {
-      throw new MigrateRefusal('rollback_unqualified');
-    }
+    $this->assertActiveFence($domain, TRUE);
     $row = $this->lockOperationAuthority($this->database, $domain);
     if ($row !== ['state' => 'agency', 'version' => $generation]) {
       throw new MigrateRefusal('rollback_stale_generation');
+    }
+  }
+
+  /**
+   * Checks both SQL participation and the original root lifetime.
+   */
+  private function assertActiveFence(string $domain, bool $rollback): void {
+    $active = $this->fencedDomains[$domain] ?? NULL;
+    if ($active === NULL) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    if (!$active() || !$this->database->inTransaction()) {
+      throw new MigrateRefusal($rollback ? 'rollback_commit_uncertain' : 'rollback_unqualified');
     }
   }
 
@@ -380,6 +391,8 @@ final class AuthorityRegister {
     $root = !$this->database->inTransaction();
     $transaction = $this->database->startTransaction();
     $owned_fence = FALSE;
+    $root_ended = FALSE;
+    $committing = FALSE;
     try {
       $locked = $this->row($domain, TRUE);
       $from = $this->validateTransition($domain, $to, $rollback, $locked['state'] ?? NULL);
@@ -387,17 +400,32 @@ final class AuthorityRegister {
         throw new MigrateRefusal('writer_transaction_owned');
       }
       if ($this->requiresFence($from, $to) && !isset($this->fencedDomains[$domain])) {
+        $this->database->transactionManager()->addPostTransactionCallback(static function (bool $success) use (&$root_ended): void {
+          $root_ended = TRUE;
+        });
         $this->writerFence->acquire($domain);
-        $this->fencedDomains[$domain] = TRUE;
+        $this->fencedDomains[$domain] = static function () use (&$root_ended): bool {
+          return !$root_ended;
+        };
         $owned_fence = TRUE;
+        $this->assertActiveFence($domain, $rollback);
       }
       $result = $work();
+      if ($owned_fence) {
+        $this->assertActiveFence($domain, $rollback);
+      }
+      $committing = TRUE;
       TransactionBoundary::commit($transaction);
       return $result;
     }
     catch (\Throwable $exception) {
-      if ($this->database->inTransaction()) {
-        $transaction?->rollBack();
+      if (!$root_ended) {
+        $this->rollbackActive($transaction);
+      }
+      elseif (!$committing) {
+        // A participant may have committed abruptly. Never use the obsolete
+        // transaction handle to act on a replacement connection transaction.
+        throw new MigrateRefusal($rollback ? 'rollback_commit_uncertain' : 'rollback_unqualified');
       }
       throw $exception;
     }
@@ -405,6 +433,15 @@ final class AuthorityRegister {
       if ($owned_fence) {
         unset($this->fencedDomains[$domain]);
       }
+    }
+  }
+
+  /**
+   * Rolls back the owned transaction while it is still active.
+   */
+  private function rollbackActive(?Transaction $transaction): void {
+    if ($this->database->inTransaction()) {
+      $transaction?->rollBack();
     }
   }
 
