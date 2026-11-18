@@ -335,13 +335,33 @@ final class MigrateRollbackDispositionTest extends MigrateKernelTestBase {
   }
 
   /**
-   * MySQL DDL can commit without notifying Drupal's transaction manager.
+   * Native DDL exposes MySQL implicit commits and PostgreSQL rollback safety.
    */
-  public function testMysqlImplicitCommitCannotSealRollback(): void {
-    if ($this->container->get('database')->driver() !== 'mysql') {
-      $this->markTestSkipped('MySQL implicitly commits this DDL statement.');
+  public function testNativeDdlTransactionBoundary(): void {
+    $database = $this->container->get('database');
+    if ($database->driver() === 'mysql') {
+      $this->assertUnsealedEscapedRollback('native_ddl');
+      return;
     }
-    $this->assertUnsealedEscapedRollback('native_ddl');
+
+    // PostgreSQL keeps this DDL transactional. A subsequent provider failure
+    // must roll back the schema change together with entity and grant effects.
+    $this->assertSame('pgsql', $database->driver());
+    $generation = $this->prepare();
+    $this->resource($generation, 1);
+    $this->container->get('agency_migrate.post_cutover_writer')->create(self::DOMAIN, $generation, $this->container->get('uuid')->generate(), 'agency_migrate_agency_item', [
+      'title' => 'Transactional DDL rollback control',
+    ]);
+    $tables = [
+      self::AUTHORITY, self::BINDING, self::RESOURCE, self::HOST_RECEIPT, self::RECEIPT,
+      'agency_migrate_legacy_item', 'agency_migrate_rollback_record', 'agency_migrate_write_log', 'agency_migrate_outbox',
+    ];
+    $before = $this->committedRows($tables);
+    $this->provider()->fault = 'native_ddl_throw';
+    $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), 'rollback_failed');
+    $this->assertSame($before, $this->committedRows($tables));
+    $this->assertFalse($database->schema()->fieldExists(self::RESOURCE, 'disposition_ddl_probe'));
+    $this->assertFalse($database->inTransaction());
   }
 
   /**

@@ -134,8 +134,11 @@ final class LocalDisposition implements RollbackDispositionInterface {
     if ($this->fault === 'native_apply') {
       $this->client($connection)->commit();
     }
-    if ($this->fault === 'native_ddl') {
+    if (in_array($this->fault, ['native_ddl', 'native_ddl_throw'], TRUE)) {
       $this->client($connection)->exec($connection->prefixTables('ALTER TABLE {agency_migrate_test_resource} ADD COLUMN disposition_ddl_probe INT'));
+      if ($this->fault === 'native_ddl_throw') {
+        throw new \LogicException('Synthetic failure after transactional DDL.');
+      }
     }
     if (str_starts_with($this->fault, 'child_rollback')) {
       $this->retainChild($connection, $plan->domain, $plan->generation);
