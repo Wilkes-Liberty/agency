@@ -11,6 +11,7 @@ use Drupal\agency_migrate\RollbackDispositionRegistry;
 use Drupal\agency_migrate\RollbackService;
 use Drupal\agency_migrate_disposition_test\LocalDisposition;
 use Drupal\agency_migrate_rollback_test\RollbackTestStorage;
+use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\Database;
 use Drupal\Core\DependencyInjection\ContainerBuilder;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -260,6 +261,48 @@ final class MigrateRollbackDispositionTest extends MigrateKernelTestBase {
   }
 
   /**
+   * Unqualified engines are refused before starting authority transactions.
+   */
+  public function testUnsupportedDriverCannotOpenAuthorityTransaction(): void {
+    $database = $this->createMock(Connection::class);
+    $database->method('driver')->willReturn('sqlite');
+    $database->expects(self::never())->method('startTransaction');
+    $authority = new AuthorityRegister(
+      $this->container->get('current_user'),
+      $this->container->get('agency_migrate.outbox'),
+      $database,
+      $this->container->get('datetime.time'),
+      $this->container->get('agency_migrate.host_writer_fence'),
+      $this->container->get('agency_migrate.rollback_dispositions'),
+    );
+    $this->assertRefused(fn () => $authority->requireDisposition(self::DOMAIN, self::PROVIDER), 'authority_storage_unavailable');
+    $this->assertRefused(fn () => $authority->transition(self::DOMAIN, 'shadow', 'Prepare sample'), 'authority_storage_unavailable');
+  }
+
+  /**
+   * Authority owns a distinct scope inside a caller's named savepoint.
+   */
+  public function testLegacyTransitionDoesNotCollideWithCallerSavepoint(): void {
+    $authority = $this->authority();
+    $authority->register(self::DOMAIN, 'Register sample');
+    $database = $this->container->get('database');
+    $outer = $database->startTransaction();
+    $caller = $database->startTransaction('savepoint_2');
+    try {
+      $authority->transition(self::DOMAIN, 'shadow', 'Prepare sample');
+      $this->assertSame('shadow', $authority->get(self::DOMAIN));
+      $this->assertTrue($database->transactionManager()->has('savepoint_2'));
+    }
+    finally {
+      $caller->rollBack();
+      $outer->rollBack();
+      unset($caller, $outer);
+    }
+    $this->assertSame('legacy', $authority->get(self::DOMAIN));
+    $this->assertFalse($database->inTransaction());
+  }
+
+  /**
    * A native client commit cannot stamp a cutover binding or advance authority.
    */
   public function testNativeCommitCannotBindCutover(): void {
@@ -370,8 +413,7 @@ final class MigrateRollbackDispositionTest extends MigrateKernelTestBase {
     catch (\Throwable $exception) {
       $refusal = $exception;
     }
-    $this->provider()->disposeChild();
-
+    $this->assertTrue($this->provider()->disposeChild());
     $this->assertSame($before, $this->committedRows($tables));
     $this->assertFalse($this->container->get('database')->inTransaction());
     $this->assertInstanceOf(MigrateRefusal::class, $refusal);

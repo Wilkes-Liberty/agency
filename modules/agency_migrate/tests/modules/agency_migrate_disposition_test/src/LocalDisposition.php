@@ -161,10 +161,12 @@ final class LocalDisposition implements RollbackDispositionInterface {
   }
 
   /**
-   * Releases the retained fixture handle without making it undo any effects.
+   * Releases the fixture handle and reports whether the provider retained it.
    */
-  public function disposeChild(): void {
+  public function disposeChild(): bool {
+    $retained = $this->child !== NULL;
     $this->child = NULL;
+    return $retained;
   }
 
   /**

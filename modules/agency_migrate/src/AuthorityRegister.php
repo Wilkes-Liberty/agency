@@ -141,6 +141,7 @@ final class AuthorityRegister {
     if (!RollbackDispositionRegistry::validProviderId($provider_id)) {
       throw new MigrateRefusal('rollback_unqualified');
     }
+    $this->assertStorage();
     if ($this->database->inTransaction()) {
       throw new MigrateRefusal('writer_transaction_owned');
     }
@@ -413,7 +414,7 @@ final class AuthorityRegister {
       throw new MigrateRefusal('rollback_unqualified');
     }
     $root = !$this->database->inTransaction();
-    $transaction = $this->database->startTransaction();
+    $transaction = $this->database->startTransaction($root ? '' : 'agency_fence_' . bin2hex(random_bytes(8)));
     $client = $this->database->getClientConnection();
     $stack = array_keys(TransactionBoundary::stack($manager));
     $owned_fence = FALSE;
