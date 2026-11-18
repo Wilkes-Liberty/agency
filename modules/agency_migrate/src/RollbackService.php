@@ -78,7 +78,8 @@ final class RollbackService {
     // Only registered domain names may enter evidence. Never copy an unknown
     // input, operator reason, backup path or record payload into the intent.
     try {
-      if ($this->authority->get($domain) !== NULL) {
+      if (preg_match('/^[a-z][a-z0-9_]{0,62}$/D', $domain)
+        && $this->authority->get($domain) !== NULL) {
         $metadata['domain'] = $domain;
       }
     }
