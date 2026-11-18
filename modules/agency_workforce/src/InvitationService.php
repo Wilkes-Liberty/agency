@@ -69,6 +69,7 @@ final class InvitationService {
         throw new InvitationRefusal('storage_conflict');
       }
       $this->journal->record($id, $scope, $record, 'invitation_issued');
+      $this->journal->recordStage($id, 'invite.issued', $record);
       return ['status' => 'completed', 'receipt_id' => $id, 'bearer' => $bearer, 'expires' => $record->expires];
     });
   }
@@ -118,19 +119,48 @@ final class InvitationService {
       if ($this->provisioner->accountExists($record->contact)) {
         throw new InvitationRefusal('collision');
       }
+      $this->journal->recordStage($id, 'invite.claimed', $record);
       $binding = $this->provisioner->provision($record->contact, $record->classification, $language, $preferredName);
       if (!$this->validBinding($binding)
         || !$this->provisioner->accountExists($record->contact)
         || !$this->provisioner->verifyBinding($binding, $record->contact, $record->classification, $language)) {
         throw new InvitationRefusal('storage_conflict');
       }
+      $this->journal->recordStage($this->uuid->generate(), 'invite.provisioned', $record);
       if ($this->store->consume($record) !== 1
         || $this->store->lookupDigest($digest, TRUE) !== NULL) {
         throw new InvitationRefusal('storage_conflict');
       }
+      $this->journal->recordStage($this->uuid->generate(), 'invite.consumed', $record);
       $this->journal->record($id, $scope, $record, 'invitation_accepted', $binding);
       return ['status' => 'completed', 'receipt_id' => $id, 'binding' => $binding];
     });
+  }
+
+  /**
+   * Accepts an invitation with an opaque application refusal.
+   *
+   * Callers choosing this boundary delegate invitation refusal evidence to
+   * Agency. The native accept() method leaves that evidence with its host.
+   */
+  public function acceptForApplication(string $bearer, string $preferredName = ''): array {
+    try {
+      return $this->accept($bearer, $preferredName);
+    }
+    catch (InvitationRefusal) {
+      // A typed refusal either preceded business work or followed confirmed
+      // rollback. An ambient transaction cannot durably record this intent.
+      if ($this->database->inTransaction()) {
+        return ['status' => 'unresolved'];
+      }
+      try {
+        $this->journal->recordRefusal($this->uuid->generate());
+      }
+      catch (\Throwable) {
+        return ['status' => 'unresolved'];
+      }
+      return ['outcome' => 'refused', 'reason' => 'not_found'];
+    }
   }
 
   /**
@@ -218,7 +248,7 @@ final class InvitationService {
       finally {
         unset($transaction);
       }
-      if ($committing || $rollbackFailed) {
+      if ($committing || $rollbackFailed || $this->database->inTransaction()) {
         return ['status' => 'uncertain', 'receipt_id' => $id];
       }
       throw $exception instanceof InvitationRefusal ? $exception : new InvitationRefusal('failed');

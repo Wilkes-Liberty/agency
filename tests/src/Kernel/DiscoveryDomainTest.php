@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Drupal\Tests\agency\Kernel;
 
 use Drupal\audit_chain\AuditChainLoggerInterface;
+use Drupal\agency_staff\Entity\InternalRecord;
 use Drupal\agency_staff\EvidenceOutbox;
 use Drupal\agency_staff\Storage\TransactionBoundary;
 use Drupal\agency_staff\ObservationRecorder;
 use Psr\Log\LoggerInterface;
+use Drupal\Core\Database\Query\SelectInterface;
 use Drupal\Core\State\StateInterface;
 use Drupal\Component\Datetime\TimeInterface;
 use Drupal\encrypt\EncryptServiceInterface;
@@ -119,7 +121,31 @@ final class DiscoveryDomainTest extends KernelTestBase {
   public function testJourneyAndSummaryDenial(): void {
     $commands = $this->container->get('agency_staff.commands');
     $reads = $this->container->get('agency_staff.reads');
+    $database = $this->container->get('database');
+    $accounts = $database->select('users_field_data', 'u')->fields('u')->orderBy('uid')->orderBy('langcode');
+    $roles = $database->select('user__roles', 'r')->fields('r')->orderBy('entity_id')->orderBy('langcode')->orderBy('delta');
+    $snapshot = static function (SelectInterface $query): array {
+      $rows = [];
+      $statement = $query->execute();
+      while ($row = $statement->fetchAssoc()) {
+        $rows[] = $row;
+      }
+      return $rows;
+    };
+    $accountSnapshot = $snapshot($accounts);
+    $roleSnapshot = $snapshot($roles);
+    $this->assertNotEmpty($accountSnapshot);
+    $this->assertNotEmpty($roleSnapshot);
+
     [$id, $version] = $this->accepted();
+    $grant = $this->container->get('agency_staff.store')->find('agency_entitlement', ['relationship_uuid' => $id]);
+    $this->assertNotNull($grant);
+    $entitlements = $this->container->get('entity_type.manager')->getStorage('agency_entitlement');
+    $persistedGrant = $entitlements->loadUnchanged($grant->id());
+    $this->assertInstanceOf(InternalRecord::class, $persistedGrant);
+    $this->assertSame('active', $persistedGrant->scalar('status'));
+    $this->assertSame($accountSnapshot, $snapshot($accounts));
+    $this->assertSame($roleSnapshot, $snapshot($roles));
     $this->assertSame('discovery', $reads->forActor($id)['workspace']['kind']);
     $reply = $commands->respond($id, ['choice' => 'not_now', 'note' => 'Synthetic note.'], 'reply-intent', $version);
     $this->assertSame('committed', $reply['outcome']);
