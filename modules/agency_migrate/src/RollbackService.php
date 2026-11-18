@@ -90,7 +90,7 @@ final class RollbackService {
       }
       if ($exception instanceof MigrateRefusal) {
         throw match ($exception->reason) {
-          'rollback_unqualified', 'rollback_conflict', 'rollback_stale_generation', 'rollback_generation_required',
+          'rollback_unqualified', 'rollback_conflict', 'rollback_ambiguous', 'rollback_stale_generation', 'rollback_generation_required',
           'invalid_transition', 'writer_fence_unavailable' => $exception,
           'history_conflict', 'history_drift' => new MigrateRefusal('rollback_conflict'),
           default => new MigrateRefusal('rollback_failed'),
