@@ -66,6 +66,24 @@ final class AuthorityRegister {
   }
 
   /**
+   * Locks current authority while the operation writer checks for a receipt.
+   *
+   * @return array{state: string, version: int}|null
+   *   The locked state and generation, or NULL for an unregistered domain.
+   */
+  public function lockOperationAuthority(Connection $connection, string $domain): ?array {
+    $this->assertDomain($domain);
+    if ($connection !== $this->database) {
+      throw new MigrateRefusal('writer_connection_mismatch');
+    }
+    if (!$connection->inTransaction()) {
+      throw new MigrateRefusal('writer_transaction_required');
+    }
+    $row = $this->row($domain, TRUE);
+    return $row === NULL ? NULL : ['state' => $row['state'], 'version' => $row['version']];
+  }
+
+  /**
    * All recorded states and versions; this does not certify host coverage.
    *
    * @return array<string, array<string, mixed>>

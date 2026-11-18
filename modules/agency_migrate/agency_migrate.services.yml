@@ -1,4 +1,12 @@
 services:
+  agency_migrate.post_cutover_writer:
+    class: Drupal\agency_migrate\PostCutoverWriter
+    arguments: ['@database', '@agency_migrate.authority', '@entity_type.manager', '@plugin.manager.agency_migrate.copier', '@agency_migrate.operation_journal_qualification', '@agency_migrate.identity_writer', '@agency_migrate.outbox', '@datetime.time']
+  agency_migrate.operation_journal_qualification:
+    class: Drupal\agency_migrate\OperationJournalQualification
+    arguments: ['@agency_migrate.operation_journal_policy']
+  agency_migrate.operation_journal_policy:
+    class: Drupal\agency_migrate\UnavailableOperationJournalPolicy
   plugin.manager.agency_migrate.copier:
     class: Drupal\agency_migrate\Plugin\CopierManager
     parent: default_plugin_manager

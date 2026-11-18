@@ -14,9 +14,9 @@ final class MigrateRefusal extends \RuntimeException {
    */
   public readonly string $reason;
 
-  public function __construct(string $reason) {
+  public function __construct(string $reason, ?self $previous = NULL) {
     $this->reason = $reason;
-    parent::__construct($reason);
+    parent::__construct($reason, 0, $previous);
   }
 
 }

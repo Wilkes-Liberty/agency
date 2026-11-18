@@ -1,0 +1,58 @@
+<?php
+
+/**
+ * @file
+ * Explicitly selects qualified SQL storage only in the synthetic test host.
+ */
+
+use Drupal\agency_migrate_operation_test\OperationTestStorage;
+use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\Sql\SqlContentEntityStorage;
+
+/**
+ * Implements hook_entity_type_alter().
+ */
+function agency_migrate_operation_test_entity_type_alter(array &$entity_types): void {
+  $handler = \Drupal::state()->get('agency_operation.unsupported_storage')
+    ? SqlContentEntityStorage::class
+    : OperationTestStorage::class;
+  $entity_types['agency_migrate_agency_item']->setHandlerClass('storage', $handler);
+  if (\Drupal::state()->get('agency_operation.bundled_target')) {
+    $definition = $entity_types['agency_migrate_agency_item'];
+    $definition->set('entity_keys', ['bundle' => 'journal_bundle'] + $definition->getKeys());
+  }
+}
+
+/**
+ * Implements hook_entity_bundle_info().
+ */
+function agency_migrate_operation_test_entity_bundle_info(): array {
+  return \Drupal::state()->get('agency_operation.bundled_target') ? [
+    'agency_migrate_agency_item' => [
+      'journal_fixture' => ['label' => 'Qualified journal fixture'],
+      'journal_other' => ['label' => 'Other journal fixture'],
+    ],
+  ] : [];
+}
+
+/**
+ * Implements hook_entity_presave().
+ */
+function agency_migrate_operation_test_entity_presave(EntityInterface $entity): void {
+  if ($entity instanceof ContentEntityInterface && $entity->getEntityTypeId() === 'agency_migrate_agency_item'
+    && \Drupal::state()->get('agency_operation.change_bundle')) {
+    $entity->set('journal_bundle', 'journal_other');
+  }
+}
+
+/**
+ * Implements hook_entity_delete().
+ */
+function agency_migrate_operation_test_entity_delete(EntityInterface $entity): void {
+  $state = \Drupal::state();
+  $case = $state->get('agency_operation.delete_policy_case');
+  if ($entity->getEntityTypeId() === 'agency_migrate_agency_item' && is_string($case)) {
+    $state->set('agency_operation.policy_case', $case);
+  }
+}
