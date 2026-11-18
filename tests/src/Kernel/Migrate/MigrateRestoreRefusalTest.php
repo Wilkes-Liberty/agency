@@ -34,6 +34,12 @@ final class MigrateRestoreRefusalTest extends MigrateKernelTestBase {
     $before = $authority->status();
     $reason = 'private-operator-reason-must-not-be-logged';
     $generation = $before['synthetic']['version'];
+    $domain = match ($entry) {
+      'uppercase domain' => 'SYNTHETIC',
+      'accent domain' => 'synthétic',
+      'status' => '',
+      default => 'synthetic',
+    };
     $database = $this->container->get('database');
     if ($entry === 'unavailable authority') {
       $database->schema()->renameTable('agency_migrate_authority_state', 'agency_migrate_authority_unavailable');
@@ -42,7 +48,7 @@ final class MigrateRestoreRefusalTest extends MigrateKernelTestBase {
       fn () => $entry === 'service'
         ? $this->container->get('agency_migrate.rollback')->rollback('synthetic', $reason, $execute, $generation, TRUE)
         : $this->container->get('agency_migrate.commands')->authority([
-          'domain' => $entry === 'status' ? '' : 'synthetic',
+          'domain' => $domain,
           'set' => $entry === 'status' ? '' : ($entry === 'transition' ? 'removed' : 'legacy'),
           'register' => $entry === 'register',
           'rollback' => TRUE,
@@ -67,11 +73,12 @@ final class MigrateRestoreRefusalTest extends MigrateKernelTestBase {
     $keys = array_keys($metadata);
     sort($keys);
     $expected_keys = ['effective_at', 'event_id', 'reason'];
-    if (!in_array($entry, ['status', 'unavailable authority'], TRUE)) {
+    $unverified = in_array($entry, ['status', 'unavailable authority', 'uppercase domain', 'accent domain'], TRUE);
+    if (!$unverified) {
       array_unshift($expected_keys, 'domain');
     }
     $this->assertSame($expected_keys, $keys);
-    if (!in_array($entry, ['status', 'unavailable authority'], TRUE)) {
+    if (!$unverified) {
       $this->assertSame('synthetic', $metadata['domain']);
     }
     $this->assertSame('restore_refused', $metadata['reason']);
@@ -139,6 +146,8 @@ final class MigrateRestoreRefusalTest extends MigrateKernelTestBase {
       'command register' => ['register', TRUE],
       'command transition' => ['transition', TRUE],
       'unavailable authority' => ['unavailable authority', TRUE],
+      'uppercase domain' => ['uppercase domain', TRUE],
+      'accent domain' => ['accent domain', TRUE],
     ];
   }
 
