@@ -87,6 +87,7 @@ final class RecoveryUninstallTest extends KernelTestBase {
       'migration evidence' => ['agency_migrate', 'agency_migrate_outbox'],
       'migration journal' => ['agency_migrate', 'agency_migrate_write_log'],
       'rollback receipt' => ['agency_migrate', 'agency_migrate_rollback_receipt'],
+      'orphan disposition binding' => ['agency_migrate', 'agency_migrate_disposition_binding'],
       'rollback provenance' => ['agency_migrate', 'agency_migrate_rollback_record'],
       'authority event' => ['agency_migrate', 'agency_migrate_authority_event'],
       'authority state' => ['agency_migrate', 'agency_migrate_authority_state'],
