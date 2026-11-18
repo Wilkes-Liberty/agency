@@ -31,7 +31,7 @@ final class MigrateAuthorityTest extends MigrateKernelTestBase {
     $authority->transition('synthetic', 'agency', 'cutover');
     $this->assertSame('agency', $authority->get('synthetic'));
     $this->assertRefused(fn () => $authority->transition('synthetic', 'legacy', 'missing rollback flag'), 'invalid_transition');
-    $authority->transition('synthetic', 'legacy', 'rehearsal rollback', TRUE);
+    $this->container->get('agency_migrate.rollback')->rollback('synthetic', 'rehearsal rollback', TRUE);
     $this->assertSame('legacy', $authority->get('synthetic'));
     $authority->transition('synthetic', 'shadow', 'shadow again');
     $authority->transition('synthetic', 'agency', 'cutover again');

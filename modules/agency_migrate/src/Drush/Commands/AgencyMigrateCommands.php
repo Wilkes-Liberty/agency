@@ -112,6 +112,7 @@ final class AgencyMigrateCommands {
    * @option execute Perform the authority write.
    * @option register Register a new domain at legacy. Requires --execute.
    * @option rollback Use the agency-to-legacy rollback edge with --set=legacy.
+   * @option generation Expected Agency generation for an executing replay.
    * @usage agency:migrate:authority
    * @usage agency:migrate:authority --domain=workforce --set=shadow --reason=rehearsal --execute
    */
@@ -123,12 +124,21 @@ final class AgencyMigrateCommands {
       'execute' => FALSE,
       'register' => FALSE,
       'rollback' => FALSE,
+      'generation' => '',
     ];
     $domain = (string) $options['domain'];
     $set = (string) $options['set'];
     $execute = $this->flag($options['execute']);
     if ($domain === '' && $set === '') {
       return $this->emit(['domains' => $this->authority->status()]);
+    }
+    if ($set === 'legacy' && $this->flag($options['rollback']) && !$this->flag($options['register'])) {
+      $supplied_generation = (string) $options['generation'];
+      $generation = $supplied_generation === '' ? NULL : filter_var($supplied_generation, FILTER_VALIDATE_INT);
+      if ($generation === FALSE) {
+        throw new MigrateRefusal('rollback_stale_generation');
+      }
+      return $this->emit($this->rollback->rollback($domain, (string) $options['reason'], $execute, $generation));
     }
     if (!$execute) {
       return $this->emit([
@@ -141,9 +151,6 @@ final class AgencyMigrateCommands {
       $this->authority->register($domain, (string) $options['reason']);
     }
     elseif ($set !== '') {
-      if ($set === 'legacy' && $this->flag($options['rollback'])) {
-        return $this->emit($this->rollback->rollback($domain, (string) $options['reason'], TRUE));
-      }
       $this->authority->transition($domain, $set, (string) $options['reason'], $this->flag($options['rollback']));
     }
     return $this->emit([

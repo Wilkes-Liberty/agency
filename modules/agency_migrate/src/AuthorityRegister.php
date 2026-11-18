@@ -128,22 +128,65 @@ final class AuthorityRegister {
   }
 
   /**
-   * Advances one step, or rolls back agency → legacy under host exclusion.
+   * Advances one step in the normal authority lifecycle.
    */
   public function transition(string $domain, string $to, string $reason, bool $rollback = FALSE): void {
-    $this->withTransitionFence($domain, $to, $reason, $rollback, function () use ($domain, $to, $reason, $rollback): void {
+    if ($rollback) {
+      $this->assertTransition($domain, $to, $reason, TRUE);
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    $this->withTransitionFence($domain, $to, $reason, FALSE, function () use ($domain, $to, $reason): void {
       $row = $this->row($domain, TRUE);
       if ($row === NULL) {
         throw new MigrateRefusal('invalid_transition');
       }
-      $values = $this->metadata($to, $row['version'] + 1, $reason);
-      $updated = $this->database->update('agency_migrate_authority_state')->fields($values)
-        ->condition('domain', $domain)->condition('version', $row['version'])->execute();
-      if ($updated !== 1) {
-        throw new MigrateRefusal('invalid_transition');
-      }
-      $this->recordEvent($domain, $row['state'], $values, $rollback);
+      $this->advanceLocked($domain, $row['state'], $to, $row['version'], $reason, FALSE);
     });
+  }
+
+  /**
+   * Requires current generation and actual host writer exclusion.
+   *
+   * @internal
+   */
+  public function assertLockedRollback(string $domain, int $generation): void {
+    if (!isset($this->fencedDomains[$domain])) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    $row = $this->lockOperationAuthority($this->database, $domain);
+    if ($row !== ['state' => 'agency', 'version' => $generation]) {
+      throw new MigrateRefusal('rollback_stale_generation');
+    }
+  }
+
+  /**
+   * Completes the verified handover in its original fenced SQL transaction.
+   *
+   * @internal
+   */
+  public function completeVerifiedRollback(string $domain, string $reason, int $generation): void {
+    $this->assertPermission('administer agency migrate authority');
+    $this->assertReason($reason);
+    $this->assertLockedRollback($domain, $generation);
+    $receipt = $this->database->select('agency_migrate_rollback_receipt', 'r')->fields('r', ['reason_hash'])
+      ->condition('domain', $domain)->condition('generation', $generation)->execute()->fetchField();
+    if ($receipt !== hash('sha256', trim($reason))) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    $this->advanceLocked($domain, 'agency', 'legacy', $generation, $reason, TRUE);
+  }
+
+  /**
+   * Writes the generation and its evidence in the caller's locked transaction.
+   */
+  private function advanceLocked(string $domain, string $from, string $to, int $generation, string $reason, bool $rollback): void {
+    $values = $this->metadata($to, $generation + 1, $reason);
+    $updated = $this->database->update('agency_migrate_authority_state')->fields($values)
+      ->condition('domain', $domain)->condition('version', $generation)->condition('state', $from)->execute();
+    if ($updated !== 1) {
+      throw new MigrateRefusal('invalid_transition');
+    }
+    $this->recordEvent($domain, $from, $values, $rollback);
   }
 
   /**
@@ -197,7 +240,9 @@ final class AuthorityRegister {
       return $result;
     }
     catch (\Throwable $exception) {
-      $transaction?->rollBack();
+      if ($this->database->inTransaction()) {
+        $transaction?->rollBack();
+      }
       throw $exception;
     }
     finally {
