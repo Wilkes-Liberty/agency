@@ -459,7 +459,8 @@ final class Reconciler {
           throw new MigrateRefusal('rollback_conflict');
         }
       }
-      if ($applied || !isset($changes[$id])) {
+      // Unchanged effective histories already exist on both sides.
+      if ($applied || !isset($changes[$id]) || $changes[$id]['before'] === $changes[$id]['after']) {
         foreach ($principals as $principal) {
           if ($copier->accessDecision($principal, 'source', $id) !== $copier->accessDecision($principal, 'target', $id)) {
             throw new MigrateRefusal('rollback_conflict');

@@ -166,6 +166,10 @@ final class RollbackReplayStore {
    *   Verified latest provenance per copier and integer identity.
    */
   public function effectiveDomain(string $domain): array {
+    $marked = $this->database->select('agency_migrate_write_log', 'w')->distinct()
+      ->fields('w', ['authority_generation'])->condition('domain', $domain)
+      ->isNotNull('replayed')->execute()->fetchCol();
+    $unsealed = array_fill_keys(array_map('intval', $marked), TRUE);
     $records = $this->database->select('agency_migrate_rollback_record', 'r')->fields('r')
       ->condition('domain', $domain)->orderBy('generation')->orderBy('copier')->orderBy('entity_id')->execute();
     $by_generation = [];
@@ -187,6 +191,7 @@ final class RollbackReplayStore {
         throw new MigrateRefusal('rollback_unqualified');
       }
       $operations = $this->sealedOperations($domain, $generation, $receipt);
+      unset($unsealed[$generation]);
       $chains = [];
       foreach ($operations as $wid => $operation) {
         $type = $operation['entity_type'];
@@ -213,7 +218,7 @@ final class RollbackReplayStore {
         }
       }
     }
-    if ($by_generation !== []) {
+    if ($by_generation !== [] || $unsealed !== []) {
       throw new MigrateRefusal('rollback_unqualified');
     }
     return $effective;

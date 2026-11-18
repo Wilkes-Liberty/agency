@@ -366,6 +366,9 @@ jobs:
             $required = array_merge($required, [
               "testOrderedReplayPreservesHistoryProvenanceAndReceipt",
               "testEffectiveProvenanceSupportsSecondRollback",
+              "testPriorEffectiveAccessMismatchRefusesBeforeLegacyWrites",
+              "testReconciliationRefusesMissingSealForReplayedGeneration with data set \"full\"",
+              "testReconciliationRefusesMissingSealForReplayedGeneration with data set \"sample\"",
               "testReconciliationRefusesAlteredEffectiveProvenance",
               "testZeroJournalRollbackAppliesQualifiedAccessPolicy with data set \"first generation\"",
               "testZeroJournalRollbackAppliesQualifiedAccessPolicy with data set \"after effective replay\"",
