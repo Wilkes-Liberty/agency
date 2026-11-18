@@ -17,7 +17,11 @@ function agency_migrate_rollback_test_entity_type_alter(array &$entity_types): v
   if (!\Drupal::state()->get('agency_rollback.second_pair')) {
     return;
   }
-  foreach (['agency_rollback_other_source' => 'agency_migrate_legacy_item', 'agency_rollback_other_target' => 'agency_migrate_agency_item'] as $id => $original) {
+  $other_types = [
+    'agency_rollback_other_source' => 'agency_migrate_legacy_item',
+    'agency_rollback_other_target' => 'agency_migrate_agency_item',
+  ];
+  foreach ($other_types as $id => $original) {
     $type = clone $entity_types[$original];
     $type->set('id', $id);
     $type->set('base_table', $id);

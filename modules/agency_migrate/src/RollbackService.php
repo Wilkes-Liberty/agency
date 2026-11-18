@@ -14,6 +14,11 @@ use Drupal\Core\Session\AccountProxyInterface;
  */
 final class RollbackService {
 
+  /**
+   * The attempt accepted by the authority coordinator in this request.
+   */
+  private ?RollbackAttempt $activeAttempt = NULL;
+
   public function __construct(
     private readonly CopierManager $copiers,
     private readonly RollbackReplayStore $writes,
@@ -59,48 +64,66 @@ final class RollbackService {
       return $operations === [] && $expected_generation === NULL ? $preview : $preview + ['generation' => $generation];
     }
 
-    $effects = [];
-    $targets = [];
-    $ready_to_commit = FALSE;
+    $attempt = new RollbackAttempt();
+    $this->activeAttempt = $attempt;
     try {
-      $receipt = $this->authority->withTransitionFence($domain, 'legacy', $reason, TRUE, function () use ($domain, $reason, $generation, $expected_generation, &$effects, &$targets, &$ready_to_commit): array {
-        $this->authority->assertLockedRollback($domain, $generation);
-        [$operations, $copiers, $targets, $changes] = $this->preflight($domain, $generation);
-        if ($operations !== []) {
-          if ($expected_generation === NULL) {
-            throw new MigrateRefusal('rollback_generation_required');
-          }
-          $effects = $operations;
-          $this->planner->replay($targets, $operations);
-          $this->planner->verifyReplayed($copiers, $changes);
-        }
-        $receipt = $this->writes->seal($domain, $generation, $reason, $operations, $changes);
-        $this->authority->completeVerifiedRollback($domain, $reason, $generation);
-        $ready_to_commit = TRUE;
-        return $this->publicReceipt($receipt, $expected_generation !== NULL);
-      });
+      $receipt = $this->authority->runQualifiedRollback($this, $domain, $reason, $generation, $expected_generation !== NULL, $attempt);
       if ($this->database->inTransaction()) {
         throw new MigrateRefusal('rollback_commit_uncertain');
       }
-      return $receipt;
+      return $this->publicReceipt($receipt, $expected_generation !== NULL);
     }
     catch (\Throwable $exception) {
       try {
-        $this->planner->clearLegacyCaches($targets, $effects);
+        $this->planner->clearLegacyCaches($attempt->targets, $attempt->effects);
       }
       catch (\Throwable) {
         // Preserve the sanitized failure or uncertain-commit result below.
       }
-      if ($ready_to_commit) {
+      if ($attempt->readyToCommit) {
         throw new MigrateRefusal('rollback_commit_uncertain');
       }
       // A second executor can wait behind the first and find legacy at recheck.
-      if ($expected_generation !== NULL && $effects === [] && $exception instanceof MigrateRefusal
+      if ($expected_generation !== NULL && $attempt->effects === [] && $exception instanceof MigrateRefusal
         && $exception->reason === 'invalid_transition' && $this->authority->get($domain) === 'legacy') {
         return $this->existingReceipt($domain, $reason, $expected_generation);
       }
-      throw $exception instanceof MigrateRefusal ? $exception : new MigrateRefusal('rollback_failed');
+      if ($exception instanceof MigrateRefusal) {
+        throw match ($exception->reason) {
+          'rollback_unqualified', 'rollback_conflict', 'rollback_stale_generation', 'rollback_generation_required',
+          'invalid_transition', 'writer_fence_unavailable' => $exception,
+          'history_conflict', 'history_drift' => new MigrateRefusal('rollback_conflict'),
+          default => new MigrateRefusal('rollback_failed'),
+        };
+      }
+      throw new MigrateRefusal('rollback_failed');
     }
+    finally {
+      $this->activeAttempt = NULL;
+    }
+  }
+
+  /**
+   * Preflights and applies only the in-flight fenced rollback attempt.
+   *
+   * @internal
+   */
+  public function applyUnderFence(string $domain, string $reason, int $generation, bool $expected, RollbackAttempt $attempt): array {
+    if ($this->activeAttempt !== $attempt) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    $this->authority->assertLockedRollback($domain, $generation);
+    [$operations, $copiers, $targets, $changes] = $this->preflight($domain, $generation);
+    if ($operations !== []) {
+      if (!$expected) {
+        throw new MigrateRefusal('rollback_generation_required');
+      }
+      $attempt->targets = $targets;
+      $attempt->effects = $operations;
+      $this->planner->replay($targets, $operations);
+      $this->planner->verifyReplayed($copiers, $changes);
+    }
+    return $this->writes->seal($domain, $generation, $reason, $operations, $changes);
   }
 
   /**
@@ -140,25 +163,18 @@ final class RollbackService {
    * Recovers only the matching receipt at its immediately resulting authority.
    */
   private function existingReceipt(string $domain, string $reason, int $generation): array {
-    $transaction = $this->database->startTransaction();
     try {
-      $state = $this->authority->lockOperationAuthority($this->database, $domain);
-      if ($state !== ['state' => 'legacy', 'version' => $generation + 1]) {
-        throw new MigrateRefusal('rollback_stale_generation');
-      }
-      $receipt = $this->writes->receipt($domain, $generation);
-      if ($receipt === NULL || !hash_equals($receipt['reason_hash'], hash('sha256', trim($reason)))) {
-        throw new MigrateRefusal('rollback_stale_generation');
-      }
-      TransactionBoundary::commit($transaction);
-      return $this->publicReceipt($receipt, TRUE);
+      // A successful COMMIT with a failing end callback may leave the older
+      // core transaction manager unusable for a new root on this request.
+      $receipt = $this->writes->committedReceipt($domain, $generation, $reason);
     }
-    catch (\Throwable $exception) {
-      if ($this->database->inTransaction()) {
-        $transaction?->rollBack();
-      }
-      throw $exception instanceof MigrateRefusal ? $exception : new MigrateRefusal('rollback_failed');
+    catch (\Throwable) {
+      throw new MigrateRefusal('rollback_failed');
     }
+    if ($receipt === NULL) {
+      throw new MigrateRefusal('rollback_stale_generation');
+    }
+    return $this->publicReceipt($receipt, TRUE);
   }
 
   /**

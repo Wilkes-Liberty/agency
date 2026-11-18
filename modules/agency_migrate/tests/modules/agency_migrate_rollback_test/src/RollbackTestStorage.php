@@ -32,7 +32,7 @@ final class RollbackTestStorage extends OperationSqlContentEntityStorage {
   /**
    * {@inheritdoc}
    */
-  public function restore(EntityInterface $entity) {
+  public function restore(EntityInterface $entity): void {
     parent::restore($entity);
     self::$effects[] = ['restore', (int) $entity->id()];
     if (self::$interrupt === 'restore') {
@@ -55,7 +55,7 @@ final class RollbackTestStorage extends OperationSqlContentEntityStorage {
   /**
    * {@inheritdoc}
    */
-  public function delete(array $entities) {
+  public function delete(array $entities): void {
     parent::delete($entities);
     foreach ($entities as $entity) {
       self::$effects[] = ['delete', (int) $entity->id()];

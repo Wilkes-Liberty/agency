@@ -160,13 +160,27 @@ final class AuthorityRegister {
   }
 
   /**
-   * Completes the verified handover in its original fenced SQL transaction.
+   * Runs the final rollback coordinator under the authority and host locks.
+   *
+   * The coordinator verifies its in-flight attempt before any replay. Unlike
+   * the general fenced callback, this path can advance the rollback edge.
    *
    * @internal
    */
-  public function completeVerifiedRollback(string $domain, string $reason, int $generation): void {
-    $this->assertPermission('administer agency migrate authority');
-    $this->assertReason($reason);
+  public function runQualifiedRollback(RollbackService $coordinator, string $domain, string $reason, int $generation, bool $expected, RollbackAttempt $attempt): array {
+    return $this->withTransitionFence($domain, 'legacy', $reason, TRUE, function () use ($coordinator, $domain, $reason, $generation, $expected, $attempt): array {
+      $this->assertLockedRollback($domain, $generation);
+      $receipt = $coordinator->applyUnderFence($domain, $reason, $generation, $expected, $attempt);
+      $this->completeVerifiedRollback($domain, $reason, $generation);
+      $attempt->readyToCommit = TRUE;
+      return $receipt;
+    });
+  }
+
+  /**
+   * Completes the verified handover in its original fenced SQL transaction.
+   */
+  private function completeVerifiedRollback(string $domain, string $reason, int $generation): void {
     $this->assertLockedRollback($domain, $generation);
     $receipt = $this->database->select('agency_migrate_rollback_receipt', 'r')->fields('r', ['reason_hash'])
       ->condition('domain', $domain)->condition('generation', $generation)->execute()->fetchField();
@@ -174,6 +188,9 @@ final class AuthorityRegister {
       throw new MigrateRefusal('rollback_unqualified');
     }
     $this->advanceLocked($domain, 'agency', 'legacy', $generation, $reason, TRUE);
+    if ($this->lockOperationAuthority($this->database, $domain) !== ['state' => 'legacy', 'version' => $generation + 1]) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
   }
 
   /**

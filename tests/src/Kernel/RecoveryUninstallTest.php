@@ -58,6 +58,9 @@ final class RecoveryUninstallTest extends KernelTestBase {
       }
       $row[$name] = $field['default'] ?? (in_array($field['type'], ['int', 'float', 'numeric'], TRUE) ? 1 : 'synthetic');
     }
+    if ($table === 'agency_migrate_rollback_record') {
+      $row['origin'] = 'create';
+    }
     $database->insert($table)->fields($row)->execute();
     $before = $database->select($table, 'r')->fields('r')->execute()->fetchAll();
     try {

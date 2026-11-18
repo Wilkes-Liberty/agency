@@ -6,6 +6,7 @@ namespace Drupal\Tests\agency\Kernel\Migrate;
 
 use Drupal\agency_migrate\IdentityPreservingWriter;
 use Drupal\agency_migrate\PostCutoverWriter;
+use Drupal\agency_migrate\RollbackAttempt;
 use Drupal\agency_migrate\RollbackService;
 use Drupal\agency_migrate_rollback_test\RollbackTestStorage;
 use Drupal\Core\Entity\ContentEntityInterface;
@@ -160,8 +161,9 @@ final class MigrateQualifiedRollbackTest extends MigrateKernelTestBase {
     $this->assertInstanceOf(ContentEntityInterface::class, $target);
     $target->set('payload', 'Unjournaled drift outside the affected copier');
     $target->save();
+    $prior_effects = RollbackTestStorage::$effects;
     $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), 'rollback_conflict');
-    $this->assertSame([], RollbackTestStorage::$effects);
+    $this->assertSame($prior_effects, RollbackTestStorage::$effects);
   }
 
   /**
@@ -387,6 +389,7 @@ final class MigrateQualifiedRollbackTest extends MigrateKernelTestBase {
     $this->create($generation, 'Must replay first');
     $authority = $this->container->get('agency_migrate.authority');
     $this->assertRefused(fn () => $authority->transition(self::DOMAIN, 'legacy', self::REASON, TRUE), 'rollback_unqualified');
+    $this->assertRefused(fn () => $authority->runQualifiedRollback($this->rollback(), self::DOMAIN, self::REASON, $generation, TRUE, new RollbackAttempt()), 'rollback_unqualified');
     $this->assertSame('agency', $authority->get(self::DOMAIN));
     $this->assertSame($generation, $authority->status()[self::DOMAIN]['version']);
   }

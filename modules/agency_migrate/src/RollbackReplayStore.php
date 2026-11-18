@@ -40,6 +40,7 @@ final class RollbackReplayStore {
     $pending = [];
     $expected_intents = [];
     $historical = [];
+    $has_legacy_rows = FALSE;
     while ($row = $rows->fetchAssoc()) {
       $copier = $targets[$row['entity_type']] ?? NULL;
       if ($copier === NULL) {
@@ -52,7 +53,8 @@ final class RollbackReplayStore {
           || $entity->getEntityTypeId() !== $row['entity_type'] || $entity->uuid() !== $row['entity_uuid']) {
           throw new MigrateRefusal('rollback_conflict');
         }
-        throw new MigrateRefusal('rollback_unqualified');
+        $has_legacy_rows = TRUE;
+        continue;
       }
       try {
         $envelope = PostCutoverOperationEnvelope::decode($row, $this->history);
@@ -84,6 +86,9 @@ final class RollbackReplayStore {
       else {
         throw new MigrateRefusal('rollback_unqualified');
       }
+    }
+    if ($has_legacy_rows) {
+      throw new MigrateRefusal('rollback_unqualified');
     }
     $receipts = $this->database->select('agency_migrate_rollback_receipt', 'r')->fields('r')
       ->condition('domain', $domain)->execute();
@@ -150,6 +155,23 @@ final class RollbackReplayStore {
     foreach (['generation', 'replayed', 'recorded'] as $field) {
       $row[$field] = (int) $row[$field];
     }
+    return $row;
+  }
+
+  /**
+   * Reads the receipt and resulting authority in one committed snapshot.
+   */
+  public function committedReceipt(string $domain, int $generation, string $reason): ?array {
+    $query = $this->database->select('agency_migrate_rollback_receipt', 'r');
+    $query->innerJoin('agency_migrate_authority_state', 'a', 'a.domain = r.domain');
+    $row = $query->fields('r')->condition('r.domain', $domain)
+      ->condition('r.generation', $generation)->condition('r.reason_hash', hash('sha256', trim($reason)))
+      ->condition('a.state', 'legacy')->condition('a.version', $generation + 1)->execute()->fetchAssoc();
+    if (!$row) {
+      return NULL;
+    }
+    $row['generation'] = (int) $row['generation'];
+    $row['replayed'] = (int) $row['replayed'];
     return $row;
   }
 
