@@ -9,9 +9,10 @@ use Drupal\Core\Database\Connection;
 /**
  * Qualifies and reverses a domain's additional host-owned SQL resources.
  *
- * The connection must be the host's exact transaction participant. The
- * provider may not acquire its own fence, complete the caller's transaction,
- * or perform external effects. A provider owns its immutable host receipt.
+ * The participant uses Agency's exact connection and existing fence. All
+ * effects belong to that SQL transaction. Native transaction control and
+ * schema changes belong outside the callbacks. A provider owns its immutable
+ * host receipt.
  */
 interface RollbackDispositionInterface {
 

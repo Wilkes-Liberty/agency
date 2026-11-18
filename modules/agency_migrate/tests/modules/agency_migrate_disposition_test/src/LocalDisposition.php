@@ -61,6 +61,9 @@ final class LocalDisposition implements RollbackDispositionInterface {
     if ($this->fault === 'replace_cutover') {
       $this->replaceTransaction($connection);
     }
+    if ($this->fault === 'native_cutover') {
+      $this->client($connection)->commit();
+    }
   }
 
   /**
@@ -119,7 +122,24 @@ final class LocalDisposition implements RollbackDispositionInterface {
     if ($this->fault === 'replace_apply') {
       $this->replaceTransaction($connection);
     }
+    if ($this->fault === 'native_apply') {
+      $this->client($connection)->commit();
+    }
+    if ($this->fault === 'native_ddl') {
+      $this->client($connection)->exec($connection->prefixTables('ALTER TABLE {agency_migrate_test_resource} ADD COLUMN disposition_ddl_probe INT'));
+    }
     return $this->fault === 'digest' ? 'invalid-proof' : $digest;
+  }
+
+  /**
+   * Returns the actual synthetic PDO connection for fault injection.
+   */
+  private function client(Connection $connection): \PDO {
+    $client = $connection->getClientConnection();
+    if (!$client instanceof \PDO || !$client->inTransaction()) {
+      throw new \LogicException('Missing native transaction for test fault.');
+    }
+    return $client;
   }
 
   /**

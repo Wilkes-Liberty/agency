@@ -19,7 +19,7 @@ final class AuthorityRegister {
   private const STATES = ['legacy', 'shadow', 'agency', 'removed'];
 
   /**
-   * Root lifetime checks for this instance's currently fenced domains.
+   * Native and Drupal scope checks for this instance's fenced domains.
    *
    * @var array<string, \Closure(): bool>
    */
@@ -343,6 +343,9 @@ final class AuthorityRegister {
    * Writes the generation and its evidence in the caller's locked transaction.
    */
   private function advanceLocked(string $domain, string $from, string $to, int $generation, string $reason, bool $rollback): void {
+    if ($this->requiresFence($from, $to)) {
+      $this->assertActiveFence($domain, $rollback);
+    }
     $values = $this->metadata($to, $generation + 1, $reason);
     $updated = $this->database->update('agency_migrate_authority_state')->fields($values)
       ->condition('domain', $domain)->condition('version', $generation)->condition('state', $from)->execute();
@@ -389,7 +392,10 @@ final class AuthorityRegister {
   public function withTransitionFence(string $domain, string $to, string $reason, bool $rollback, callable $work): mixed {
     $this->assertTransition($domain, $to, $reason, $rollback);
     $root = !$this->database->inTransaction();
-    $transaction = $this->database->startTransaction();
+    $transaction = $this->database->startTransaction($root ? '' : 'agency_fence_' . bin2hex(random_bytes(8)));
+    $manager = $this->database->transactionManager();
+    $client = $this->database->getClientConnection();
+    $scope = $transaction->name();
     $owned_fence = FALSE;
     $root_ended = FALSE;
     $committing = FALSE;
@@ -400,13 +406,18 @@ final class AuthorityRegister {
         throw new MigrateRefusal('writer_transaction_owned');
       }
       if ($this->requiresFence($from, $to) && !isset($this->fencedDomains[$domain])) {
-        $this->database->transactionManager()->addPostTransactionCallback(static function (bool $success) use (&$root_ended): void {
+        $manager->addPostTransactionCallback(static function (bool $success) use (&$root_ended): void {
           $root_ended = TRUE;
         });
-        $this->writerFence->acquire($domain);
-        $this->fencedDomains[$domain] = static function () use (&$root_ended): bool {
-          return !$root_ended;
+        $is_active = function () use ($manager, $client, $scope, &$root_ended): bool {
+          return !$root_ended && $manager->has('drupal_transaction') && $manager->has($scope)
+            && $this->nativeTransactionActive($client);
         };
+        if (!$is_active()) {
+          throw new MigrateRefusal($rollback ? 'rollback_commit_uncertain' : 'rollback_unqualified');
+        }
+        $this->writerFence->acquire($domain);
+        $this->fencedDomains[$domain] = $is_active;
         $owned_fence = TRUE;
         $this->assertActiveFence($domain, $rollback);
       }
@@ -419,12 +430,22 @@ final class AuthorityRegister {
       return $result;
     }
     catch (\Throwable $exception) {
-      if (!$root_ended) {
-        $this->rollbackActive($transaction);
+      if (!$this->nativeTransactionActive() && $manager->has($scope)) {
+        try {
+          // A native commit can leave Drupal's stack pending. Clear the void
+          // scope before releasing the handle, which could otherwise commit.
+          $manager->voidClientTransaction();
+          $transaction = NULL;
+        }
+        catch (\Throwable) {
+          // A stale handle or end callback must preserve the refusal below.
+        }
       }
-      elseif (!$committing) {
-        // A participant may have committed abruptly. Never use the obsolete
-        // transaction handle to act on a replacement connection transaction.
+      elseif (!$root_ended && $manager->has($scope) && $this->nativeTransactionActive($client)) {
+        $this->rollbackActive($transaction);
+        throw $exception;
+      }
+      if (!$committing) {
         throw new MigrateRefusal($rollback ? 'rollback_commit_uncertain' : 'rollback_unqualified');
       }
       throw $exception;
@@ -437,10 +458,23 @@ final class AuthorityRegister {
   }
 
   /**
+   * Reads the native PDO transaction, independently of Drupal's stack.
+   */
+  private function nativeTransactionActive(?object $expected = NULL): bool {
+    try {
+      $client = $this->database->getClientConnection();
+      return $client instanceof \PDO && ($expected === NULL || $expected === $client) && $client->inTransaction();
+    }
+    catch (\Throwable) {
+      return FALSE;
+    }
+  }
+
+  /**
    * Rolls back the owned transaction while it is still active.
    */
   private function rollbackActive(?Transaction $transaction): void {
-    if ($this->database->inTransaction()) {
+    if ($this->database->inTransaction() && $this->nativeTransactionActive()) {
       $transaction?->rollBack();
     }
   }

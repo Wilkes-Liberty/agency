@@ -6,6 +6,7 @@ namespace Drupal\Tests\agency\Kernel\Migrate;
 
 use Drupal\agency_migrate\AgencyMigrateServiceProvider;
 use Drupal\agency_migrate\AuthorityRegister;
+use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\agency_migrate\RollbackDispositionRegistry;
 use Drupal\agency_migrate\RollbackService;
 use Drupal\agency_migrate_disposition_test\LocalDisposition;
@@ -254,6 +255,79 @@ final class MigrateRollbackDispositionTest extends MigrateKernelTestBase {
     // The coerced early SQL commit cannot be undone by the coordinator.
     $this->assertCount(1, $this->rows(self::HOST_RECEIPT));
     $this->assertSame('agency', $this->authority()->get(self::DOMAIN));
+  }
+
+  /**
+   * A native client commit cannot stamp a cutover binding or advance authority.
+   */
+  public function testNativeCommitCannotBindCutover(): void {
+    $authority = $this->authority();
+    $authority->register(self::DOMAIN, 'Register sample');
+    $authority->requireDisposition(self::DOMAIN, self::PROVIDER);
+    $authority->transition(self::DOMAIN, 'shadow', 'Prepare sample');
+    $this->provider()->fault = 'native_cutover';
+    $before = $this->rows('agency_migrate_outbox');
+    $refusal = NULL;
+    try {
+      $authority->transition(self::DOMAIN, 'agency', 'Promote sample');
+    }
+    catch (\Throwable $exception) {
+      $refusal = $exception;
+    }
+    $this->assertSame('shadow', $authority->get(self::DOMAIN));
+    $this->assertSame([], $this->rows(self::BINDING));
+    $this->assertSame($before, $this->rows('agency_migrate_outbox'));
+    $this->assertFalse($this->container->get('database')->inTransaction());
+    $this->assertInstanceOf(MigrateRefusal::class, $refusal);
+    $this->assertSame('rollback_unqualified', $refusal->reason);
+  }
+
+  /**
+   * A PDO commit after provider writes cannot seal rollback.
+   */
+  public function testNativeCommitCannotSealRollback(): void {
+    $this->assertUnsealedEscapedRollback('native_apply');
+  }
+
+  /**
+   * MySQL DDL can commit without notifying Drupal's transaction manager.
+   */
+  public function testMysqlImplicitCommitCannotSealRollback(): void {
+    if ($this->container->get('database')->driver() !== 'mysql') {
+      $this->markTestSkipped('MySQL implicitly commits this DDL statement.');
+    }
+    $this->assertUnsealedEscapedRollback('native_ddl');
+  }
+
+  /**
+   * Checks committed state after the participant escapes Agency's transaction.
+   */
+  private function assertUnsealedEscapedRollback(string $fault): void {
+    $generation = $this->prepare();
+    $this->resource($generation, 1);
+    $this->container->get('agency_migrate.post_cutover_writer')->create(self::DOMAIN, $generation, $this->container->get('uuid')->generate(), 'agency_migrate_agency_item', [
+      'title' => 'Agency journal record',
+    ]);
+    $this->provider()->fault = $fault;
+    $before = $this->rows('agency_migrate_outbox');
+    $refusal = NULL;
+    try {
+      $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation);
+    }
+    catch (\Throwable $exception) {
+      $refusal = $exception;
+    }
+    $this->assertCount(1, $this->rows(self::HOST_RECEIPT));
+    $this->assertSame('legacy', $this->rows(self::RESOURCE)[0]['authority']);
+    $this->assertSame('agency', $this->authority()->get(self::DOMAIN));
+    $this->assertSame($generation, $this->authority()->status()[self::DOMAIN]['version']);
+    $this->assertSame([], $this->rows(self::RECEIPT));
+    $this->assertSame([], $this->rows('agency_migrate_rollback_record'));
+    $this->assertCount(1, $this->container->get('agency_migrate.writes')->pending(self::DOMAIN));
+    $this->assertSame($before, $this->rows('agency_migrate_outbox'));
+    $this->assertFalse($this->container->get('database')->inTransaction());
+    $this->assertInstanceOf(MigrateRefusal::class, $refusal);
+    $this->assertSame('rollback_commit_uncertain', $refusal->reason);
   }
 
   /**

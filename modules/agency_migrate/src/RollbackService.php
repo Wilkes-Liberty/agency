@@ -190,8 +190,8 @@ final class RollbackService {
       catch (\Throwable) {
         throw new MigrateRefusal('rollback_failed');
       }
-      $this->authority->assertLockedRollback($domain, $generation);
     }
+    $this->authority->assertLockedRollback($domain, $generation);
     return $this->writes->seal($domain, $generation, $reason, $operations, $changes, $disposition['id'] ?? NULL, $digest);
   }
 

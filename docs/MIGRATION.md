@@ -385,7 +385,11 @@ applies and verifies it after successful entity replay, and seals the private
 host receipt digest before returning authority. The public `replayed` count
 covers entities. If a participant ends the original transaction, Agency
 refuses to seal the receipt or advance authority. An interrupted rollback
-with an early SQL commit reports `rollback_commit_uncertain`.
+with an early SQL commit reports `rollback_commit_uncertain`. The guard
+checks the original Drupal scope and native PDO transaction. A raw PDO
+commit followed by a raw begin can leave both checks appearing active.
+Trusted participants must leave transaction control and DDL outside their
+callbacks.
 
 The provider owns its immutable receipt and verifies it without using live
 resource counts when an operator reconciles an uncertain handover. A missing
