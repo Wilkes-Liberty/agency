@@ -55,14 +55,32 @@ operator. Recovery is scoped to the trusted host scope and storage collection;
 it never provisions on a miss. Lost issuance acknowledgement cannot recover
 plaintext from a digest: an operator must revoke and reissue through host policy.
 
-Required evidence intents commit with the business operation. Drupal cron drains
-at most 20 pending intents per invocation. Schedule Drupal cron and configure
+Issuance records an `invite.issued` intent. Acceptance records
+`invite.claimed`, `invite.provisioned`, and `invite.consumed` in that order.
+These intents commit with the business operation. Inspection and recovery do
+not record lifecycle stages. Recovery receipts retain the operation names
+`invitation_issued` and `invitation_accepted`. Pending evidence from earlier
+versions retains its original operation names when delivered.
+
+The internal `acceptForApplication()` method returns
+`{outcome: refused, reason: not_found}` for denied acceptance. A refusal
+before business work or after a confirmed rollback queues `invite.refused`
+with the fixed reason `not_found`. The application receives an `unresolved`
+status if refusal evidence could not be confirmed or the caller already owns
+the transaction. An uncertain business commit returns its receipt ID for
+reconciliation. Hosts using `accept()` retain its refusal codes and own their
+refusal evidence.
+
+Drupal cron drains at most 20 pending intents per invocation. Schedule Drupal cron and configure
 Audit Chain signing before expecting delivery. An unavailable signer leaves the
 intent pending for a later invocation. `InvitationJournal::drain()` also permits
 a bounded host-operated drain after the business transaction. Signed append and
 the delivery marker share one transaction under an outbox row lock; `logKeyed()`
-alone does not provide retry protection. Evidence excludes bearer, digest,
-contact, preferred name and account binding.
+alone does not provide retry protection. Stage evidence contains the event UUID, effective time
+and staff classification. Refusal evidence contains the event UUID, effective
+time and fixed reason. Evidence excludes bearer, onboarding URL, digest,
+contact, preferred name, phone, raw identity claims, filenames and account
+binding.
 
 ## Removal and retained records
 

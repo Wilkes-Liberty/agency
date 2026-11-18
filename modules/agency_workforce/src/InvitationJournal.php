@@ -6,6 +6,7 @@ namespace Drupal\agency_workforce;
 
 use Drupal\audit_chain\AuditChainLoggerInterface;
 use Drupal\Component\Datetime\TimeInterface;
+use Drupal\Component\Uuid\Uuid;
 use Drupal\Core\Database\Connection;
 
 /**
@@ -20,14 +21,13 @@ final class InvitationJournal {
   ) {}
 
   /**
-   * Records the operation and its required intent in the business transaction.
+   * Records the recovery receipt in the business transaction.
    */
   public function record(string $id, string $scope, InvitationRecord $record, string $operation, ?string $binding = NULL): void {
     if (!$this->database->inTransaction()
       || !in_array($operation, ['invitation_issued', 'invitation_accepted'], TRUE)) {
       throw new \LogicException('A workforce operation transaction is required.');
     }
-    $now = $this->time->getCurrentTime();
     $this->database->insert('agency_workforce_receipt')->fields([
       'id' => $id,
       'scope' => $scope,
@@ -36,16 +36,50 @@ final class InvitationJournal {
       'operation' => $operation,
       'expires' => $record->expires,
       'binding' => $binding,
-      'recorded' => $now,
+      'recorded' => $this->time->getCurrentTime(),
     ])->execute();
+  }
+
+  /**
+   * Records a completed invitation stage inside the business transaction.
+   */
+  public function recordStage(string $id, string $operation, InvitationRecord $record): void {
+    if (!$this->database->inTransaction()
+      || !in_array($operation, ['invite.issued', 'invite.claimed', 'invite.provisioned', 'invite.consumed'], TRUE)) {
+      throw new \LogicException('A workforce stage transaction is required.');
+    }
+    $this->enqueue($id, $operation, ['classification' => $record->classification]);
+  }
+
+  /**
+   * Records an application refusal outside any business transaction.
+   */
+  public function recordRefusal(string $id): void {
+    if ($this->database->inTransaction()) {
+      throw new \LogicException('An application refusal requires an independent write.');
+    }
+    $this->enqueue($id, 'invite.refused', ['reason' => 'not_found']);
+  }
+
+  /**
+   * Queues one operation with the supplied allowlisted metadata.
+   *
+   * @param string $id
+   *   The unique event UUID.
+   * @param string $operation
+   *   The evidence operation name.
+   * @param array<string, string> $metadata
+   *   The operation's fixed metadata.
+   */
+  private function enqueue(string $id, string $operation, array $metadata): void {
+    if (!Uuid::isValid($id)) {
+      throw new \LogicException('A valid workforce event ID is required.');
+    }
+    $now = $this->time->getCurrentTime();
     $this->database->insert('agency_workforce_outbox')->fields([
       'id' => $id,
       'operation' => $operation,
-      'metadata' => json_encode([
-        'event_id' => $id,
-        'classification' => $record->classification,
-        'effective_at' => $now,
-      ], JSON_THROW_ON_ERROR),
+      'metadata' => json_encode(['event_id' => $id, 'effective_at' => $now] + $metadata, JSON_THROW_ON_ERROR),
       'recorded' => $now,
       'delivered' => NULL,
       'attempts' => 0,
