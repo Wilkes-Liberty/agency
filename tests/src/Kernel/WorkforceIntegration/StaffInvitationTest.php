@@ -135,7 +135,7 @@ class StaffInvitationTest extends KernelTestBase {
     $this->assertSame('completed', $accepted['status']);
     $profile = $this->container->get('database')->select('agency_workforce_test_profile', 'p')->fields('p')->execute()->fetchAssoc();
     $this->assertSame('es', $profile['language']);
-    $this->assertSame(2, $this->countRows('agency_workforce_outbox'));
+    $this->assertSame(4, $this->countRows('agency_workforce_outbox'));
     $this->assertSame([], $this->container->get('state')->get('system.test_mail_collector', []));
   }
 
@@ -432,29 +432,239 @@ class StaffInvitationTest extends KernelTestBase {
     });
     $this->container->set('uuid', $uuid);
     $this->container->get('current_user')->setAccount(User::load(2));
-    $issued = $this->service()->issue('recipient@example.test', 'employee');
+    $contact = 'recipient@example.test';
+    $issued = $this->service()->issue($contact, 'employee');
+    $this->assertSame('invitation_issued', $this->service()->reconcile($issued['receipt_id'])['operation']);
     $this->anonymousPost();
-    $this->service()->accept($issued['bearer']);
+    $this->assertTrue($this->service()->inspect($issued['bearer'])['valid']);
+    $this->assertSame(1, $this->countRows('agency_workforce_outbox'));
+
+    $url = 'https://example.test/onboard/' . $issued['bearer'];
+    $name = 'Synthetic Preferred Name';
+    $phone = '+15550100123';
+    $subject = 'raw-subject-canary';
+    $filename = 'private-example.pdf';
+    $jwt = 'eyJhbGciOiJub25lIn0.eyJzdWIiOiJjYW5hcnkifQ.synthetic';
+    $preferredName = implode(' ', [$name, $phone, $subject, $filename, $jwt, $url]);
+    $canaries = [
+      $contact, $issued['bearer'], hash('sha256', $issued['bearer']),
+      $url, $name, $phone, $subject, $filename, $jwt,
+    ];
+    $accepted = $this->service()->accept($issued['bearer'], $preferredName);
+    $this->assertSame('completed', $accepted['status']);
+    $canaries[] = $accepted['binding'];
+    $this->assertSame('invitation_accepted', $this->service()->recover($issued['bearer'])['operation']);
+    $this->assertSame('invitation_accepted', $this->service()->reconcile($accepted['receipt_id'], $issued['bearer'])['operation']);
     $outbox = $this->container->get('agency_workforce.outbox');
     $this->assertSame(0, $outbox->drain());
-    $this->assertSame(2, $this->countRows('agency_workforce_outbox'));
-    $rows = $this->container->get('database')->select('agency_workforce_outbox', 'o')->fields('o')->execute();
-    while ($row = $rows->fetchAssoc()) {
-      $metadata = json_decode($row['metadata'], TRUE, 512, JSON_THROW_ON_ERROR);
-      $keys = array_keys($metadata);
-      sort($keys);
-      $this->assertSame(['classification', 'effective_at', 'event_id'], $keys);
-      $this->assertStringNotContainsString('recipient@example.test', $row['metadata']);
-      $this->assertStringNotContainsString($issued['bearer'], $row['metadata']);
-      $this->assertNull($row['delivered']);
-    }
+    $operations = ['invite.issued', 'invite.claimed', 'invite.provisioned', 'invite.consumed'];
+    $this->assertEvidence('agency_workforce_outbox', 'sequence', $operations, $canaries);
+    $this->assertSame(4, (int) $this->container->get('database')->select('agency_workforce_outbox', 'o')
+      ->isNull('delivered')->countQuery()->execute()->fetchField());
     $this->signingKey();
     $this->container->get('module_handler')->invoke('agency_workforce', 'cron');
     $this->assertSame(0, $outbox->drain());
-    $this->assertSame(2, $this->countRows('audit_chain_log'));
-    $operations = $this->container->get('database')->select('audit_chain_log', 'l')
-      ->fields('l', ['operation'])->orderBy('id')->execute()->fetchCol();
-    $this->assertSame(['invitation_issued', 'invitation_accepted'], $operations);
+    $this->assertEvidence('audit_chain_log', 'id', $operations, $canaries);
+    $this->assertTrue($this->container->get('audit_chain.logger')->verify()['ok']);
+  }
+
+  /**
+   * Replay and expiry are opaque refusals, with only one completed consumption.
+   */
+  public function testApplicationRefusesReplayAndExpiryWithSignedEvidence(): void {
+    $this->installChain();
+    $this->signingKey();
+    $this->container->get('current_user')->setAccount(User::load(2));
+    $first = $this->service()->issue('first@example.test', 'employee');
+    $expires = $this->service()->issue('expires@example.test', 'contractor');
+    $this->anonymousPost();
+    $this->assertTrue($this->service()->inspect($expires['bearer'])['valid']);
+    $accepted = $this->service()->acceptForApplication($first['bearer']);
+    $this->assertSame('completed', $accepted['status']);
+    $before = $this->freshSnapshot();
+    $denied = ['outcome' => 'refused', 'reason' => 'not_found'];
+    $this->assertSame($denied, $this->service()->acceptForApplication($first['bearer']));
+    $this->assertRefused(fn () => $this->service()->accept($first['bearer']), 'invalid_invitation');
+    $this->config('agency_workforce_test.settings')->set('clock', $expires['expires'])->save();
+    $this->assertSame($denied, $this->service()->acceptForApplication($expires['bearer']));
+    $this->assertRefused(fn () => $this->service()->accept($expires['bearer']), 'invalid_invitation');
+    $after = $this->freshSnapshot();
+    unset($before['agency_workforce_outbox'], $after['agency_workforce_outbox']);
+    $this->assertSame($before, $after);
+
+    $operations = [
+      'invite.issued', 'invite.issued', 'invite.claimed', 'invite.provisioned',
+      'invite.consumed', 'invite.refused', 'invite.refused',
+    ];
+    $canaries = [
+      'first@example.test', 'expires@example.test', $first['bearer'], $expires['bearer'], $accepted['binding'],
+    ];
+    $this->assertEvidence('agency_workforce_outbox', 'sequence', $operations, $canaries);
+    $outbox = $this->container->get('agency_workforce.outbox');
+    $this->assertSame(7, $outbox->drain());
+    $this->assertSame(0, $outbox->drain());
+    $this->assertEvidence('audit_chain_log', 'id', $operations, $canaries);
+    $this->assertTrue($this->container->get('audit_chain.logger')->verify()['ok']);
+  }
+
+  /**
+   * Preflight refusals record evidence outside an ambient transaction.
+   */
+  public function testApplicationJournalsPreflightRefusalsWithoutBusinessWrites(): void {
+    $this->installChain();
+    $this->signingKey();
+    $token = $this->legacy();
+    $invalidBearer = $token . '-malformed';
+    $name = str_repeat('Private preferred name ', 16);
+    $denied = ['outcome' => 'refused', 'reason' => 'not_found'];
+    $before = $this->freshSnapshot();
+
+    $this->assertSame($denied, $this->service()->acceptForApplication($invalidBearer));
+    $this->assertSame($denied, $this->service()->acceptForApplication($token, $name));
+    $this->assertRefused(fn () => $this->service()->accept($invalidBearer), 'invalid_invitation');
+    $this->assertRefused(fn () => $this->service()->accept($token, $name), 'invalid_invitation');
+    $this->assertSame(2, $this->countRows('agency_workforce_outbox'));
+
+    $database = $this->container->get('database');
+    $transaction = $database->startTransaction();
+    try {
+      $this->assertSame(['status' => 'unresolved'], $this->service()->acceptForApplication($token));
+      $this->assertRefused(fn () => $this->service()->accept($token), 'transaction_boundary');
+      $this->assertTrue($database->inTransaction());
+      $this->assertSame(2, $this->countRows('agency_workforce_outbox'));
+    }
+    finally {
+      $transaction->rollBack();
+    }
+    $after = $this->freshSnapshot();
+    unset($before['agency_workforce_outbox'], $after['agency_workforce_outbox']);
+    $this->assertSame($before, $after);
+
+    $operations = ['invite.refused', 'invite.refused'];
+    $canaries = [$invalidBearer, $token, 'Private preferred name'];
+    $this->assertEvidence('agency_workforce_outbox', 'sequence', $operations, $canaries);
+    $this->assertSame(2, $this->container->get('agency_workforce.outbox')->drain());
+    $this->assertEvidence('audit_chain_log', 'id', $operations, $canaries);
+    $this->assertTrue($this->container->get('audit_chain.logger')->verify()['ok']);
+  }
+
+  /**
+   * Refusal evidence storage must acknowledge the independent write.
+   */
+  public function testApplicationReturnsUnresolvedWhenRefusalEvidenceIsUnavailable(): void {
+    $token = $this->legacy();
+    $before = $this->freshSnapshot();
+    $this->container->get('database')->schema()->dropTable('agency_workforce_outbox');
+    try {
+      $this->assertSame(['status' => 'unresolved'], $this->service()->acceptForApplication($token . '-malformed'));
+    }
+    finally {
+      $this->installSchema('agency_workforce', ['agency_workforce_outbox']);
+    }
+    $this->assertSame($before, $this->freshSnapshot());
+  }
+
+  /**
+   * A failure after claiming rolls back the account and its stage evidence.
+   */
+  public function testApplicationJournalsRefusalAfterProvisionRollback(): void {
+    $this->installChain();
+    $this->signingKey();
+    $token = $this->legacy();
+    $before = $this->freshSnapshot();
+    $this->config('agency_workforce_test.settings')->set('fault', 'profile')->save();
+    $this->assertSame(['outcome' => 'refused', 'reason' => 'not_found'], $this->service()->acceptForApplication($token));
+    $after = $this->freshSnapshot();
+    unset($before['agency_workforce_outbox'], $after['agency_workforce_outbox']);
+    $this->assertSame($before, $after);
+    $this->assertEvidence('agency_workforce_outbox', 'sequence', ['invite.refused'], [$token]);
+    $this->assertSame(1, $this->container->get('agency_workforce.outbox')->drain());
+    $this->assertEvidence('audit_chain_log', 'id', ['invite.refused'], [$token]);
+    $this->assertTrue($this->container->get('audit_chain.logger')->verify()['ok']);
+  }
+
+  /**
+   * Uncertain acknowledgements never manufacture a refusal.
+   */
+  public function testApplicationDoesNotJournalAnUncertainCommitAsRefusal(): void {
+    $this->installChain();
+    $this->signingKey();
+    $token = $this->legacy();
+    $this->config('agency_workforce_test.settings')->set('fault', 'commit_before')->save();
+    $result = $this->service()->acceptForApplication($token);
+    $this->assertSame(['status' => 'uncertain', 'receipt_id' => $result['receipt_id']], $result);
+    $this->assertSame(0, $this->countRows('agency_workforce_outbox'));
+
+    $this->config('agency_workforce_test.settings')->set('fault', 'commit_ack')->save();
+    $result = $this->service()->acceptForApplication($token);
+    $this->assertSame(['status' => 'uncertain', 'receipt_id' => $result['receipt_id']], $result);
+    $this->assertSame('invitation_accepted', $this->service()->reconcile($result['receipt_id'], $token)['operation']);
+    $operations = ['invite.claimed', 'invite.provisioned', 'invite.consumed'];
+    $this->assertEvidence('agency_workforce_outbox', 'sequence', $operations, [$token]);
+    $this->assertSame(3, $this->container->get('agency_workforce.outbox')->drain());
+    $this->assertEvidence('audit_chain_log', 'id', $operations, [$token]);
+    $this->assertTrue($this->container->get('audit_chain.logger')->verify()['ok']);
+  }
+
+  /**
+   * Checks ordered operations and the exact signed metadata allowlist.
+   */
+  private function assertEvidence(string $table, string $order, array $operations, array $canaries): void {
+    $rows = $this->container->get('database')->select($table, 'e')
+      ->fields('e', ['operation', 'metadata'])->orderBy($order)->execute();
+    $actual = [];
+    $eventIds = [];
+    foreach ($rows as $row) {
+      $actual[] = $row->operation;
+      $metadata = json_decode($row->metadata, TRUE, 32, JSON_THROW_ON_ERROR);
+      $keys = array_keys($metadata);
+      sort($keys);
+      if ($row->operation === 'invite.refused') {
+        $this->assertSame(['effective_at', 'event_id', 'reason'], $keys);
+        $this->assertSame('not_found', $metadata['reason']);
+      }
+      else {
+        $this->assertSame(['classification', 'effective_at', 'event_id'], $keys);
+        $this->assertContains($metadata['classification'], ['employee', 'contractor']);
+      }
+      $this->assertIsInt($metadata['effective_at']);
+      $this->assertNotContains($metadata['event_id'], $eventIds);
+      $eventIds[] = $metadata['event_id'];
+      $content = json_encode($metadata, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+      foreach ($canaries as $canary) {
+        $this->assertStringNotContainsString($canary, $content);
+      }
+    }
+    $this->assertSame($operations, $actual);
+  }
+
+  /**
+   * Older pending operation names remain deliverable after a source upgrade.
+   */
+  public function testRetainedReceiptNamedIntentsDrainUnchanged(): void {
+    $this->installChain();
+    $this->signingKey();
+    $operations = ['invitation_issued', 'invitation_accepted'];
+    foreach ($operations as $operation) {
+      // These rows represent the pending queue from an earlier module version.
+      $id = (new Php())->generate();
+      $this->container->get('database')->insert('agency_workforce_outbox')->fields([
+        'id' => $id,
+        'operation' => $operation,
+        'metadata' => json_encode([
+          'event_id' => $id,
+          'classification' => 'contractor',
+          'effective_at' => self::NOW,
+        ], JSON_THROW_ON_ERROR),
+        'recorded' => self::NOW,
+        'delivered' => NULL,
+        'attempts' => 0,
+      ])->execute();
+    }
+    $outbox = $this->container->get('agency_workforce.outbox');
+    $this->assertSame(2, $outbox->drain());
+    $this->assertSame(0, $outbox->drain());
+    $this->assertEvidence('audit_chain_log', 'id', $operations, []);
     $this->assertTrue($this->container->get('audit_chain.logger')->verify()['ok']);
   }
 
@@ -650,7 +860,7 @@ class StaffInvitationTest extends KernelTestBase {
       $this->assertSame(1, $this->countRows('agency_workforce_test_concurrent_account'));
       $this->assertSame(1, $this->countRows('agency_workforce_test_concurrent_profile'));
       $this->assertSame(1, $this->countRows('agency_workforce_receipt'));
-      $this->assertSame(1, $this->countRows('agency_workforce_outbox'));
+      $this->assertSame(3, $this->countRows('agency_workforce_outbox'));
       $this->assertSame($mode === 'same_token' ? 0 : 1, $this->countRows('agency_workforce_test_invitation'));
       $this->assertSame(2, $this->countRows('users'), 'Synthetic SQL peer must not create real account privileges.');
     }
