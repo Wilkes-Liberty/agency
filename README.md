@@ -18,8 +18,8 @@ engines remain independent dependencies.
 - `agency` provides the shared package foundation and tenant configuration.
 - `agency_staff` is the capability boundary for workforce relationships and the
   Discovery workspace.
-- `agency_workforce` provides staff invitation issuance, acceptance, recovery and
-  durable evidence through explicitly configured host adapters.
+- `agency_workforce` provides staff invitation issuance, acceptance and recovery,
+  and an audited own-profile read through explicitly configured host adapters.
 - `agency_recruiting` registers career posting and application storage. Enabling
   it copies no host data and transfers no recruiting authority.
 - `agency_migrate` copies host records into Agency types with lineage, shadow
