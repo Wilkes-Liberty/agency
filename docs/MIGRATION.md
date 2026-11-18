@@ -241,6 +241,11 @@ The internal service constructor now takes the writer-fence service instead of
 the configuration factory. A recorded `agency` state imported from an older
 installation does not certify that its writers are covered.
 
+Authorized host domain services can use the [post-cutover operation writer](POST_CUTOVER_OPERATIONS.md)
+to commit local revisionable SQL entity changes with a retryable journal receipt.
+Run update `agency_migrate_update_10004` before calling that service on an existing
+installation. Earlier journal rows remain available in their original format.
+
 ### Host writer coverage
 
 Replace `agency_migrate.host_writer_fence` with a verified

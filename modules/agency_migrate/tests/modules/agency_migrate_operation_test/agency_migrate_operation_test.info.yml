@@ -1,0 +1,7 @@
+name: Agency migration operation test
+type: module
+description: Synthetic storage faults for value-based operation journal proofs.
+package: Testing
+core_version_requirement: ^10.3 || ^11
+dependencies:
+  - agency:agency_migrate_test

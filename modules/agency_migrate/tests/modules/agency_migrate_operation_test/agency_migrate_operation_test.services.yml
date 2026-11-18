@@ -1,0 +1,4 @@
+services:
+  agency_migrate.operation_journal_policy:
+    class: Drupal\agency_migrate_operation_test\OperationTestJournalPolicy
+    arguments: ['@state']
