@@ -143,6 +143,77 @@ final class MigrateQualifiedRollbackTest extends MigrateKernelTestBase {
   }
 
   /**
+   * Empty journals still require the opted-in copiers' access parity.
+   *
+   * @dataProvider zeroJournalGenerations
+   */
+  #[DataProvider('zeroJournalGenerations')]
+  public function testZeroJournalRollbackAppliesQualifiedAccessPolicy(bool $prior_replay): void {
+    $generation = $this->prepareDomain();
+    if ($prior_replay) {
+      $this->update($generation, $this->target(1), 'Sealed history from the first generation');
+      $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation);
+      $generation = $this->promoteAgain();
+    }
+    $this->container->get('state')->set('agency_rollback.access_mismatch', 1);
+    $receipts = $this->countRows('agency_migrate_rollback_receipt');
+    foreach ([FALSE, TRUE] as $execute) {
+      $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, $execute, $generation), 'rollback_unqualified');
+    }
+    $this->assertSame($receipts, $this->countRows('agency_migrate_rollback_receipt'));
+    $this->assertSame('agency', $this->container->get('agency_migrate.authority')->get(self::DOMAIN));
+  }
+
+  /**
+   * Includes initial and subsequent empty rollback requests.
+   */
+  public static function zeroJournalGenerations(): array {
+    return ['first generation' => [FALSE], 'after effective replay' => [TRUE]];
+  }
+
+  /**
+   * A physical orphan revision invalidates a previously sealed tombstone.
+   *
+   * @dataProvider orphanSides
+   */
+  #[DataProvider('orphanSides')]
+  public function testTombstoneOrphanRevisionRefusesFullSampleAndZeroJournal(string $side): void {
+    $generation = $this->prepareDomain();
+    $archive = $side === self::SOURCE ? $this->source(2) : $this->target(2);
+    $this->assertInstanceOf(ContentEntityInterface::class, $archive);
+    $vid = $archive->getRevisionId();
+    $this->delete($generation, $this->target(2));
+    $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation);
+    $reconciler = $this->container->get('agency_migrate.reconciler');
+    $this->assertTrue($reconciler->compare('synthetic_item', [2])->passed());
+    $this->assertTrue($reconciler->compare('synthetic_item')->fullPassed());
+    $storage = $this->container->get('entity_type.manager')->getStorage($side);
+    $archive->enforceIsNew(FALSE);
+    $archive->setNewRevision(FALSE);
+    $archive->isDefaultRevision(FALSE);
+    $storage->restore($archive);
+    $storage->resetCache([2]);
+    $this->assertNull($storage->load(2));
+    $this->assertSame(1, (int) $this->container->get('database')->select($side . '_revision', 'r')
+      ->condition('revision_id', $vid)->countQuery()->execute()->fetchField());
+
+    $this->assertRefused(fn () => $reconciler->compare('synthetic_item'), 'coverage_unverified');
+    $this->assertRefused(fn () => $reconciler->compare('synthetic_item', [2]), 'coverage_unverified');
+    $next = $this->promoteAgain();
+    foreach ([FALSE, TRUE] as $execute) {
+      $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, $execute, $next), 'rollback_unqualified');
+    }
+    $this->assertSame('agency', $this->container->get('agency_migrate.authority')->get(self::DOMAIN));
+  }
+
+  /**
+   * Detects orphaned revision storage on either side.
+   */
+  public static function orphanSides(): array {
+    return ['legacy archive' => [self::SOURCE], 'Agency archive' => [self::TARGET]];
+  }
+
+  /**
    * Delivered intents expose a lost create/delete pair even after both vanish.
    */
   public function testDeliveredIntentsExposeMissingCreateDeletePair(): void {
@@ -499,6 +570,16 @@ final class MigrateQualifiedRollbackTest extends MigrateKernelTestBase {
     $authority->register(self::DOMAIN, 'Register synthetic records');
     $authority->transition(self::DOMAIN, 'shadow', 'Begin shadow');
     $authority->transition(self::DOMAIN, 'agency', 'Complete cutover');
+    return $authority->status()[self::DOMAIN]['version'];
+  }
+
+  /**
+   * Starts a subsequent synthetic Agency generation with the same history.
+   */
+  private function promoteAgain(): int {
+    $authority = $this->container->get('agency_migrate.authority');
+    $authority->transition(self::DOMAIN, 'shadow', 'Review retained effective history');
+    $authority->transition(self::DOMAIN, 'agency', 'Start the next Agency generation');
     return $authority->status()[self::DOMAIN]['version'];
   }
 
