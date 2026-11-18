@@ -59,6 +59,7 @@ final class MigrateBundledHistoryMergeTest extends MigrateKernelTestBase {
    */
   public function testBundledSnapshotRestoresConfigurableHistory(): void {
     [$current, $before] = $this->history();
+    $this->assertSame('Later summary', $current->get('formatted')->get(1)->get('summary')->getValue());
     $after = $this->writer()->captureHistory($current);
     $expected = [];
     foreach ($this->writer()->loadHistory($current) as $revision) {

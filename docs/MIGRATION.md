@@ -389,8 +389,10 @@ refuses before imports. Runtime default flags may differ as current selection
 changes; stored historical default metadata must match. The captured default
 must have been a stored default, and may be older than a later pending revision.
 
-The merge uses a nested transaction, verifies the complete union and exact
-current selection after reload, and invalidates entity and revision caches after
+The merge uses a nested transaction and verifies the complete union, current
+selection, and values exposed by an ordinary entity load. On Drupal 10, selecting
+an existing default also refreshes its current dedicated field tables from the
+selected revision. The merge invalidates entity and revision caches after
 failure. It does not reload live source content during replay. Repeated identical
 merges are idempotent; later automatic IDs advance beyond imported IDs.
 

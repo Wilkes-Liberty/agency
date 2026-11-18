@@ -76,7 +76,9 @@ final class MigrateHistoryMergeTest extends MigrateKernelTestBase {
     $retained = $this->storage('agency_migrate_legacy_item')->loadRevision(70);
     $this->assertInstanceOf(ContentEntityInterface::class, $retained);
     $this->assertSame($legacy_only, $this->writer()->canonicalize($retained));
-    $this->assertSame($ids[1], (int) $this->source(1)->getRevisionId());
+    $current = $this->source(1);
+    $this->assertSame($ids[1], (int) $current->getRevisionId());
+    $this->assertSame($expected[$ids[1]], $this->writer()->canonicalize($current));
     $this->assertGreaterThan($ids[1], $ids[2]);
   }
 

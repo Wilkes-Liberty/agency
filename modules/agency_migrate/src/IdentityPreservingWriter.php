@@ -8,6 +8,7 @@ use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\ContentEntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\Sql\DefaultTableMapping;
 use Drupal\Core\Entity\Sql\SqlEntityStorageInterface;
 use Drupal\Core\TypedData\PrimitiveInterface;
 use Drupal\agency_migrate\Exception\MigrateRefusal;
@@ -138,7 +139,8 @@ final class IdentityPreservingWriter {
         // Compare presave translation metadata to this persisted revision,
         // rather than to a different current revision on the legacy branch.
         // Core 10 uses the public original property; core 11 adds setOriginal.
-        if (version_compare(\Drupal::VERSION, '11.2.0', '>=')) {
+        $legacy_original = version_compare(\Drupal::VERSION, '11.2.0', '<');
+        if (!$legacy_original) {
           $selected->setOriginal(clone $selected);
         }
         else {
@@ -148,11 +150,17 @@ final class IdentityPreservingWriter {
         $selected->setNewRevision(FALSE);
         $selected->isDefaultRevision(TRUE);
         $selected->save();
+        // Core 10 skips dedicated fields that equal the original revision,
+        // even when selecting that revision changes their current values.
+        if ($legacy_original && $storage instanceof SqlEntityStorageInterface) {
+          $this->refreshDedicatedProjection($storage, $selected);
+        }
       }
       $this->advanceSerial($incoming[$default_id]);
       $storage->resetCache([$id]);
       $result = $storage->load($id);
-      if (!$result instanceof ContentEntityInterface || (int) $result->getRevisionId() !== $default_id) {
+      if (!$result instanceof ContentEntityInterface || (int) $result->getRevisionId() !== $default_id
+        || RevisionHistorySnapshot::fields($result) !== $expected[$default_id]) {
         throw new MigrateRefusal('history_drift');
       }
       $actual = [];
@@ -175,6 +183,34 @@ final class IdentityPreservingWriter {
       $transaction?->rollBack();
       $storage->resetCache([$id]);
       throw $exception;
+    }
+  }
+
+  /**
+   * Refreshes current dedicated field rows from the immutable SQL revision.
+   */
+  private function refreshDedicatedProjection(SqlEntityStorageInterface $storage, ContentEntityInterface $selected): void {
+    $mapping = $storage->getTableMapping();
+    if (!$mapping instanceof DefaultTableMapping) {
+      throw new MigrateRefusal('incompatible_field_layout');
+    }
+    foreach ($selected->getFieldDefinitions() as $field) {
+      $definition = $field->getFieldStorageDefinition();
+      if (!$mapping->requiresDedicatedTableStorage($definition)) {
+        continue;
+      }
+      $current = $mapping->getDedicatedDataTableName($definition);
+      $history = $mapping->getDedicatedRevisionTableName($definition);
+      $columns = $mapping->getAllColumns($current);
+      if ($current === $history || $columns === [] || $columns !== $mapping->getAllColumns($history)) {
+        throw new MigrateRefusal('incompatible_field_layout');
+      }
+      $this->database->delete($current)->condition('entity_id', $selected->id())->condition('deleted', 0)->execute();
+      $values = $this->database->select($history, 'r')->fields('r', $columns)
+        ->condition('entity_id', $selected->id())
+        ->condition('revision_id', $selected->getRevisionId())
+        ->condition('deleted', 0);
+      $this->database->insert($current)->from($values)->execute();
     }
   }
 
