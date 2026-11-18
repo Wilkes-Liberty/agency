@@ -371,7 +371,11 @@ in string properties remain strings. Objects and nonfinite numbers refuse.
 `validateHistorySnapshot($snapshot, $target_type)` validates this reconstruction
 payload without loading the original source or changing storage. It checks exact
 identity, layout, fields, properties, revision IDs and default selection.
-Duplicate IDs, inconsistent counts and missing translations refuse. These
+Duplicate IDs, inconsistent counts and missing translations refuse. For bundled
+content, the actual target bundle key is authoritative. Every captured revision
+and translation must carry the same nonempty bundle value, which must exist in
+target configuration. Only that bundle is supplied when deriving the target
+layout; no bundle remapping or source entity lookup is inferred. These
 checks detect malformed or truncated payloads. A self-consistent snapshot does
 not establish that its author captured every source revision; a hash alone
 establishes neither provenance nor authentication.

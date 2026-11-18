@@ -366,6 +366,9 @@ jobs:
             $required = array_merge($required, [
               "testMergePreservesBothHistoriesAndExactDefault",
               "testPromotionPreservesUnaffectedTranslationMetadata",
+              "testBundledSnapshotRestoresConfigurableHistory",
+              "testMissingCapturedBundleRefusesWithoutMutation",
+              "testInconsistentCapturedBundlesRefuseWithoutMutation",
               "testSnapshotReplaysAfterSourceDeletion",
               "testSnapshotIgnoresLaterSourceMutation",
               "testConflictingExistingRevisionRefusesBeforeImports",

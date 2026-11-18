@@ -78,7 +78,7 @@ final class RevisionHistorySnapshot {
       || !is_array($snapshot['revisions']) || !array_is_list($snapshot['revisions']) || count($snapshot['revisions']) !== $snapshot['revision_count']) {
       throw new MigrateRefusal('history_unverified');
     }
-    $probe = $storage->create([]);
+    $probe = $storage->create(self::probeValues($snapshot, $storage));
     if (!$probe instanceof ContentEntityInterface
       || !$probe->getEntityType()->isRevisionable()
       || self::layout($probe) !== $snapshot['layout']) {
@@ -150,6 +150,45 @@ final class RevisionHistorySnapshot {
     }
     ksort($result, SORT_NUMERIC);
     return $result;
+  }
+
+  /**
+   * Uses the target's bundle key and the same captured value for every row.
+   *
+   * @return array<string, string>
+   *   Only the bundle, or no probe defaults for an unbundled target.
+   */
+  private static function probeValues(array $snapshot, ContentEntityStorageInterface $storage): array {
+    $key = $storage->getEntityType()->getKey('bundle');
+    if (($snapshot['layout']['keys']['bundle'] ?? NULL) !== $key) {
+      throw new MigrateRefusal('incompatible_field_layout');
+    }
+    if (!$key) {
+      return [];
+    }
+    $bundle = NULL;
+    foreach ($snapshot['revisions'] as $revision) {
+      if (!is_array($revision) || !isset($revision['fields'][$key])
+        || !is_array($revision['fields'][$key]) || $revision['fields'][$key] === []) {
+        throw new MigrateRefusal('history_unverified');
+      }
+      foreach ($revision['fields'][$key] as $items) {
+        if (!is_array($items) || !array_is_list($items) || count($items) !== 1
+          || !is_array($items[0]) || count($items[0]) !== 1) {
+          throw new MigrateRefusal('history_unverified');
+        }
+        $value = array_values($items[0])[0];
+        if (!is_string($value) || $value === '' || ($bundle !== NULL && $value !== $bundle)) {
+          throw new MigrateRefusal('history_unverified');
+        }
+        $bundle = $value;
+      }
+    }
+    $bundles = \Drupal::service('entity_type.bundle.info')->getBundleInfo($storage->getEntityTypeId());
+    if ($bundle === NULL || !isset($bundles[$bundle])) {
+      throw new MigrateRefusal('incompatible_field_layout');
+    }
+    return [$key => $bundle];
   }
 
   /**
