@@ -16,8 +16,20 @@ application row stores a File Gate UUID string only.
 | CareerPosting | `agency_career_posting` | `draft`, `published`, `closed` |
 | Application | `agency_application` | `received`, `withdrawn`, `accepted`, `declined` |
 
-A published posting must have a future close date (`valid_through`). An
-application may omit a posting reference (general, no-role application).
+Publication validation requires `valid_through` only when `status` is
+`published` and `hiring_status` is `open`. The timestamp is an exclusive
+deadline. It must be later than the current request time. A paused or filled
+posting may remain published with a missing or elapsed deadline.
+
+A host adapter mapping an inclusive date-only close value should use the
+start of the following calendar day in the source site's timezone as the
+deadline. Calendar-day arithmetic accounts for daylight saving transitions.
+Keep the original date and timezone in the projection for reverse mapping.
+Use identity-preserving restore for historical records so each revision
+retains its recorded publication state and deadline. Normal entity validation
+applies when editing an open published posting.
+
+An application may omit a posting reference (general, no-role application).
 Both types accept explicit integer ids, UUIDs, revision ids, timestamps and
 owner values, and refuse collisions. Entity access is denied by default.
 

@@ -44,9 +44,9 @@ retiring an installation requires a reviewed retention and recovery procedure.
 
 `agency_recruiting` stores `agency_career_posting` and `agency_application`
 records. Entity access is denied by default. There are no routes, forms, Views
-or menu links. A published posting requires a future close date. An application
-may omit a posting. Résumé bytes stay in File Gate; the row stores a File Gate
-UUID. See the [recruiting module note](modules/agency_recruiting/README.md).
+or menu links. A published open posting requires a future close deadline. An
+application may omit a posting. Résumé bytes stay in File Gate; the row stores a
+File Gate UUID. See the [recruiting module note](modules/agency_recruiting/README.md).
 
 The alpha6 migration scope includes complete revision/translation copying,
 atomic resumable batches and complete-population reconciliation. A rollback with
