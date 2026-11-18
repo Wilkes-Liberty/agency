@@ -121,6 +121,33 @@ final class LineageStore {
   }
 
   /**
+   * Attaches an immutable copy row to later replay provenance.
+   */
+  public function fingerprint(array $row): string {
+    foreach (['lid', 'source_id', 'source_revision_id', 'target_id', 'target_revision_id', 'recorded'] as $key) {
+      $row[$key] = (int) $row[$key];
+    }
+    ksort($row, SORT_STRING);
+    return hash('sha256', json_encode($row, JSON_THROW_ON_ERROR));
+  }
+
+  /**
+   * Requires the effective record's original lineage to remain intact.
+   */
+  public function assertEffectiveAnchor(array $record): void {
+    $source = $this->bySource($record['source_type'], $record['entity_id']);
+    $target = $this->byTarget($record['target_type'], $record['entity_id']);
+    if ($record['origin'] === 'create' && $source === NULL && $target === NULL) {
+      return;
+    }
+    if ($record['origin'] === 'copy' && $source !== NULL && $source === $target
+      && (int) $source['lid'] === $record['lineage_id'] && $this->fingerprint($source) === $record['lineage_digest']) {
+      return;
+    }
+    throw new MigrateRefusal('rollback_conflict');
+  }
+
+  /**
    * Counts lineage rows for one source/target pair.
    */
   public function countPair(string $source_type, string $target_type): int {

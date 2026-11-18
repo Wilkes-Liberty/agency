@@ -286,15 +286,17 @@ this upgrade. The retained configuration becomes stale as operational authority
 changes; downgrading to such code is not an authority rollback. Use the verified
 rollback service and a reviewed code/data recovery procedure instead.
 
-## Rollback containment and remaining limits
+## Qualified rollback
 
-The rollback service currently supports a verified **zero-journal** return to
-legacy authority. Full operation replay is not implemented. The existing
-four-argument `PostCutoverWriteLog::record()` remains callable, and recorded rows
-remain readable, but they lack operation kinds, authority generations and durable
-before/after history snapshots. Pending legacy records refuse with
-`rollback_unqualified`; no envelope or backfill is inferred, and rows are not
-consumed or rewritten.
+The rollback service returns authority to legacy after whole-domain
+reconciliation. With an empty journal, every registered copier must pass its
+full reconciliation. Opted-in rollback copiers also compare their declared
+access cases. Earlier copiers use the existing empty-journal reconciliation
+contract. With post-cutover operations, the service checks and
+replays the durable create, update and delete envelopes in write-id order.
+The original four-argument `PostCutoverWriteLog::record()` still writes legacy
+records. Those records lack operation and history evidence and cannot qualify
+for replay. Their original rows remain available for recovery review.
 
 The host must explicitly list every expected copier id for a domain in the
 nonsecret Settings key `agency_migrate_copier_domains`. Each copier also declares
@@ -305,30 +307,51 @@ refuse with `rollback_ambiguous`; discovery order never selects authority.
 `copierForTarget()` remains callable but now requires an explicit domain for a
 qualified result. No domain membership is inferred from entity-type names.
 
-Both preview and execution validate the entire known pending set's entity type,
-integer id and UUID against the current target before any replay effects. A
-missing or replaced target refuses with `rollback_conflict`. Even matching
-identities cannot qualify the old journal format. A clean sample also cannot
-qualify a return: an empty journal still requires `fullPassed()` for **every**
-registered domain copier. Execution repeats preflight inside the authority SQL
-transaction and host writer fence before changing authority. Preview performs
-only the read-only preflight and does not acquire that fence.
+For nonempty replay, each domain copier must implement `RollbackCopierInterface`
+for its reviewed equal-layout pair and return its access-comparison principals.
+Both entity storages must explicitly participate on the rollback SQL connection.
+Qualification compares exact typed revision and translation snapshots, integer
+IDs, UUIDs, original lineage, references and the final Agency state. A create
+must prove its identity is new. An update preserves the complete old history.
+A delete needs the exact owned preimage and records a tombstone that points to
+the retained delete envelope. Side-by-side contact or workforce layouts need
+their own reviewed compatibility before qualification.
 
-The future complete replay contract needs append-only mutations and a versioned
-journal with generations, idempotency, durable revision/translation snapshots
-and explicit delete tombstones. Replay must merge complete histories from those
-snapshots, preserve original lineage provenance, qualify every domain population
-including proved deletions, and commit replay markers with authority. The current
-content-overwrite helper is not that history-merge contract. This containment
-change does not make a nonempty replay safe or establish host writer coverage.
+The service pairs each operation with its retained outbox intent, including
+delivered intents, and checks the pair in both directions. Preserve these
+records together. Losing a create and its later delete can leave the current
+populations looking equal while their delivered intents still prove a gap.
+Every pending before and after snapshot must still match its journal
+qualification fingerprint under the current host contract.
 
-Authority `removed` has no rollback edge. Real transfer and rollback acceptance
-still require a qualified host boundary and an operator-controlled rehearsal.
+Preview checks the known data without acquiring a fence. Execution repeats
+preflight inside one root SQL transaction while holding the current Agency
+generation and the host writer fence. After replay it verifies every domain
+copier and appends effective provenance, tombstones, replay markers, authority
+evidence and a durable handover receipt in that transaction. Original lineage,
+copy manifests and journal payloads retain their historical meaning.
+
+Ordinary reconciliation and subsequent rollback use the effective history from
+sealed receipts. A copied record keeps its original copy manifest. An identity
+created after cutover keeps its original create operation. A delete stays
+represented by its retained tombstone and the verified absence of the identity
+and preimage revision IDs from both sides' mapped SQL tables. If an original
+copy row, receipt, journal endpoint or provenance record changes unexpectedly,
+the effective history cannot qualify reconciliation.
+
+Run `agency:migrate:authority --domain=example --set=legacy --rollback
+--reason='Reviewed rollback'` to preview. A nonempty execution also needs
+`--execute` and `--generation` set to the previewed Agency generation. Repeat
+the same generation and reason after `rollback_commit_uncertain` to recover the
+committed receipt or safely retry. A stale generation refuses after further
+authority changes. Authority `removed` has no rollback edge. Production replay
+requires a qualified host fence and an operator-controlled rehearsal.
 
 ## Removal and retained records
 
 Routine uninstall refuses while lineage, run receipts, evidence intents, write
-journals, authority events or authority state contain records. Delivered evidence
+journals, rollback receipts and provenance, authority events or authority state
+contain records. Delivered evidence
 remains protected. Missing or unreadable recovery storage also refuses removal;
 empty installations remain removable. Stop writers and complete an explicit
 retention and recovery procedure before retiring a used installation. There is

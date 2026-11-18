@@ -56,14 +56,35 @@ services:
       - '@plugin.manager.agency_migrate.copier'
       - '@agency_migrate.lineage'
       - '@current_user'
+      - '@agency_migrate.rollback_replay_store'
+      - '@agency_migrate.identity_writer'
+      - '@entity_type.manager'
+      - '@database'
+  agency_migrate.rollback_replay_store:
+    class: Drupal\agency_migrate\RollbackReplayStore
+    arguments:
+      - '@database'
+      - '@datetime.time'
+      - '@agency_migrate.identity_writer'
+      - '@agency_migrate.operation_journal_qualification'
+  agency_migrate.rollback_planner:
+    class: Drupal\agency_migrate\QualifiedRollbackPlanner
+    arguments:
+      - '@entity_type.manager'
+      - '@database'
+      - '@agency_migrate.identity_writer'
+      - '@agency_migrate.lineage'
+      - '@agency_migrate.reconciler'
   agency_migrate.rollback:
     class: Drupal\agency_migrate\RollbackService
     arguments:
       - '@plugin.manager.agency_migrate.copier'
-      - '@agency_migrate.writes'
+      - '@agency_migrate.rollback_replay_store'
       - '@agency_migrate.authority'
       - '@current_user'
       - '@agency_migrate.reconciler'
+      - '@agency_migrate.rollback_planner'
+      - '@database'
   agency_migrate.commands:
     class: Drupal\agency_migrate\Drush\Commands\AgencyMigrateCommands
     arguments:

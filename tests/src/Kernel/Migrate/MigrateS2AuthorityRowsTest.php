@@ -87,8 +87,11 @@ final class MigrateS2AuthorityRowsTest extends MigrateKernelTestBase {
       $this->assertSame('shadow', $authority->get($domain));
       $authority->transition($domain, 'agency', 'cutover');
       $this->assertSame('agency', $authority->get($domain));
-      $authority->transition($domain, 'legacy', 'rehearsal rollback', TRUE);
-      $this->assertSame('legacy', $authority->get($domain));
+      $this->assertRefused(
+        fn () => $authority->transition($domain, 'legacy', 'unqualified rollback', TRUE),
+        'rollback_unqualified',
+      );
+      $this->assertSame('agency', $authority->get($domain));
     }
   }
 

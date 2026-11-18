@@ -209,10 +209,12 @@ final class MigrateAuthorityStorageTest extends MigrateKernelTestBase {
     );
     $rollback = new RollbackService(
       $this->container->get('plugin.manager.agency_migrate.copier'),
-      $this->container->get('agency_migrate.writes'),
+      $this->container->get('agency_migrate.rollback_replay_store'),
       $authority,
       $this->container->get('current_user'),
       $this->container->get('agency_migrate.reconciler'),
+      $this->container->get('agency_migrate.rollback_planner'),
+      $database,
     );
     $before = $authority->status();
     $database->schema()->renameTable('agency_migrate_write_log', 'agency_migrate_write_log_unavailable');
