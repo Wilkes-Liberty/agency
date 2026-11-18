@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\agency\Kernel\Migrate;
 
+use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\agency_migrate\IdentityPreservingWriter;
 use Drupal\agency_migrate\PostCutoverWriter;
 use Drupal\agency_migrate\RollbackAttempt;
 use Drupal\agency_migrate\RollbackService;
 use Drupal\agency_migrate_rollback_test\RollbackTestStorage;
 use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\Core\Entity\ContentEntityStorageInterface;
 use Drupal\Tests\agency\Fixtures\MigrateOperationSqlFault;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
@@ -317,6 +319,42 @@ final class MigrateQualifiedRollbackTest extends MigrateKernelTestBase {
     $foreign->save();
     $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), 'rollback_conflict');
     $this->assertSame([], RollbackTestStorage::$effects);
+    $this->assertSame('body-a', $this->source(1)->get('payload')->value);
+  }
+
+  /**
+   * A later orphan VID collision must refuse before an earlier legacy write.
+   */
+  public function testRollbackRejectsOrphanRevisionCollisionBeforeLegacyWrites(): void {
+    $generation = $this->prepareDomain();
+    $this->update($generation, $this->target(1), 'Earlier valid edit');
+    $this->update($generation, $this->target(2), 'Later edit owns the VID');
+    $target = $this->target(2);
+    $this->assertInstanceOf(ContentEntityInterface::class, $target);
+    $vid = $target->getRevisionId();
+    $storage = $this->container->get('entity_type.manager')->getStorage(self::SOURCE);
+    $this->assertInstanceOf(ContentEntityStorageInterface::class, $storage);
+    $orphan = $storage->create(['id' => 97, 'revision_id' => $vid, 'title' => 'Synthetic orphan']);
+    $this->assertInstanceOf(ContentEntityInterface::class, $orphan);
+    $orphan->enforceIsNew(FALSE);
+    $orphan->setNewRevision(FALSE);
+    $orphan->set('revision_id', $vid);
+    $orphan->isDefaultRevision(FALSE);
+    $storage->restore($orphan);
+    $storage->resetCache([97]);
+    $this->assertNull($storage->loadRevision($vid));
+    $this->assertSame(1, (int) $this->container->get('database')->select(self::SOURCE . '_revision', 'r')
+      ->condition('revision_id', $vid)->countQuery()->execute()->fetchField());
+    $prior_effects = RollbackTestStorage::$effects;
+    $reason = NULL;
+    try {
+      $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation);
+    }
+    catch (MigrateRefusal $exception) {
+      $reason = $exception->reason;
+    }
+    $this->assertSame($prior_effects, RollbackTestStorage::$effects);
+    $this->assertSame('rollback_conflict', $reason);
     $this->assertSame('body-a', $this->source(1)->get('payload')->value);
   }
 
