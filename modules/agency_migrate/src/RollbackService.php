@@ -118,8 +118,13 @@ final class RollbackService {
     }
     if (!$execute) {
       [$operations] = $this->preflight($domain, $generation);
+      $disposition = $this->planDisposition($domain, $generation);
       $preview = ['domain' => $domain, 'pending' => count($operations), 'execute' => FALSE, 'status' => 'dry_run'];
-      return $operations === [] && $expected_generation === NULL ? $preview : $preview + ['generation' => $generation];
+      if ($disposition !== NULL) {
+        $preview['disposition_pending'] = $disposition['plan']->pendingCount;
+      }
+      return $operations === [] && ($preview['disposition_pending'] ?? 0) === 0 && $expected_generation === NULL
+        ? $preview : $preview + ['generation' => $generation];
     }
 
     $attempt = new RollbackAttempt();
@@ -164,16 +169,50 @@ final class RollbackService {
     }
     $this->authority->assertLockedRollback($domain, $generation);
     [$operations, $copiers, $targets, $changes, $effective] = $this->preflight($domain, $generation);
+    $disposition = $this->planDisposition($domain, $generation);
+    if (!$expected && ($operations !== [] || ($disposition['plan']->pendingCount ?? 0) > 0)) {
+      throw new MigrateRefusal('rollback_generation_required');
+    }
     if ($operations !== []) {
-      if (!$expected) {
-        throw new MigrateRefusal('rollback_generation_required');
-      }
       $attempt->targets = $targets;
       $attempt->effects = $operations;
       $this->planner->replay($targets, $operations);
       $this->planner->verifyReplayed($copiers, $changes, $effective);
     }
-    return $this->writes->seal($domain, $generation, $reason, $operations, $changes);
+    $digest = NULL;
+    if ($disposition !== NULL) {
+      try {
+        $digest = $disposition['provider']->applyAndVerify($this->database, $disposition['plan']);
+      }
+      catch (\Throwable) {
+        throw new MigrateRefusal('rollback_failed');
+      }
+      $this->authority->assertLockedRollback($domain, $generation);
+    }
+    return $this->writes->seal($domain, $generation, $reason, $operations, $changes, $disposition['id'] ?? NULL, $digest);
+  }
+
+  /**
+   * Obtains an observational plan without retaining any preview state.
+   *
+   * @return array{id: string, provider: \Drupal\agency_migrate\RollbackDispositionInterface, plan: \Drupal\agency_migrate\RollbackDispositionPlan}|null
+   *   The internal plan, when bound.
+   */
+  private function planDisposition(string $domain, int $generation): ?array {
+    $binding = $this->authority->rollbackDisposition($domain, $generation);
+    if ($binding === NULL) {
+      return NULL;
+    }
+    try {
+      $plan = $binding['provider']->plan($this->database, $domain, $generation);
+    }
+    catch (\Throwable) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    if ($plan->domain !== $domain || $plan->generation !== $generation || $plan->pendingCount < 0) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    return $binding + ['plan' => $plan];
   }
 
   /**
@@ -225,6 +264,32 @@ final class RollbackService {
     }
     if ($receipt === NULL) {
       throw new MigrateRefusal('rollback_stale_generation');
+    }
+    $provider = $this->authority->resolveDisposition(
+      $domain,
+      $generation,
+      $receipt['required_disposition_provider'],
+      $receipt['disposition_required_after'],
+      $receipt['bound_disposition_provider'],
+    );
+    $provider_id = $receipt['disposition_provider'];
+    $digest = $receipt['disposition_digest'];
+    if ($provider_id !== $receipt['bound_disposition_provider']
+      || ($provider_id === NULL) !== ($digest === NULL)
+      || ($digest !== NULL && !preg_match('/^[a-f0-9]{64}$/D', $digest))) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    if ($provider !== NULL && $digest !== NULL) {
+      try {
+        $provider->verifyCommitted($this->database, $domain, $generation, $digest);
+        $confirmed = $this->writes->committedReceipt($domain, $generation, $reason);
+      }
+      catch (\Throwable) {
+        throw new MigrateRefusal('rollback_unqualified');
+      }
+      if ($this->database->inTransaction() || $confirmed !== $receipt) {
+        throw new MigrateRefusal('rollback_unqualified');
+      }
     }
     return $this->publicReceipt($receipt, TRUE);
   }

@@ -30,6 +30,7 @@ final class AuthorityRegister {
     private readonly Connection $database,
     private readonly TimeInterface $time,
     private readonly HostWriterFenceInterface $writerFence,
+    private readonly RollbackDispositionRegistry $dispositions = new RollbackDispositionRegistry(),
   ) {}
 
   /**
@@ -96,7 +97,9 @@ final class AuthorityRegister {
     while ($row = $rows->fetchAssoc()) {
       $domain = $row['domain'];
       unset($row['domain']);
-      $domains[$domain] = $this->validatedRow($row);
+      $validated = $this->validatedRow($row);
+      unset($validated['disposition_provider'], $validated['disposition_required_after']);
+      $domains[$domain] = $validated;
     }
     return $domains;
   }
@@ -128,6 +131,122 @@ final class AuthorityRegister {
   }
 
   /**
+   * Durably enrolls a trusted participant before the domain enters Agency.
+   */
+  public function requireDisposition(string $domain, string $provider_id): void {
+    $this->assertPermission('administer agency migrate authority');
+    $this->assertDomain($domain);
+    if (!RollbackDispositionRegistry::validProviderId($provider_id)) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    if ($this->database->inTransaction()) {
+      throw new MigrateRefusal('writer_transaction_owned');
+    }
+    $transaction = $this->database->startTransaction();
+    try {
+      $row = $this->row($domain, TRUE);
+      if ($row === NULL || !in_array($row['state'], ['legacy', 'shadow'], TRUE)
+        || ($row['disposition_provider'] !== NULL && $row['disposition_provider'] !== $provider_id)) {
+        throw new MigrateRefusal('rollback_unqualified');
+      }
+      if ($row['disposition_provider'] === NULL) {
+        $this->dispositions->resolve($domain, $provider_id);
+        $enrollment = ['disposition_provider' => $provider_id, 'disposition_required_after' => $row['version']];
+        $changed = $this->database->update('agency_migrate_authority_state')->fields($enrollment)
+          ->condition('domain', $domain)->condition('version', $row['version'])
+          ->condition('state', $row['state'])->isNull('disposition_provider')->isNull('disposition_required_after')->execute();
+        if ($changed !== 1 || $this->row($domain, TRUE) !== array_replace($row, $enrollment)) {
+          throw new MigrateRefusal('rollback_unqualified');
+        }
+      }
+      TransactionBoundary::commit($transaction);
+    }
+    catch (\Throwable $exception) {
+      if ($this->database->inTransaction()) {
+        $transaction->rollBack();
+      }
+      throw $exception;
+    }
+  }
+
+  /**
+   * Loads the checked participant for this forward cutover, if required.
+   */
+  private function bindDisposition(string $domain, int $generation, ?string $required): void {
+    if ($required === NULL && $this->dispositions->declaration($domain) === NULL) {
+      return;
+    }
+    if ($required === NULL) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    $this->assertLockedCutover($domain, $generation);
+    $provider = $this->dispositions->resolve($domain, $required);
+    try {
+      $provider->qualifyCutover($this->database, $domain, $generation);
+    }
+    catch (\Throwable) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    $this->assertLockedCutover($domain, $generation);
+    $this->database->insert('agency_migrate_disposition_binding')->fields([
+      'domain' => $domain,
+      'generation' => $generation,
+      'provider' => $required,
+    ])->execute();
+    if ($this->dispositionBinding($domain, $generation) !== $required) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+  }
+
+  /**
+   * Resolves only the active generation's durable rollback binding.
+   *
+   * @return array{id: string, provider: \Drupal\agency_migrate\RollbackDispositionInterface}|null
+   *   The bound participant, if required.
+   *
+   * @internal
+   */
+  public function rollbackDisposition(string $domain, int $generation): ?array {
+    $row = $this->row($domain);
+    if ($row === NULL || $row['state'] !== 'agency' || $row['version'] !== $generation) {
+      throw new MigrateRefusal('rollback_stale_generation');
+    }
+    $binding = $this->dispositionBinding($domain, $generation);
+    if ($binding === NULL && $this->dispositions->declaration($domain) !== NULL) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    $provider = $this->resolveDisposition($domain, $generation, $row['disposition_provider'], $row['disposition_required_after'], $binding);
+    return $provider === NULL || $binding === NULL ? NULL : ['id' => $binding, 'provider' => $provider];
+  }
+
+  /**
+   * Resolves persisted enrollment and binding without inferring historic rows.
+   *
+   * @internal
+   */
+  public function resolveDisposition(string $domain, int $generation, ?string $required, ?int $required_after, ?string $binding): ?RollbackDispositionInterface {
+    if (($required === NULL) !== ($required_after === NULL)
+      || ($required !== NULL && !RollbackDispositionRegistry::validProviderId($required))
+      || ($required_after !== NULL && ($required_after < 1 || $required_after > $generation + 1))) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    $expected = $required_after !== NULL && $generation > $required_after ? $required : NULL;
+    if ($binding !== $expected) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    return $binding === NULL ? NULL : $this->dispositions->resolve($domain, $binding);
+  }
+
+  /**
+   * Reads one immutable binding by its exact scope.
+   */
+  private function dispositionBinding(string $domain, int $generation): ?string {
+    $binding = $this->database->select('agency_migrate_disposition_binding', 'd')->fields('d', ['provider'])
+      ->condition('domain', $domain)->condition('generation', $generation)->execute()->fetchField();
+    return $binding === FALSE ? NULL : $binding;
+  }
+
+  /**
    * Advances one step in the normal authority lifecycle.
    */
   public function transition(string $domain, string $to, string $reason, bool $rollback = FALSE): void {
@@ -140,8 +259,24 @@ final class AuthorityRegister {
       if ($row === NULL) {
         throw new MigrateRefusal('invalid_transition');
       }
+      if ($to === 'agency') {
+        $this->bindDisposition($domain, $row['version'] + 1, $row['disposition_provider']);
+      }
       $this->advanceLocked($domain, $row['state'], $to, $row['version'], $reason, FALSE);
     });
+  }
+
+  /**
+   * Asserts the existing fenced cutover still owns the shadow generation.
+   */
+  public function assertLockedCutover(string $domain, int $prospectiveGeneration): void {
+    if (!isset($this->fencedDomains[$domain]) || !$this->database->inTransaction() || $prospectiveGeneration < 2) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    $row = $this->lockOperationAuthority($this->database, $domain);
+    if ($row !== ['state' => 'shadow', 'version' => $prospectiveGeneration - 1]) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
   }
 
   /**
@@ -242,11 +377,15 @@ final class AuthorityRegister {
    */
   public function withTransitionFence(string $domain, string $to, string $reason, bool $rollback, callable $work): mixed {
     $this->assertTransition($domain, $to, $reason, $rollback);
+    $root = !$this->database->inTransaction();
     $transaction = $this->database->startTransaction();
     $owned_fence = FALSE;
     try {
       $locked = $this->row($domain, TRUE);
       $from = $this->validateTransition($domain, $to, $rollback, $locked['state'] ?? NULL);
+      if ($to === 'agency' && !$root && (($locked['disposition_provider'] ?? NULL) !== NULL || $this->dispositions->declaration($domain) !== NULL)) {
+        throw new MigrateRefusal('writer_transaction_owned');
+      }
       if ($this->requiresFence($from, $to) && !isset($this->fencedDomains[$domain])) {
         $this->writerFence->acquire($domain);
         $this->fencedDomains[$domain] = TRUE;
@@ -295,6 +434,14 @@ final class AuthorityRegister {
     }
     $row['version'] = (int) $row['version'];
     $row['changed'] = (int) $row['changed'];
+    $row['disposition_provider'] ??= NULL;
+    $required_after = $row['disposition_required_after'] ?? NULL;
+    $row['disposition_required_after'] = $required_after === NULL ? NULL : (int) $required_after;
+    if (($row['disposition_provider'] === NULL) !== ($row['disposition_required_after'] === NULL)
+      || ($row['disposition_provider'] !== NULL && !RollbackDispositionRegistry::validProviderId($row['disposition_provider']))
+      || ($required_after !== NULL && ((int) $required_after < 1 || (int) $required_after > $row['version']))) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
     return $row;
   }
 
@@ -403,7 +550,7 @@ final class AuthorityRegister {
    * Restricts domain ids to tenant-neutral machine names.
    */
   private function assertDomain(string $domain): void {
-    if (!preg_match('/^[a-z][a-z0-9_]{0,62}$/', $domain)) {
+    if (!preg_match('/^[a-z][a-z0-9_]{0,62}$/D', $domain)) {
       throw new MigrateRefusal('invalid_transition');
     }
   }

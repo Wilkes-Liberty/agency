@@ -276,6 +276,8 @@ function agency_migrate_schema(): array {
         'reason_hash' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
         'journal_digest' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
         'provenance_digest' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'disposition_provider' => ['type' => 'varchar_ascii', 'length' => 128, 'binary' => TRUE, 'not null' => FALSE],
+        'disposition_digest' => ['type' => 'varchar_ascii', 'length' => 64, 'binary' => TRUE, 'not null' => FALSE],
         'replayed' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
         'recorded' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
       ],
@@ -302,6 +304,15 @@ function agency_migrate_schema(): array {
       ],
       'primary key' => ['domain', 'generation', 'copier', 'entity_id'],
     ],
+    'agency_migrate_disposition_binding' => [
+      'description' => 'Immutable provider binding for a qualified Agency authority generation.',
+      'fields' => [
+        'domain' => ['type' => 'varchar_ascii', 'length' => 63, 'binary' => TRUE, 'not null' => TRUE],
+        'generation' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
+        'provider' => ['type' => 'varchar_ascii', 'length' => 128, 'binary' => TRUE, 'not null' => TRUE],
+      ],
+      'primary key' => ['domain', 'generation'],
+    ],
     'agency_migrate_authority_state' => [
       'description' => 'Operational authority generations independent of configuration import.',
       'fields' => [
@@ -311,6 +322,8 @@ function agency_migrate_schema(): array {
         'changed' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
         'actor_hash' => ['type' => 'varchar', 'length' => 64, 'not null' => TRUE],
         'reason' => ['type' => 'varchar', 'length' => 255, 'not null' => TRUE],
+        'disposition_provider' => ['type' => 'varchar_ascii', 'length' => 128, 'binary' => TRUE, 'not null' => FALSE],
+        'disposition_required_after' => ['type' => 'int', 'size' => 'big', 'not null' => FALSE],
       ],
       'primary key' => ['domain'],
     ],
@@ -520,6 +533,29 @@ function agency_migrate_update_10005(): void {
   foreach (['agency_migrate_rollback_receipt', 'agency_migrate_rollback_record'] as $table) {
     if (!$schema->tableExists($table)) {
       $schema->createTable($table, $definitions[$table]);
+    }
+  }
+}
+
+/**
+ * Retains explicit provider enrollment and receipt pairs without backfilling.
+ */
+function agency_migrate_update_10006(): void {
+  $schema = \Drupal::database()->schema();
+  $definitions = agency_migrate_schema();
+  $binding = 'agency_migrate_disposition_binding';
+  if (!$schema->tableExists($binding)) {
+    $schema->createTable($binding, $definitions[$binding]);
+  }
+  $fields = [
+    'agency_migrate_authority_state' => ['disposition_provider', 'disposition_required_after'],
+    'agency_migrate_rollback_receipt' => ['disposition_provider', 'disposition_digest'],
+  ];
+  foreach ($fields as $table => $names) {
+    foreach ($names as $name) {
+      if (!$schema->fieldExists($table, $name)) {
+        $schema->addField($table, $name, $definitions[$table]['fields'][$name]);
+      }
     }
   }
 }
