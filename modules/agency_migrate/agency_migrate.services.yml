@@ -58,7 +58,11 @@ services:
       - '@current_user'
   agency_migrate.rollback_replay_store:
     class: Drupal\agency_migrate\RollbackReplayStore
-    arguments: ['@database', '@datetime.time', '@agency_migrate.identity_writer']
+    arguments:
+      - '@database'
+      - '@datetime.time'
+      - '@agency_migrate.identity_writer'
+      - '@agency_migrate.operation_journal_qualification'
   agency_migrate.rollback_planner:
     class: Drupal\agency_migrate\QualifiedRollbackPlanner
     arguments:

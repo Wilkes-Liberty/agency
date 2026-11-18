@@ -19,6 +19,7 @@ final class RollbackReplayStore {
     private readonly Connection $database,
     private readonly TimeInterface $time,
     private readonly IdentityPreservingWriter $history,
+    private readonly OperationJournalQualification $qualification,
   ) {}
 
   /**
@@ -74,6 +75,7 @@ final class RollbackReplayStore {
         'kind' => $envelope['kind'],
       ];
       if ($envelope['generation'] === $generation && $row['replayed'] === NULL) {
+        $this->assertCurrentQualification($domain, $envelope);
         $pending[$wid] = $envelope;
       }
       elseif ($envelope['generation'] < $generation && $row['replayed'] !== NULL) {
@@ -106,10 +108,22 @@ final class RollbackReplayStore {
   }
 
   /**
+   * Requalifies both private snapshot sides under the current host contract.
+   */
+  private function assertCurrentQualification(string $domain, array $envelope): void {
+    foreach (['before', 'after'] as $side) {
+      $snapshot = $envelope[$side];
+      if ($snapshot !== NULL && !hash_equals($envelope['qualification'], $this->qualification->assertSnapshot($domain, $envelope['entity_type'], $snapshot))) {
+        throw new MigrateRefusal('rollback_unqualified');
+      }
+    }
+  }
+
+  /**
    * Includes delivered intents and refuses mismatched or unpaired operations.
    */
   private function matchIntents(string $domain, array $expected): void {
-    $intents = $this->database->select('agency_migrate_outbox', 'o')->fields('o', ['id', 'fingerprint', 'metadata'])
+    $intents = $this->database->select('agency_migrate_outbox', 'o')->fields('o', ['id', 'fingerprint', 'metadata', 'recorded'])
       ->condition('operation', 'post_cutover_write')->execute();
     while ($intent = $intents->fetchAssoc()) {
       try {
@@ -126,7 +140,7 @@ final class RollbackReplayStore {
         continue;
       }
       if (!isset($expected[$fingerprint]) || ($metadata['event_id'] ?? NULL) !== $intent['id']
-        || !is_int($metadata['effective_at'] ?? NULL)) {
+        || ($metadata['effective_at'] ?? NULL) !== (int) $intent['recorded']) {
         throw new MigrateRefusal('rollback_unqualified');
       }
       unset($metadata['event_id'], $metadata['effective_at']);
@@ -240,6 +254,7 @@ final class RollbackReplayStore {
         || PostCutoverOperationEnvelope::decode($row, $this->history) !== $operation) {
         throw new MigrateRefusal('rollback_unqualified');
       }
+      $this->assertCurrentQualification($domain, $operation);
     }
     $receipt = [
       'domain' => $domain,

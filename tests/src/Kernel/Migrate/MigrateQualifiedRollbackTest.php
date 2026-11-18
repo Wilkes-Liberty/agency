@@ -142,6 +142,24 @@ final class MigrateQualifiedRollbackTest extends MigrateKernelTestBase {
   }
 
   /**
+   * A changed snapshot qualification cannot authorize replay of an old row.
+   */
+  public function testRollbackRefusesChangedJournalQualification(): void {
+    $generation = $this->prepareDomain();
+    $this->update($generation, $this->target(1), 'Committed under the original contract');
+    $pending = $this->container->get('agency_migrate.writes')->pending(self::DOMAIN);
+    $this->assertCount(1, $pending);
+    $this->container->get('state')->set('agency_operation.policy_case', 'changed_contract');
+    foreach ([FALSE, TRUE] as $execute) {
+      $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, $execute, $generation), 'rollback_unqualified');
+    }
+    $this->assertSame([], RollbackTestStorage::$effects);
+    $this->assertSame('body-a', $this->source(1)->get('payload')->value);
+    $this->assertSame($pending, $this->container->get('agency_migrate.writes')->pending(self::DOMAIN));
+    $this->assertSame('agency', $this->container->get('agency_migrate.authority')->get(self::DOMAIN));
+  }
+
+  /**
    * Drift in an untouched copier refuses before a valid journal prefix writes.
    */
   public function testRollbackRejectsUntouchedCopierDrift(): void {
@@ -183,6 +201,37 @@ final class MigrateQualifiedRollbackTest extends MigrateKernelTestBase {
     $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), 'rollback_conflict');
     $this->assertSame([], RollbackTestStorage::$effects);
     $this->assertSame('body-a', $this->source(1)->get('payload')->value);
+  }
+
+  /**
+   * References must resolve at their own operation in global journal order.
+   */
+  public function testRollbackRefusesForwardReferenceBeforeReplay(): void {
+    $generation = $this->prepareDomain();
+    $first = $this->writer()->create(self::DOMAIN, $generation, $this->container->get('uuid')->generate(), self::TARGET, [
+      'title' => 'Refers to the following record',
+      'related_id' => 5,
+    ]);
+    $second = $this->create($generation, 'Later reference destination');
+    $this->assertSame(4, $first['entity_id']);
+    $this->assertSame(5, $second['entity_id']);
+    $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), 'rollback_conflict');
+    $this->assertSame([], RollbackTestStorage::$effects);
+  }
+
+  /**
+   * Failed final access parity undoes applied history and keeps Agency serving.
+   */
+  public function testRollbackAccessMismatchRestoresLegacy(): void {
+    $generation = $this->prepareDomain();
+    $before = $this->history()->captureHistory($this->source(1));
+    $this->update($generation, $this->target(1), 'Would change access after replay');
+    $this->container->get('state')->set('agency_rollback.access_mismatch', 1);
+    $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), 'rollback_conflict');
+    $this->assertSame([['restore', 1]], RollbackTestStorage::$effects);
+    $this->assertSame($before, $this->history()->captureHistory($this->source(1)));
+    $this->assertCount(1, $this->container->get('agency_migrate.writes')->pending(self::DOMAIN));
+    $this->assertSame('agency', $this->container->get('agency_migrate.authority')->get(self::DOMAIN));
   }
 
   /**

@@ -319,6 +319,8 @@ The service pairs each operation with its retained outbox intent, including
 delivered intents, and checks the pair in both directions. Preserve these
 records together. Losing a create and its later delete can leave the current
 populations looking equal while their delivered intents still prove a gap.
+Every pending before and after snapshot must still match its journal
+qualification fingerprint under the current host contract.
 
 Preview checks the known data without acquiring a fence. Execution repeats
 preflight inside one root SQL transaction while holding the current Agency

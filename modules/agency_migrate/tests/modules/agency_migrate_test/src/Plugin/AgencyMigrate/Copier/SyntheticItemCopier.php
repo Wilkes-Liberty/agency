@@ -35,7 +35,9 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 )]
 final class SyntheticItemCopier extends EntityCopierBase implements ContainerFactoryPluginInterface, RollbackCopierInterface {
 
-  use SyntheticCopierTrait;
+  use SyntheticCopierTrait {
+    accessDecision as private syntheticAccessDecision;
+  }
 
   public function __construct(
     array $configuration,
@@ -69,6 +71,15 @@ final class SyntheticItemCopier extends EntityCopierBase implements ContainerFac
    */
   public function rollbackPrincipals(): array {
     return ['public', 'owner-2'];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function accessDecision(string $principal, string $side, int $id): bool {
+    $allowed = $this->syntheticAccessDecision($principal, $side, $id);
+    return $side === 'source' && $principal === 'public' && $id === $this->state->get('agency_rollback.access_mismatch')
+      ? !$allowed : $allowed;
   }
 
 }
