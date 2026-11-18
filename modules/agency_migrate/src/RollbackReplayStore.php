@@ -24,6 +24,10 @@ final class RollbackReplayStore {
   /**
    * Matches every retained operation intent to a journal entry in both ways.
    *
+   * @param string $domain
+   *   Qualified domain identifier.
+   * @param int $generation
+   *   Current Agency generation.
    * @param array<string, \Drupal\agency_migrate\Plugin\CopierInterface> $targets
    *   Confirmed domain copiers, keyed by their target entity type.
    *
@@ -152,6 +156,14 @@ final class RollbackReplayStore {
   /**
    * Appends immutable provenance, CAS marks all operations, seals receipt.
    *
+   * @param string $domain
+   *   Qualified domain identifier.
+   * @param int $generation
+   *   Agency generation being retired.
+   * @param string $reason
+   *   Original operator reason for exact retry matching.
+   * @param array<int, array<string, mixed>> $operations
+   *   Verified operations keyed by journal write id in their replay order.
    * @param array<string, array<int, array<string, mixed>>> $changes
    *   Verified per-copier identity chains, indexed by entity id.
    */

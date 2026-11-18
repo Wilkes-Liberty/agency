@@ -219,8 +219,12 @@ final class Reconciler {
    * Changed histories are checked against their full snapshots by the planner.
    * Inventory, references and access also cover records outside the journal.
    *
+   * @param \Drupal\agency_migrate\Plugin\RollbackCopierInterface $copier
+   *   A copier with reviewed identity, history and access semantics.
    * @param array<int, array<string, mixed>> $changes
    *   Planned baseline and final snapshots for affected source identities.
+   * @param bool $applied
+   *   Whether legacy now holds the final snapshots.
    *
    * @return array<int, array{uuid: string, revision_id: int}>
    *   The actual legacy side inventory at this stage.
@@ -264,7 +268,7 @@ final class Reconciler {
     if ($sources !== $expected_source || $targets !== $expected_target) {
       throw new MigrateRefusal('rollback_conflict');
     }
-    foreach ($sources as $id => $identity) {
+    foreach (array_keys($sources) as $id) {
       $source = $copier->loadSource($id);
       if ($source === NULL || $this->referenceExceptions($copier, $source, 'source') !== []) {
         throw new MigrateRefusal('rollback_conflict');
@@ -273,7 +277,7 @@ final class Reconciler {
         $target = $copier->loadTarget($id);
         $row = $this->lineage->bySource($source_type, $id);
         $manifest = $row === NULL ? NULL : $this->lineage->manifest($row);
-        if ($target === NULL || $manifest === NULL
+        if ($target === NULL || $row === NULL || $manifest === NULL
           || $manifest !== $copier->historyManifest($source) || $manifest !== $copier->historyManifest($target)
           || $row['content_digest'] !== $copier->contentDigest($source)
           || $row['content_digest'] !== $copier->contentDigest($target)) {
@@ -288,7 +292,7 @@ final class Reconciler {
         }
       }
     }
-    foreach ($targets as $id => $identity) {
+    foreach (array_keys($targets) as $id) {
       $target = $copier->loadTarget($id);
       if ($target === NULL || $this->referenceExceptions($copier, $target, 'target') !== []) {
         throw new MigrateRefusal('rollback_conflict');

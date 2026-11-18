@@ -338,13 +338,39 @@ final class AuthorityRegister {
       'reason' => $values['reason'],
       'recorded' => $values['changed'],
     ])->execute();
-    $this->outbox->record('authority_change', [
+    $metadata = [
       'domain' => $domain,
       'from' => $from,
       'to' => $values['state'],
       'version' => $values['version'],
       'rollback' => $rollback,
-    ], hash('sha256', implode(':', ['authority', $domain, (string) $values['version']])));
+    ];
+    $fingerprint = hash('sha256', implode(':', ['authority', $domain, (string) $values['version']]));
+    $intent_id = $this->outbox->record('authority_change', $metadata, $fingerprint);
+    if ($rollback) {
+      $this->assertRollbackIntent($intent_id, $fingerprint, $metadata);
+    }
+  }
+
+  /**
+   * Requires the exact new authority intent to be durably queued at handover.
+   */
+  private function assertRollbackIntent(string $id, string $fingerprint, array $expected): void {
+    $row = $this->database->select('agency_migrate_outbox', 'o')->fields('o')
+      ->condition('id', $id)->execute()->fetchAssoc();
+    if (!$row || $row['operation'] !== 'authority_change' || $row['fingerprint'] !== $fingerprint || $row['delivered'] !== NULL) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    $metadata = json_decode($row['metadata'], TRUE, 16, JSON_THROW_ON_ERROR);
+    if (!is_array($metadata) || ($metadata['event_id'] ?? NULL) !== $id || ($metadata['effective_at'] ?? NULL) !== (int) $row['recorded']) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
+    unset($metadata['event_id'], $metadata['effective_at']);
+    ksort($metadata);
+    ksort($expected);
+    if ($metadata !== $expected) {
+      throw new MigrateRefusal('rollback_unqualified');
+    }
   }
 
   /**

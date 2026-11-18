@@ -63,7 +63,7 @@ final class RollbackService {
     $targets = [];
     $ready_to_commit = FALSE;
     try {
-      return $this->authority->withTransitionFence($domain, 'legacy', $reason, TRUE, function () use ($domain, $reason, $generation, $expected_generation, &$effects, &$targets, &$ready_to_commit): array {
+      $receipt = $this->authority->withTransitionFence($domain, 'legacy', $reason, TRUE, function () use ($domain, $reason, $generation, $expected_generation, &$effects, &$targets, &$ready_to_commit): array {
         $this->authority->assertLockedRollback($domain, $generation);
         [$operations, $copiers, $targets, $changes] = $this->preflight($domain, $generation);
         if ($operations !== []) {
@@ -79,6 +79,10 @@ final class RollbackService {
         $ready_to_commit = TRUE;
         return $this->publicReceipt($receipt, $expected_generation !== NULL);
       });
+      if ($this->database->inTransaction()) {
+        throw new MigrateRefusal('rollback_commit_uncertain');
+      }
+      return $receipt;
     }
     catch (\Throwable $exception) {
       try {
@@ -161,7 +165,12 @@ final class RollbackService {
    * Exposes the resulting authority and count without private replay values.
    */
   private function publicReceipt(array $receipt, bool $include_generation): array {
-    $public = ['domain' => $receipt['domain'], 'replayed' => $receipt['replayed'], 'authority' => 'legacy', 'status' => 'completed'];
+    $public = [
+      'domain' => $receipt['domain'],
+      'replayed' => $receipt['replayed'],
+      'authority' => 'legacy',
+      'status' => 'completed',
+    ];
     return $include_generation ? $public + ['generation' => $receipt['generation'] + 1] : $public;
   }
 

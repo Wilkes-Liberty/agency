@@ -16,8 +16,9 @@ interface RollbackCopierInterface extends HistoryCopierInterface, InventoryCopie
   /**
    * Returns the reviewed opaque principal tokens for full access comparison.
    *
-   * @return non-empty-list<string>
-   *   The access cases the adapter qualifies, including denial cases.
+   * @return array<mixed>
+   *   The adapter must supply a nonempty list of strings that includes a
+   *   denial case. The caller validates the supplied list.
    */
   public function rollbackPrincipals(): array;
 

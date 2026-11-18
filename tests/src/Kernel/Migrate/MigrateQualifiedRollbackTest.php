@@ -7,9 +7,13 @@ namespace Drupal\Tests\agency\Kernel\Migrate;
 use Drupal\agency_migrate\IdentityPreservingWriter;
 use Drupal\agency_migrate\PostCutoverWriter;
 use Drupal\agency_migrate\RollbackService;
+use Drupal\agency_migrate_rollback_test\RollbackTestStorage;
 use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\Tests\agency\Fixtures\MigrateOperationSqlFault;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use Symfony\Component\Process\Process;
 
 /**
  * Ordered rollback proves the journal, applies it and seals the handover.
@@ -55,6 +59,14 @@ final class MigrateQualifiedRollbackTest extends MigrateKernelTestBase {
     $receipt = $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation);
     $this->assertSame('legacy', $receipt['authority']);
     $this->assertSame(6, $receipt['replayed']);
+    $this->assertSame([
+      ['restore', $first['entity_id']],
+      ['restore', $second['entity_id']],
+      ['restore', 1],
+      ['restore', $first['entity_id']],
+      ['delete', $second['entity_id']],
+      ['delete', 2],
+    ], RollbackTestStorage::$effects);
     $this->assertSame($generation + 1, $receipt['generation']);
     $this->assertSame($receipt, $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation));
     $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, 'Different reason', TRUE, $generation), 'rollback_stale_generation');
@@ -77,6 +89,10 @@ final class MigrateQualifiedRollbackTest extends MigrateKernelTestBase {
     $this->assertSame($original_lineage, $this->container->get('agency_migrate.lineage')->bySource(self::SOURCE, 2));
     $this->assertNull($this->container->get('agency_migrate.lineage')->bySource(self::SOURCE, $first['entity_id']));
     $this->assertSame([], $this->container->get('agency_migrate.writes')->pending(self::DOMAIN));
+    $authority = $this->container->get('agency_migrate.authority');
+    $authority->transition(self::DOMAIN, 'shadow', 'Return to shadow');
+    $authority->transition(self::DOMAIN, 'agency', 'Second Agency generation');
+    $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), 'rollback_stale_generation');
   }
 
   /**
@@ -108,8 +124,259 @@ final class MigrateQualifiedRollbackTest extends MigrateKernelTestBase {
     $database->update('agency_migrate_write_log')->fields(['envelope' => '{}'])->condition('wid', $later['wid'])->execute();
     $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), 'rollback_unqualified');
     $this->assertSame('body-a', $this->source(1)->get('payload')->value);
+    $this->assertSame([], RollbackTestStorage::$effects);
     $this->assertCount(2, $this->container->get('agency_migrate.writes')->pending(self::DOMAIN));
     $this->assertSame('agency', $this->container->get('agency_migrate.authority')->get(self::DOMAIN));
+  }
+
+  /**
+   * A journal row without its exact retained intent refuses before effects.
+   */
+  public function testRollbackMissingOperationIntentRefuses(): void {
+    $generation = $this->prepareDomain();
+    $this->create($generation, 'Requires its operation intent');
+    $this->container->get('database')->delete('agency_migrate_outbox')->condition('operation', 'post_cutover_write')->execute();
+    $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), 'rollback_unqualified');
+    $this->assertSame([], RollbackTestStorage::$effects);
+  }
+
+  /**
+   * Drift in an untouched copier refuses before a valid journal prefix writes.
+   */
+  public function testRollbackRejectsUntouchedCopierDrift(): void {
+    $this->container->get('state')->set('agency_rollback.second_pair', TRUE);
+    $manager = $this->container->get('entity_type.manager');
+    $manager->clearCachedDefinitions();
+    $this->container->get('plugin.manager.agency_migrate.copier')->clearCachedDefinitions();
+    $this->setSetting('agency_migrate_copier_domains', ['synthetic' => ['synthetic_item', 'synthetic_other']]);
+    $this->installEntitySchema('agency_rollback_other_source');
+    $this->installEntitySchema('agency_rollback_other_target');
+    $other = $manager->getStorage('agency_rollback_other_source')->create(['title' => 'Other original']);
+    $other->save();
+    $this->container->get('agency_migrate.runner')->run('synthetic_other', 50, TRUE);
+    $generation = $this->prepareDomain();
+    $this->create($generation, 'Valid first operation');
+    $target = $manager->getStorage('agency_rollback_other_target')->load($other->id());
+    $this->assertInstanceOf(ContentEntityInterface::class, $target);
+    $target->set('payload', 'Unjournaled drift outside the affected copier');
+    $target->save();
+    $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), 'rollback_conflict');
+    $this->assertSame([], RollbackTestStorage::$effects);
+  }
+
+  /**
+   * A foreign historical revision can collide with a later planned operation.
+   */
+  public function testRollbackRejectsLaterRevisionCollisionBeforeLegacyWrites(): void {
+    $generation = $this->prepareDomain();
+    $this->update($generation, $this->target(1), 'Earlier valid edit');
+    $this->update($generation, $this->target(2), 'Later colliding edit');
+    $target = $this->target(2);
+    $this->assertInstanceOf(ContentEntityInterface::class, $target);
+    $foreign = $this->source(3);
+    $foreign->setNewRevision(TRUE);
+    $foreign->set('revision_id', $target->getRevisionId());
+    $foreign->isDefaultRevision(FALSE);
+    $foreign->save();
+    $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), 'rollback_conflict');
+    $this->assertSame([], RollbackTestStorage::$effects);
+    $this->assertSame('body-a', $this->source(1)->get('payload')->value);
+  }
+
+  /**
+   * Unknown or prematurely marked operations cannot be treated as a zero log.
+   *
+   * @dataProvider inconsistentMarkers
+   */
+  #[DataProvider('inconsistentMarkers')]
+  public function testRollbackRefusesInconsistentGenerationAndMarkers(string $case): void {
+    $generation = $this->prepareDomain();
+    $record = $this->create($generation, 'Do not lose this operation');
+    $database = $this->container->get('database');
+    if ($case === 'stale') {
+      $generation += 2;
+      $database->update('agency_migrate_authority_state')->fields(['version' => $generation])->condition('domain', self::DOMAIN)->execute();
+    }
+    else {
+      $database->update('agency_migrate_write_log')->fields(['replayed' => 123])->condition('wid', $record['wid'])->execute();
+    }
+    $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), 'rollback_unqualified');
+    $this->assertSame([], RollbackTestStorage::$effects);
+  }
+
+  /**
+   * Retained evidence cannot repair stale generation or false replay state.
+   */
+  public static function inconsistentMarkers(): array {
+    return [
+      'old pending generation' => ['stale'],
+      'false replay marker' => ['marked'],
+    ];
+  }
+
+  /**
+   * The schema upgrade preserves the original unqualified journal bytes.
+   */
+  public function testRollbackUpgradePreservesOldJournal(): void {
+    $database = $this->container->get('database');
+    $this->container->get('agency_migrate.writes')->record(self::DOMAIN, self::TARGET, 17, $this->container->get('uuid')->generate());
+    $original = $this->container->get('agency_migrate.writes')->pending(self::DOMAIN);
+    $database->schema()->dropTable('agency_migrate_rollback_receipt');
+    $database->schema()->dropTable('agency_migrate_rollback_record');
+    require_once $this->container->get('extension.list.module')->getPath('agency_migrate') . '/agency_migrate.install';
+    agency_migrate_update_10005();
+    agency_migrate_update_10005();
+    $this->assertSame($original, $this->container->get('agency_migrate.writes')->pending(self::DOMAIN));
+    $this->assertSame(0, $this->countRows('agency_migrate_rollback_receipt'));
+    $this->assertSame(0, $this->countRows('agency_migrate_rollback_record'));
+  }
+
+  /**
+   * Faults after real legacy writes undo the entire handover.
+   *
+   * @dataProvider rollbackFaults
+   */
+  #[DataProvider('rollbackFaults')]
+  public function testQualifiedRollbackFaultIsAtomic(string $stage, string $reason): void {
+    $generation = $this->prepareDomain();
+    $before = $this->history()->captureHistory($this->source(1));
+    $deleted = $this->history()->captureHistory($this->source(2));
+    $this->update($generation, $this->target(1), 'Do not leave a committed prefix');
+    $this->delete($generation, $this->target(2));
+    $database = $this->container->get('database');
+    $evidence = $this->countRows('agency_migrate_outbox');
+    $events = $this->countRows('agency_migrate_authority_event');
+    $fault = in_array($stage, ['outbox_insert', 'outbox_extra'], TRUE)
+      ? new MigrateOperationSqlFault($database, 'agency_migrate_outbox', $stage) : NULL;
+    RollbackTestStorage::$interrupt = $stage;
+    $fault?->install();
+    try {
+      $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), $reason);
+    }
+    finally {
+      $fault?->remove();
+      RollbackTestStorage::$interrupt = NULL;
+    }
+    $this->assertFalse($database->inTransaction());
+    $this->assertContains(['restore', 1], RollbackTestStorage::$effects);
+    $this->assertSame($before, $this->history()->captureHistory($this->source(1)));
+    $this->assertSame($deleted, $this->history()->captureHistory($this->source(2)));
+    $this->assertCount(2, $this->container->get('agency_migrate.writes')->pending(self::DOMAIN));
+    $this->assertSame(0, $this->countRows('agency_migrate_rollback_receipt'));
+    $this->assertSame(0, $this->countRows('agency_migrate_rollback_record'));
+    $this->assertSame($evidence, $this->countRows('agency_migrate_outbox'));
+    $this->assertSame($events, $this->countRows('agency_migrate_authority_event'));
+    $this->assertSame('agency', $this->container->get('agency_migrate.authority')->get(self::DOMAIN));
+    $this->assertSame('completed', $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation)['status']);
+  }
+
+  /**
+   * Local SQL and evidence failure boundaries.
+   */
+  public static function rollbackFaults(): array {
+    return [
+      'restore after SQL' => ['restore', 'rollback_failed'],
+      'delete after SQL' => ['delete', 'rollback_failed'],
+      'authority intent insert' => ['outbox_insert', 'rollback_failed'],
+      'authority intent changed' => ['outbox_extra', 'rollback_unqualified'],
+    ];
+  }
+
+  /**
+   * A lost commit acknowledgement returns the original result on retry.
+   */
+  public function testQualifiedRollbackLostCommitAcknowledgement(): void {
+    $generation = $this->prepareDomain();
+    $record = $this->create($generation, 'Exactly one committed record');
+    RollbackTestStorage::$interrupt = 'commit';
+    try {
+      $this->assertRefused(fn () => $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation), 'rollback_commit_uncertain');
+    }
+    finally {
+      RollbackTestStorage::$interrupt = NULL;
+    }
+    $this->assertFalse($this->container->get('database')->inTransaction());
+    $this->assertSame('legacy', $this->container->get('agency_migrate.authority')->get(self::DOMAIN));
+    $receipt = $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation);
+    $this->assertSame('completed', $receipt['status']);
+    $this->assertSame(1, $receipt['replayed']);
+    $this->assertSame([['restore', $record['entity_id']]], RollbackTestStorage::$effects);
+    $this->assertSame(1, $this->countRows('agency_migrate_rollback_receipt'));
+  }
+
+  /**
+   * An independent Agency writer stays blocked until the root handover commits.
+   */
+  public function testQualifiedRollbackExcludesConcurrentAgencyWriter(): void {
+    $generation = $this->prepareDomain();
+    $this->assertSame(3, $generation);
+    $created = $this->create($generation, 'Original operation');
+    $database = $this->container->get('database');
+    $prefix = sys_get_temp_dir() . '/agency-rollback-' . bin2hex(random_bytes(8));
+    $ready = $prefix . '-ready';
+    $release = $prefix . '-release';
+    $vendor = dirname($this->root) . '/vendor';
+    if (!is_file($vendor . '/autoload.php')) {
+      $vendor = $this->root . '/vendor';
+    }
+    $worker = new Process([
+      PHP_BINARY,
+      dirname(__DIR__, 3) . '/fixtures/migrate/operation-worker.php',
+      $this->root,
+      $vendor,
+    ]);
+    $worker->setInput(json_encode([
+      'database' => $database->getConnectionOptions(),
+      'mode' => 'new operation',
+      'operation_id' => $this->container->get('uuid')->generate(),
+      'ready' => $ready,
+      'release' => $release,
+    ], JSON_THROW_ON_ERROR))->setTimeout(35);
+    $worker->start();
+    try {
+      $deadline = microtime(TRUE) + 20;
+      while (!is_file($ready)) {
+        if (!$worker->isRunning() || microtime(TRUE) > $deadline) {
+          $this->fail('Independent writer did not boot.');
+        }
+        usleep(20000);
+      }
+      $observed_lock = FALSE;
+      RollbackTestStorage::$compete = static function () use ($ready, $release, $database, &$observed_lock): void {
+        touch($release);
+        $pid = (int) file_get_contents($ready);
+        $deadline = microtime(TRUE) + 10;
+        do {
+          if ($database->driver() === 'pgsql') {
+            $database->query('SELECT pg_stat_clear_snapshot()');
+            $info = $database->query("SELECT query FROM pg_stat_activity WHERE pid = :pid AND wait_event_type = 'Lock'", [':pid' => $pid])->fetchField();
+          }
+          else {
+            $info = $database->query("SELECT INFO FROM INFORMATION_SCHEMA.PROCESSLIST WHERE ID = :pid AND COMMAND = 'Query'", [':pid' => $pid])->fetchField();
+          }
+          $observed_lock = is_string($info) && str_contains($info, 'agency_migrate_authority_state') && str_contains($info, 'FOR UPDATE');
+          if (!$observed_lock) {
+            usleep(20000);
+          }
+        } while (!$observed_lock && microtime(TRUE) < $deadline);
+        if (!$observed_lock) {
+          throw new \RuntimeException('The competing writer did not wait.');
+        }
+      };
+      $this->assertSame('completed', $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation)['status']);
+      $this->assertTrue($observed_lock);
+      $this->assertSame(0, $worker->wait());
+      $this->assertSame(['status' => 'refused', 'reason' => 'agency_writer_refused'], json_decode($worker->getOutput(), TRUE, 32, JSON_THROW_ON_ERROR));
+      $this->assertSame(1, $this->countRows('agency_migrate_write_log'));
+      $this->assertSame([['restore', $created['entity_id']]], RollbackTestStorage::$effects);
+    }
+    finally {
+      RollbackTestStorage::$compete = NULL;
+      touch($release);
+      $worker->stop(1);
+      @unlink($ready);
+      @unlink($release);
+    }
   }
 
   /**
@@ -165,6 +432,13 @@ final class MigrateQualifiedRollbackTest extends MigrateKernelTestBase {
    */
   private function writer(): PostCutoverWriter {
     return $this->container->get('agency_migrate.post_cutover_writer');
+  }
+
+  /**
+   * Counts the isolated test site's persisted rows.
+   */
+  private function countRows(string $table): int {
+    return (int) $this->container->get('database')->select($table, 'r')->countQuery()->execute()->fetchField();
   }
 
   /**

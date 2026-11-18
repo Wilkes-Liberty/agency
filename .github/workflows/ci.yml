@@ -364,6 +364,26 @@ jobs:
               "testJournalTargetTypeOutsideDomainRefuses",
             ]);
             $required = array_merge($required, [
+              "testOrderedReplayPreservesHistoryProvenanceAndReceipt",
+              "testDeliveredIntentsExposeMissingCreateDeletePair",
+              "testInvalidLaterOperationLeavesLegacyUntouched",
+              "testRollbackMissingOperationIntentRefuses",
+              "testRollbackRejectsUntouchedCopierDrift",
+              "testRollbackRejectsLaterRevisionCollisionBeforeLegacyWrites",
+              "testRollbackRefusesInconsistentGenerationAndMarkers with data set \"old pending generation\"",
+              "testRollbackRefusesInconsistentGenerationAndMarkers with data set \"false replay marker\"",
+              "testRollbackUpgradePreservesOldJournal",
+              "testQualifiedRollbackFaultIsAtomic with data set \"restore after SQL\"",
+              "testQualifiedRollbackFaultIsAtomic with data set \"delete after SQL\"",
+              "testQualifiedRollbackFaultIsAtomic with data set \"authority intent insert\"",
+              "testQualifiedRollbackFaultIsAtomic with data set \"authority intent changed\"",
+              "testQualifiedRollbackLostCommitAcknowledgement",
+              "testQualifiedRollbackExcludesConcurrentAgencyWriter",
+              "testAuthorityTransitionRefusesDirectRollback",
+              "testPopulatedRecoveryTablesBlockUninstall with data set \"rollback receipt\"",
+              "testPopulatedRecoveryTablesBlockUninstall with data set \"rollback provenance\"",
+            ]);
+            $required = array_merge($required, [
               "testMergePreservesBothHistoriesAndExactDefault",
               "testPromotionPreservesUnaffectedTranslationMetadata",
               "testBundledSnapshotRestoresConfigurableHistory",
