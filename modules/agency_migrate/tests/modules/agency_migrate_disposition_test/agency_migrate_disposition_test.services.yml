@@ -1,0 +1,6 @@
+services:
+  agency_migrate_disposition_test.provider:
+    class: Drupal\agency_migrate_disposition_test\LocalDisposition
+    arguments: ['@database', '@agency_migrate.authority']
+    tags:
+      - { name: agency_migrate.rollback_disposition, provider_id: synthetic.disposition, domain: synthetic }

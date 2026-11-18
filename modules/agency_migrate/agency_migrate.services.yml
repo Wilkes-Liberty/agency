@@ -24,6 +24,8 @@ services:
     arguments: ['@database', '@datetime.time']
   agency_migrate.host_writer_fence:
     class: Drupal\agency_migrate\UnavailableHostWriterFence
+  agency_migrate.rollback_dispositions:
+    class: Drupal\agency_migrate\RollbackDispositionRegistry
   agency_migrate.authority:
     class: Drupal\agency_migrate\AuthorityRegister
     arguments:
@@ -32,6 +34,7 @@ services:
       - '@database'
       - '@datetime.time'
       - '@agency_migrate.host_writer_fence'
+      - '@agency_migrate.rollback_dispositions'
   agency_migrate.authority_reader:
     class: Drupal\agency_migrate\AuthorityGatedReader
     arguments:

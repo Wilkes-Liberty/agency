@@ -358,6 +358,49 @@ refuses before that append, and unavailable evidence storage returns a fixed
 failure instead of claiming an evidenced refusal. Backup recovery remains a
 separate reviewed procedure.
 
+### Optional host resources
+
+A host can register a local SQL participant for additional resources that
+need to return when a domain hands authority back. The participant
+implements `Drupal\agency_migrate\RollbackDispositionInterface` and uses
+the exact connection supplied by Agency. It runs within the existing
+authority and host writer fence for cutover and rollback. Each service has
+one `agency_migrate.rollback_disposition` tag with a stable `provider_id`
+and canonical `domain`. Service configuration alone cannot enroll the
+domain or change its authority.
+
+An authority administrator calls
+`AuthorityRegister::requireDisposition($domain, $provider_id)` while the
+domain is in legacy or shadow. Enrollment is durable, and repeating the same
+enrollment in either state is safe. Enrollment cannot be changed or cleared.
+Before cutover advances authority, the declared provider qualifies the
+prospective generation and Agency records its immutable binding. Missing or
+mismatched qualification prevents the transition.
+
+A dry run can return a separate `disposition_pending` count for a bound
+generation. It reserves nothing. Execution requires the expected generation
+when either the entity journal or the additional resource plan has pending
+work. It builds a fresh plan after entity preflight under the existing locks,
+applies and verifies it after successful entity replay, and seals the private
+host receipt digest before returning authority. The public `replayed` count
+covers entities. If a participant ends the original transaction, Agency
+refuses to seal the receipt or advance authority. An interrupted rollback
+with an early SQL commit reports `rollback_commit_uncertain`. The guard
+checks the original Drupal stack IDs and native PDO transaction. A retained
+savepoint causes refusal. Agency rolls back the retained children before
+rolling back its own scope. A raw PDO
+commit followed by a raw begin can leave both checks appearing active.
+Trusted participants must leave transaction control and DDL outside their
+callbacks.
+
+The provider owns its immutable receipt and verifies it without using live
+resource counts when an operator reconciles an uncertain handover. A missing
+provider, binding, incomplete receipt, or mismatched proof prevents
+confirmation. Keep the provider available for the lifetime of the retained
+receipt. Update 10006 adds nullable enrollment and proof fields and a
+generation binding table. It preserves earlier receipts without inferring
+host resource history.
+
 ## Removal and retained records
 
 Routine uninstall refuses while lineage, run receipts, evidence intents, write

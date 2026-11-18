@@ -1,0 +1,34 @@
+<?php
+
+/**
+ * @file
+ * Stores synthetic transaction-owned resources and immutable receipts.
+ */
+
+declare(strict_types=1);
+
+/**
+ * Implements hook_schema().
+ */
+function agency_migrate_disposition_test_schema(): array {
+  $scope = [
+    'domain' => ['type' => 'varchar_ascii', 'length' => 63, 'not null' => TRUE],
+    'generation' => ['type' => 'int', 'size' => 'big', 'not null' => TRUE],
+  ];
+  return [
+    'agency_migrate_test_resource' => [
+      'fields' => $scope + [
+        'id' => ['type' => 'int', 'not null' => TRUE],
+        'authority' => ['type' => 'varchar_ascii', 'length' => 8, 'not null' => TRUE],
+      ],
+      'primary key' => ['domain', 'generation', 'id'],
+    ],
+    'agency_migrate_test_disposition' => [
+      'fields' => $scope + [
+        'digest' => ['type' => 'varchar_ascii', 'length' => 64, 'not null' => TRUE],
+        'changed' => ['type' => 'int', 'not null' => TRUE],
+      ],
+      'primary key' => ['domain', 'generation'],
+    ],
+  ];
+}
