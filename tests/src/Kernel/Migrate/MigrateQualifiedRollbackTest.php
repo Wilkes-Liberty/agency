@@ -131,6 +131,73 @@ final class MigrateQualifiedRollbackTest extends MigrateKernelTestBase {
   }
 
   /**
+   * Prior effective records must pass access checks before a new replay.
+   */
+  public function testPriorEffectiveAccessMismatchRefusesBeforeLegacyWrites(): void {
+    $generation = $this->prepareDomain();
+    $this->update($generation, $this->target(1), 'First rollback update');
+    $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation);
+    $next = $this->promoteAgain();
+    $this->update($next, $this->target(2), 'Must not reach legacy');
+    $this->container->get('state')->set('agency_rollback.access_mismatch', 1);
+    $before = RollbackTestStorage::$effects;
+    $refusals = [];
+    foreach ([FALSE, TRUE] as $execute) {
+      try {
+        $this->rollback()->rollback(self::DOMAIN, self::REASON, $execute, $next);
+      }
+      catch (MigrateRefusal $exception) {
+        $refusals[] = $exception->reason;
+      }
+    }
+    $this->assertSame($before, RollbackTestStorage::$effects);
+    $this->assertSame(['rollback_conflict', 'rollback_conflict'], $refusals);
+    $this->assertSame('body-b', $this->source(2)->get('payload')->value);
+    $this->assertCount(1, $this->container->get('agency_migrate.writes')->pending(self::DOMAIN));
+    $this->assertSame('agency', $this->container->get('agency_migrate.authority')->get(self::DOMAIN));
+  }
+
+  /**
+   * Replay markers still require a seal when both stored outcomes are absent.
+   *
+   * @dataProvider reconciliationScopes
+   */
+  #[DataProvider('reconciliationScopes')]
+  public function testReconciliationRefusesMissingSealForReplayedGeneration(array $sample): void {
+    $generation = $this->prepareDomain();
+    $created = $this->create($generation, 'Transient Agency record');
+    $this->delete($generation, $this->target($created['entity_id']));
+    $reconciler = $this->container->get('agency_migrate.reconciler');
+    $this->assertTrue($reconciler->compare('synthetic_item', $sample)->passed());
+    $this->rollback()->rollback(self::DOMAIN, self::REASON, TRUE, $generation);
+    $this->assertTrue($reconciler->compare('synthetic_item', $sample)->passed());
+
+    $database = $this->container->get('database');
+    $database->delete('agency_migrate_rollback_record')->condition('domain', self::DOMAIN)->execute();
+    $database->delete('agency_migrate_rollback_receipt')->condition('domain', self::DOMAIN)->execute();
+    $this->assertSame(2, (int) $database->select('agency_migrate_write_log', 'w')
+      ->condition('domain', self::DOMAIN)->condition('authority_generation', $generation)
+      ->isNotNull('replayed')->countQuery()->execute()->fetchField());
+    $this->assertSame(2, (int) $database->select('agency_migrate_outbox', 'o')
+      ->condition('operation', 'post_cutover_write')->countQuery()->execute()->fetchField());
+    $reason = NULL;
+    try {
+      $reconciler->compare('synthetic_item', $sample);
+    }
+    catch (MigrateRefusal $exception) {
+      $reason = $exception->reason;
+    }
+    $this->assertSame('coverage_unverified', $reason);
+  }
+
+  /**
+   * A missing seal invalidates full and sampled reconciliation.
+   */
+  public static function reconciliationScopes(): array {
+    return ['full' => [[]], 'sample' => [[1]]];
+  }
+
+  /**
    * Changed provenance cannot create a new reconciliation baseline.
    */
   public function testReconciliationRefusesAlteredEffectiveProvenance(): void {
