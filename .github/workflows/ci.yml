@@ -281,6 +281,13 @@ jobs:
             if (!in_array("testSeededFixtureFails", $names, TRUE)) { exit(1); }
             if (!in_array("testPublishedPackagePasses", $names, TRUE)) { exit(1); }
           '
+      - name: Run contact preflight refusal tests
+        working-directory: drupal
+        env:
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/ContactPreflightTest.php"
       - name: Start test server
         working-directory: drupal
         run: |
