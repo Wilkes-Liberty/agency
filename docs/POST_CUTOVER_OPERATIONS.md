@@ -53,8 +53,10 @@ concurrent miss followed by a transition. Historical receipt lookup leaves live
 entities unread.
 
 The service returns `completed` only after root commit. A lost commit
-acknowledgement reports `operation_commit_uncertain`, with no success receipt.
-Do not automatically mint another operation ID. Resolve the original operation
+acknowledgement or a failed final cache reset after commit reports
+`operation_commit_uncertain` and withholds the receipt. A cleanup failure
+includes the secondary reason `operation_cache_cleanup_failed` and preserves
+any existing refusal reason. Do not automatically mint another operation ID. Resolve the original operation
 using its exact request; changed-generation retries cannot perform another
 mutation. SQL and provider failures never include record values in refusal
 messages or evidence metadata. The migration outbox delivers required intents

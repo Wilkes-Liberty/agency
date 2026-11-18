@@ -224,6 +224,69 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
   }
 
   /**
+   * A failed final cache reset reports uncertainty and preserves the receipt.
+   */
+  public function testOperationCacheCleanupAfterCommitKeepsReceipt(): void {
+    $this->authority('agency', 3);
+    $operation = $this->container->get('uuid')->generate();
+    $this->container->get('state')->set('agency_operation.fault', 'cleanup_after_commit');
+    $attempt = fn () => $this->writer()->create('synthetic', 3, $operation, self::TYPE, ['title' => 'Committed despite cache failure']);
+    $this->assertCleanupRefused($attempt, 'operation_commit_uncertain');
+    $this->assertFalse($this->container->get('database')->inTransaction());
+    $this->assertSame(1, $this->rows('agency_migrate_agency_item'));
+    $this->assertSame(1, $this->rows('agency_migrate_write_log'));
+    $this->assertSame(1, $this->rows('agency_migrate_outbox'));
+    $receipt = $attempt();
+    $this->assertSame('completed', $receipt['status']);
+    $this->assertSame('Committed despite cache failure', $this->target($receipt['entity_id'])->get('title')->value);
+  }
+
+  /**
+   * Cache cleanup cannot expose a backend failure during root rollback.
+   *
+   * @dataProvider rollbackCleanupFailures
+   */
+  #[DataProvider('rollbackCleanupFailures')]
+  public function testOperationCacheCleanupAfterRollbackKeepsRefusal(string $fault, string $reason): void {
+    $this->authority('agency', 3);
+    $operation = $this->container->get('uuid')->generate();
+    $this->container->get('state')->set('agency_operation.fault', $fault);
+    $attempt = fn () => $this->writer()->create('synthetic', 3, $operation, self::TYPE, ['title' => 'Rolled back despite cache failure']);
+    $this->assertCleanupRefused($attempt, $reason);
+    $this->assertFalse($this->container->get('database')->inTransaction());
+    $this->assertSame(0, $this->rows('agency_migrate_agency_item'));
+    $this->assertSame(0, $this->rows('agency_migrate_write_log'));
+    $this->assertSame(0, $this->rows('agency_migrate_outbox'));
+  }
+
+  /**
+   * Cache failures with and without a failed rollback callback.
+   */
+  public static function rollbackCleanupFailures(): array {
+    return [
+      'rollback acknowledged' => ['cleanup_after_rollback', 'operation_history_conflict'],
+      'rollback callback failed' => ['cleanup_after_rollback_callback', 'operation_commit_uncertain'],
+    ];
+  }
+
+  /**
+   * Requires both safe refusal reasons without any backend exception chain.
+   */
+  private function assertCleanupRefused(callable $attempt, string $reason): void {
+    try {
+      $attempt();
+      $this->fail('Expected a migrate refusal.');
+    }
+    catch (MigrateRefusal $exception) {
+      $this->assertSame($reason, $exception->reason);
+      $cleanup = $exception->getPrevious();
+      $this->assertInstanceOf(MigrateRefusal::class, $cleanup);
+      $this->assertSame('operation_cache_cleanup_failed', $cleanup->reason);
+      $this->assertNull($cleanup->getPrevious());
+    }
+  }
+
+  /**
    * SQL interface membership cannot qualify a different actual connection.
    */
   public function testOperationWrongStorageConnectionRefuses(): void {

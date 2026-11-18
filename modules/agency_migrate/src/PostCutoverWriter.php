@@ -12,6 +12,7 @@ use Drupal\Core\Database\Connection;
 use Drupal\Core\Database\Transaction;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\ContentEntityStorageInterface;
+use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 
 /**
@@ -212,28 +213,42 @@ final class PostCutoverWriter {
       $receipt = $this->append($envelope);
       $committing = TRUE;
       $this->commit($transaction);
-      return $receipt;
     }
     catch (\Throwable $exception) {
       $rollbackFailed = FALSE;
       try {
-        if ($this->database->inTransaction()) {
-          $transaction?->rollBack();
+        try {
+          if ($this->database->inTransaction()) {
+            $transaction?->rollBack();
+          }
+        }
+        finally {
+          // Releasing the object can run callbacks after the SQL rollback.
+          unset($transaction);
         }
       }
       catch (\Throwable) {
         $rollbackFailed = TRUE;
       }
-      finally {
-        unset($transaction);
-      }
-      if ($committing || $rollbackFailed) {
-        throw new MigrateRefusal('operation_commit_uncertain');
-      }
-      throw $exception instanceof MigrateRefusal ? $exception : new MigrateRefusal('operation_failed');
+      $refusal = $committing || $rollbackFailed
+        ? new MigrateRefusal('operation_commit_uncertain')
+        : ($exception instanceof MigrateRefusal ? $exception : new MigrateRefusal('operation_failed'));
+      $this->resetCacheAfterCompletion($storage, $refusal->reason);
+      throw $refusal;
     }
-    finally {
+    $this->resetCacheAfterCompletion($storage, 'operation_commit_uncertain');
+    return $receipt;
+  }
+
+  /**
+   * Clears cached entities after commit or rollback, with safe refusal reasons.
+   */
+  private function resetCacheAfterCompletion(?EntityStorageInterface $storage, string $reason): void {
+    try {
       $storage?->resetCache();
+    }
+    catch (\Throwable) {
+      throw new MigrateRefusal($reason, new MigrateRefusal('operation_cache_cleanup_failed'));
     }
   }
 

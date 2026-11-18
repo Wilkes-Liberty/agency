@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Drupal\agency_migrate_operation_test;
 
+use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\agency_migrate\OperationSqlContentEntityStorage;
 use Drupal\Core\Database\Database;
 use Drupal\Core\Entity\EntityInterface;
@@ -20,6 +21,11 @@ final class OperationTestStorage extends OperationSqlContentEntityStorage {
    * In-process synthetic fault and worker coordination controls.
    */
   protected StateInterface $operationState;
+
+  /**
+   * Whether the first cache reset after root completion must fail.
+   */
+  protected bool $failCompletedCacheReset = FALSE;
 
   /**
    * {@inheritdoc}
@@ -42,6 +48,9 @@ final class OperationTestStorage extends OperationSqlContentEntityStorage {
       return SAVED_UPDATED;
     }
     $result = parent::save($entity);
+    if (in_array($fault, ['cleanup_after_commit', 'cleanup_after_rollback', 'cleanup_after_rollback_callback'], TRUE)) {
+      $this->failCompletedCacheReset = TRUE;
+    }
     $workers = $this->operationState->get('agency_operation.workers', []);
     foreach ($workers as $ready => $release) {
       touch($release);
@@ -75,6 +84,16 @@ final class OperationTestStorage extends OperationSqlContentEntityStorage {
         }
       });
     }
+    if ($fault === 'cleanup_after_rollback_callback') {
+      $this->database->transactionManager()->addPostTransactionCallback(static function (bool $success): void {
+        if (!$success) {
+          throw new \RuntimeException('Synthetic rollback callback details.');
+        }
+      });
+    }
+    if (in_array($fault, ['cleanup_after_rollback', 'cleanup_after_rollback_callback'], TRUE)) {
+      throw new MigrateRefusal('operation_history_conflict');
+    }
     if ($fault === 'save') {
       throw new \RuntimeException('Synthetic post-save failure.');
     }
@@ -87,6 +106,17 @@ final class OperationTestStorage extends OperationSqlContentEntityStorage {
         ->condition('revision_id', $old)->execute();
     }
     return $result;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function resetCache(?array $ids = NULL): void {
+    if ($this->failCompletedCacheReset && !$this->database->inTransaction()) {
+      $this->failCompletedCacheReset = FALSE;
+      throw new \RuntimeException('Synthetic cache backend details.');
+    }
+    parent::resetCache($ids);
   }
 
 }
