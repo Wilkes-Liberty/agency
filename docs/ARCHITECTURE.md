@@ -40,6 +40,24 @@ Drupal's database and Entity API provide the initial storage environment. A shar
 does not imply shared authorization. Installation topology and any multi-tenant support
 require explicit isolation design and verification before a support claim.
 
+## Contact migration preflight
+
+The internal commercial preflight takes a complete authorized snapshot for one
+host and tenant, a private reviewed crosswalk, and an occupancy inventory for
+both target populations. The host supplies source authorization and verified
+user UUIDs. Review rows bind the source ID and UUID to one classification,
+a history watermark and a digest. The watermark covers all source revisions,
+their storage layout, default selection and referenced user identities. The
+digest detects changes to a trusted row.
+
+Person-shaped records have a commercial history and an optional independently
+reviewed Person binding. Organization-shaped records hold the reviewed
+shareable display name separately from a private commercial extension keyed
+by Organization UUID and original revision ID. Inverse reconstruction recovers
+the exact source value tree, merge references and claim bytes in memory. The
+preflight reads supplied occupancy across both populations. Durable migration
+requires a separate qualified writer and shared identity reservation.
+
 ## Independent state
 
 Keep these concepts separate in storage, policy and user experience:

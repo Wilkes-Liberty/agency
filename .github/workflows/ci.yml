@@ -281,6 +281,42 @@ jobs:
             if (!in_array("testSeededFixtureFails", $names, TRUE)) { exit(1); }
             if (!in_array("testPublishedPackagePasses", $names, TRUE)) { exit(1); }
           '
+      - name: Run contact and statement preflight refusal tests
+        working-directory: drupal
+        env:
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/contact-preflight-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/ContactPreflightTest.php"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/statement-preflight-junit.xml" \
+            "$PWD/web/modules/contrib/agency/modules/agency_engagement/tests/src/Unit/StatementPreflightTest.php"
+          # PHP expressions are intentionally passed literally to PHP.
+          # shellcheck disable=SC2016
+          php -r '
+            $required = [
+              "contact-preflight-junit.xml" => ["testRequiresReviewForBothIdentitiesBeforeProjection"],
+              "statement-preflight-junit.xml" => [
+                "testKeepsExactSnapshotBytesAndDistinctAnchors",
+                "testDocumentReplayRefusesForeignNamespaceBeforeSlotReads",
+                "testDocumentReplayRefusesForeignEmptySlot",
+                "testChallengeQualificationRefusesForeignStatementBeforeReceiptRead",
+                "testChallengeReplayRefusesForeignNamespaceBeforeKeyReads",
+              ],
+            ];
+            foreach ($required as $file => $names) {
+              $xml = simplexml_load_file($file);
+              if ($xml === false) { exit(1); }
+              $executed = [];
+              foreach ($xml->xpath("//testcase") as $case) {
+                if (isset($case->failure) || isset($case->error) || isset($case->skipped)) { exit(1); }
+                $executed[] = (string) $case["name"];
+              }
+              if (array_diff($names, $executed)) { exit(1); }
+              echo "$file: " . count($executed) . " cases executed\n";
+            }
+          '
       - name: Start test server
         working-directory: drupal
         run: |
@@ -727,5 +763,7 @@ jobs:
             drupal/agency-host-junit.xml
             drupal/agency-recruiting-junit.xml
             drupal/tenant-strings-junit.xml
+            drupal/contact-preflight-junit.xml
+            drupal/statement-preflight-junit.xml
             drupal/composer.lock
             drupal/server.log
