@@ -44,7 +44,7 @@ final class IdentityPreservingWriter {
    * Captures typed revision values for later replay without a live source.
    *
    * @return array<string, mixed>
-   *   Version 1 snapshot; see RevisionHistorySnapshot for its value contract.
+   *   Versioned snapshot; see RevisionHistorySnapshot for its value contract.
    */
   public function captureHistory(ContentEntityInterface $entity): array {
     if (!$entity->getEntityType()->isRevisionable()) {
@@ -401,6 +401,12 @@ final class IdentityPreservingWriter {
         }
         $values[$name][$langcode] = [];
         foreach ($field as $item) {
+          if ($field->getFieldDefinition()->getType() === 'map') {
+            // Encode the item before sorting field and language keys. PHP
+            // serialization retains map order, sparse keys and scalar types.
+            $values[$name][$langcode][] = base64_encode(serialize(RevisionHistorySnapshot::mapValues($item)));
+            continue;
+          }
           $properties = [];
           foreach ($item->getProperties(FALSE) as $property_name => $property) {
             $value = $property->getValue();
@@ -449,6 +455,16 @@ final class IdentityPreservingWriter {
       }
       $values[$name] = [];
       foreach ($field as $item) {
+        if ($field->getFieldDefinition()->getType() === 'map') {
+          $map = RevisionHistorySnapshot::mapValues($item);
+          // SQL reload passes the raw map to the item list. A leading
+          // numeric key is interpreted as a delta and loses map structure.
+          if (is_numeric(array_key_first($map))) {
+            throw new MigrateRefusal('incompatible_field_layout');
+          }
+          $values[$name][] = $map;
+          continue;
+        }
         $properties = [];
         foreach ($item->getProperties(FALSE) as $property_name => $property) {
           $properties[$property_name] = $property->getValue();

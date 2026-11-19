@@ -8,6 +8,7 @@ use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\ContentEntityStorageInterface;
 use Drupal\Core\Entity\ContentEntityTypeInterface;
+use Drupal\Core\Field\FieldItemInterface;
 use Drupal\Core\Field\Plugin\Field\FieldType\MapItem;
 use Drupal\Core\TypedData\PrimitiveInterface;
 use Drupal\Core\TypedData\ComplexDataDefinitionInterface;
@@ -226,12 +227,8 @@ final class RevisionHistorySnapshot {
         $result[$name][$langcode] = [];
         foreach ($field as $item) {
           // Core maps have dynamic keys and an empty property definition.
-          if ($item instanceof MapItem && $field->getFieldDefinition()->getType() === 'map') {
-            $values = $item->getValue();
-            if (!is_array($values)) {
-              throw new MigrateRefusal('history_unverified');
-            }
-            $result[$name][$langcode][] = $values;
+          if ($field->getFieldDefinition()->getType() === 'map') {
+            $result[$name][$langcode][] = self::mapValues($item);
             continue;
           }
           $properties = [];
@@ -251,6 +248,19 @@ final class RevisionHistorySnapshot {
     }
     self::assertValues($result);
     return $result;
+  }
+
+  /**
+   * Returns the exact object-free values of a stored core map item.
+   *
+   * Key order and scalar types are part of the persisted map value.
+   */
+  public static function mapValues(FieldItemInterface $item): array {
+    if (!$item instanceof MapItem || !is_array($values = $item->getValue())) {
+      throw new MigrateRefusal('history_unverified');
+    }
+    self::assertValues($values);
+    return $values;
   }
 
   /**

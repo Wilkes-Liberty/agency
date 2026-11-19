@@ -44,6 +44,9 @@ final class OperationTestJournalPolicy implements OperationJournalPolicyInterfac
       'title' => ['value' => 'public'],
       'uuid' => ['value' => 'internal'],
     ];
+    if ($this->state->get('agency_migrate_test.map_target')) {
+      $markings['data'] = [];
+    }
     if ($bundle === 'journal_fixture') {
       $markings['journal_bundle'] = ['value' => 'internal'];
     }

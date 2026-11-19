@@ -386,6 +386,39 @@ final class MigrateOperationJournalTest extends MigrateKernelTestBase {
   }
 
   /**
+   * A dynamic map cannot qualify through an empty property marking.
+   */
+  public function testOperationJournalRefusesDynamicMapBeforeSave(): void {
+    $this->installMapTarget();
+    $this->authority('agency', 3);
+    $operation = $this->container->get('uuid')->generate();
+    $marker = 'synthetic-nested-unclassified-marker';
+    $attempt = fn () => $this->writer()->create('synthetic', 3, $operation, self::TYPE, [
+      'title' => 'Held map record',
+      'data' => [['settings' => ['protected_value' => $marker]]],
+    ]);
+    try {
+      $attempt();
+      // A successful pre-fix write exposes the arbitrary nested field.
+      $this->assertStringNotContainsString($marker, json_encode($this->envelope($operation), JSON_THROW_ON_ERROR));
+      $this->fail('Expected qualification to refuse the dynamic map.');
+    }
+    catch (MigrateRefusal $exception) {
+      $this->assertSame('operation_unqualified', $exception->reason);
+      $this->assertNull($exception->getPrevious());
+    }
+    $this->assertSame(0, $this->rows('agency_migrate_agency_item'));
+    $this->assertSame(0, $this->rows('agency_migrate_write_log'));
+    $this->assertSame(0, $this->rows('agency_migrate_outbox'));
+
+    $this->container->get('state')->set('agency_operation.fault', 'save');
+    $this->assertRefused($attempt, 'operation_unqualified');
+    $this->assertSame(0, $this->rows('agency_migrate_agency_item'));
+    $this->assertSame(0, $this->rows('agency_migrate_write_log'));
+    $this->assertSame(0, $this->rows('agency_migrate_outbox'));
+  }
+
+  /**
    * Unrelated writes cannot journal an unmarked confidential prior revision.
    */
   public function testOperationJournalQualificationCoversHistoricalTranslation(): void {

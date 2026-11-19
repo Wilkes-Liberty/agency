@@ -93,6 +93,19 @@ abstract class MigrateKernelTestBase extends KernelTestBase {
   }
 
   /**
+   * Adds a shared-table map to the synthetic Agency target for one test.
+   */
+  protected function installMapTarget(): void {
+    $type = 'agency_migrate_agency_item';
+    $this->container->get('state')->set('agency_migrate_test.map_target', TRUE);
+    $manager = $this->container->get('entity_field.manager');
+    $manager->clearCachedFieldDefinitions();
+    $definition = $manager->getFieldStorageDefinitions($type)['data'];
+    $this->container->get('entity.definition_update_manager')
+      ->installFieldStorageDefinition('data', $type, 'agency_migrate_test', $definition);
+  }
+
+  /**
    * Creates synthetic source records from the fixture file.
    *
    * @return list<\Drupal\Core\Entity\ContentEntityInterface>

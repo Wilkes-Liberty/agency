@@ -141,6 +141,87 @@ final class MigrateRevisionHistoryTest extends MigrateKernelTestBase {
   }
 
   /**
+   * Copy, merge and overwrite keep typed maps in real revision storage.
+   */
+  public function testMapValuesSurvivePersistentWriterPaths(): void {
+    $sourceType = 'agency_migrate_map_item';
+    $targetType = 'agency_migrate_agency_item';
+    $this->installEntitySchema($sourceType);
+    FieldStorageConfig::create([
+      'field_name' => 'formatted',
+      'entity_type' => $sourceType,
+      'type' => 'text_with_summary',
+      'cardinality' => -1,
+    ])->save();
+    FieldConfig::create([
+      'field_name' => 'formatted',
+      'entity_type' => $sourceType,
+      'bundle' => $sourceType,
+      'translatable' => TRUE,
+    ])->save();
+    $this->installMapTarget();
+    $sourceStorage = $this->storage($sourceType);
+    $map = ['nested' => [9 => NULL, 'ordered' => [0, FALSE, '0']], 'count' => 1, 4 => ''];
+    $next = ['nested' => [9 => '', 'ordered' => [1, TRUE, '1']], 'count' => 1.0, 4 => ''];
+    $source = $sourceStorage->create(['title' => 'Stored map', 'data' => [$map]]);
+    $this->assertInstanceOf(ContentEntityInterface::class, $source);
+    $source->save();
+    $past = (int) $source->getRevisionId();
+    $source->setNewRevision(TRUE);
+    $source->set('data', [$next]);
+    $source->save();
+    $writer = $this->container->get('agency_migrate.identity_writer');
+
+    $target = $writer->insertCopy($source, $targetType);
+    $this->assertSame([$map], $this->revision($targetType, $past)->get('data')->getValue());
+    $this->assertSame([$next], $target->get('data')->getValue());
+
+    $source->setNewRevision(TRUE);
+    $source->set('data', [$map]);
+    $source->save();
+    $expected = $writer->captureHistory($source);
+    $target = $writer->mergeHistory($expected, $targetType);
+    $this->assertSame([$map], $target->get('data')->getValue());
+    $this->assertSame($expected['revisions'], $writer->captureHistory($target)['revisions']);
+
+    $reordered = ['count' => 1, 4 => '', 'nested' => $map['nested']];
+    $overwrite = clone $source;
+    $overwrite->set('data', [$reordered]);
+    $target = $writer->overwriteContent($target, $overwrite);
+    $this->assertSame([$reordered], $target->get('data')->getValue());
+    $vid = (int) $target->getRevisionId();
+    foreach ([array_reverse($map, TRUE), ['01' => 'numeric string key'] + $map] as $numericFirst) {
+      $unsupported = clone $source;
+      $unsupported->set('data', [$numericFirst]);
+      $this->assertRefused(fn () => $writer->overwriteContent($target, $unsupported), 'incompatible_field_layout');
+      $this->assertSame([$reordered], $this->revision($targetType, $vid)->get('data')->getValue());
+    }
+    $this->assertRefused(fn () => $writer->mergeHistory($expected, $targetType), 'history_conflict');
+
+    // Reloaded revisions at the same VID can differ only by map key order
+    // or by the scalar type of a single item.
+    foreach ([$reordered, array_replace($map, ['count' => 1.0])] as $modified) {
+      $target->set('data', [$map]);
+      $target->setNewRevision(FALSE);
+      $target->save();
+      $stale = clone $target;
+      $target->set('data', [$modified]);
+      $target->setNewRevision(FALSE);
+      $target->save();
+      $this->assertSame($stale->getRevisionId(), $target->getRevisionId());
+      $fresh = $this->revision($targetType, (int) $target->getRevisionId());
+      $this->assertSame([$modified], $fresh->get('data')->getValue());
+      $before = $writer->canonicalize($stale);
+      $after = $writer->canonicalize($fresh);
+      $this->assertNotSame($before['data'], $after['data']);
+      unset($before['data'], $after['data']);
+      $this->assertSame($before, $after);
+      $this->assertRefused(fn () => $writer->captureHistory($stale), 'history_drift');
+      $this->assertRefused(fn () => $writer->mergeHistory($expected, $targetType), 'history_conflict');
+    }
+  }
+
+  /**
    * A revision identifier owned by another target must not be overwritten.
    */
   public function testHistoricalRevisionCollisionRefusesAtomically(): void {
