@@ -1,7 +1,7 @@
 # Agency Engagement
 
-Scaffolding only. No entity types, routes, granting permissions, copiers,
-authority rows, feeds or client-membership code. Slice 4 G1 is open.
+Agency Engagement provides refusing access ports, a storage-free review policy
+and an internal statement preservation preflight.
 
 This submodule owns the Slice 4 engagement and time boundary named by
 G-ONT. Enabling it registers refusing ports and a storage-free review-path
@@ -24,3 +24,26 @@ assignment and an explicit review permission supplied as booleans; refuse
 amendments to an already approved submission; pin exact entry revision
 ids; bulk approval is all-approved or a conflict list, never partial.
 A time actor is never derived from a Discovery entitlement.
+
+## Statement preservation preflight
+
+Use `StatementPreflight` with a reviewed `StatementSourceInterface` adapter
+inside a stable writer-fenced snapshot. Bind the reviewed source namespace
+when constructing the preflight. It qualifies an issued statement by its
+original kind and serial ID and checks the namespace before reading replay
+slots. The inverse returns the original statement row, including exact JSON
+bytes. The sorted engagement membership identifies the index rows. The typed
+projection retains source-list
+order independently from group and line order. It requires historical approval
+and bill-to evidence for the actual pinned revisions, including client
+Profile ownership at issuance.
+
+The preflight recognizes absent presentation and frozen presentation versions
+1 and 2. It checks their structure and keeps the stored prose and formatting.
+A separate challenge projection keeps the original receipt identity, actor,
+retry key, reason, digest and time. Replay checks compare the source serial slot
+and both challenge keys. They refuse occupied invoice IDs and conflicting rows.
+
+Snapshots and challenge data require protected handling. The preflight has no
+registered entry point. Access to the statement reader continues to refuse until
+its client and reviewer authorization policies are qualified.
