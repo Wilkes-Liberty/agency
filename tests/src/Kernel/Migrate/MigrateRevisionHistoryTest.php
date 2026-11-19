@@ -12,6 +12,7 @@ use Drupal\agency_migrate\SharedSqlMapVerifier;
 use Drupal\agency_migrate_test\Entity\SyntheticItem;
 use Drupal\Core\Database\Database;
 use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\Core\Entity\ContentEntityStorageInterface;
@@ -186,7 +187,7 @@ final class MigrateRevisionHistoryTest extends MigrateKernelTestBase {
     $this->assertInstanceOf(ContentEntityInterface::class, $overwrite);
     $overwrite->addTranslation('fr', ['title' => 'Synthetic translation', 'data' => [['localized' => [NULL, 1.0, []]]]]);
     $overwrite->save();
-    $target = $writer->overwriteContent($target, $sourceStorage->loadUnchanged($overwrite->id()));
+    $target = $writer->overwriteContent($target, $this->unchanged($sourceStorage, $overwrite->id()));
     $this->assertSame([$reordered], $target->get('data')->getValue());
     $vid = (int) $target->getRevisionId();
     foreach ([array_reverse($map, TRUE), ['01' => 'numeric string key'] + $map] as $numericFirst) {
@@ -297,14 +298,14 @@ final class MigrateRevisionHistoryTest extends MigrateKernelTestBase {
       }
     }
     $writer = $this->container->get('agency_migrate.identity_writer');
-    $snapshot = $writer->captureHistory($storage->loadUnchanged($id));
+    $snapshot = $writer->captureHistory($this->unchanged($storage, $id));
     $this->assertSame(['en' => [], 'fr' => []], $snapshot['revisions'][0]['fields']['fixture_global_map']);
 
     $database->update($expectedTables['revision'])->fields(['fixture_global_map' => NULL])
       ->condition('id', $id)->condition('revision_id', $vid)->condition('langcode', 'fr')->execute();
     $revision = $this->revision($type, $vid);
     $this->assertTrue($revision->getTranslation('fr')->get('fixture_global_map')->isEmpty());
-    $this->assertRefused(fn () => $writer->captureHistory($storage->loadUnchanged($id)), 'history_unverified');
+    $this->assertRefused(fn () => $writer->captureHistory($this->unchanged($storage, $id)), 'history_unverified');
   }
 
   /**
@@ -343,7 +344,7 @@ final class MigrateRevisionHistoryTest extends MigrateKernelTestBase {
     $writer = $this->container->get('agency_migrate.identity_writer');
     $this->assertRefused(fn () => $writer->overwriteContent($target, $source), 'incompatible_field_layout');
     $this->assertRefused(fn () => $writer->captureHistory($target), 'incompatible_field_layout');
-    $reloaded = $storage->loadUnchanged($target->id());
+    $reloaded = $this->unchanged($storage, $target->id());
     $this->assertSame('Original title', $reloaded->label());
     $this->assertSame([['value' => ['count' => 1, 'tag' => 'same']]], $reloaded->get('fixture_map')->getValue());
   }
@@ -367,7 +368,7 @@ final class MigrateRevisionHistoryTest extends MigrateKernelTestBase {
     $writer = $this->container->get('agency_migrate.identity_writer');
     $this->container->get('state')->set('agency_migrate_test.rewrite_map', TRUE);
     $this->assertRefused(fn () => $writer->overwriteContent($entity, $candidate), 'history_drift');
-    $reloaded = $storage->loadUnchanged($id);
+    $reloaded = $this->unchanged($storage, $id);
     $this->assertSame('Original title', $reloaded->label());
     $this->assertSame($original, $reloaded->get('data')->getValue());
     $revision = $this->revision($type, $vid);
@@ -407,7 +408,7 @@ final class MigrateRevisionHistoryTest extends MigrateKernelTestBase {
     finally {
       Database::removeConnection('migrate_map_foreign');
     }
-    $reloaded = $storage->loadUnchanged($id);
+    $reloaded = $this->unchanged($storage, $id);
     $this->assertSame('Original title', $reloaded->label());
     $this->assertSame($original, $reloaded->get('data')->getValue());
     $this->assertSame($original, $this->revision($type, $vid)->get('data')->getValue());
@@ -731,6 +732,15 @@ final class MigrateRevisionHistoryTest extends MigrateKernelTestBase {
     $copier = $this->container->get('plugin.manager.agency_migrate.copier')->createInstance('synthetic_item');
     $this->assertInstanceOf(HistoryCopierInterface::class, $copier);
     return $copier;
+  }
+
+  /**
+   * Loads an entity from storage, bypassing the static cache.
+   */
+  private function unchanged(EntityStorageInterface $storage, int|string|null $id): ContentEntityInterface {
+    $entity = $storage->loadUnchanged($id);
+    $this->assertInstanceOf(ContentEntityInterface::class, $entity);
+    return $entity;
   }
 
   /**
