@@ -6,6 +6,87 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0-alpha7] - 2026-11-18
+
+### Added
+- A value-based post-cutover writer commits local entity mutations, qualified typed before/after histories and required evidence intents under the current Agency authority generation. Hosts must mark every stored target property and verify equivalent journal access, recovery and retention. Stable operation IDs recover scalar receipts without repeating committed mutations. Existing unqualified journal rows keep their recorded format. Nonempty rollback remains unavailable.
+- Qualified equal-layout migration copiers can replay post-cutover creates,
+  updates and deletes in journal order. Replay verifies the whole domain and
+  commits authority, provenance, tombstones and a retryable handover receipt in
+  one transaction. Hosts supply the reviewed compatibility and writer fence.
+- Hosts can explicitly enroll local rollback participants for additional domain
+  resources. Qualified rollback verifies and seals their receipts in the same
+  transaction as entity replay and the authority handover.
+- Clarify the combined release scope: the earlier implementation-stage notes below
+  retain the limitations recorded when each component was introduced. Qualified
+  nonempty rollback is now available for reviewed copiers under a verified writer
+  fence, including the required journal and resource disposition checks. Recruiting
+  close deadlines apply only to published open postings. The commercial, intake and
+  engagement modules remain refusing scaffolds; their earlier design-gate notes do
+  not describe runtime activation or completed migration.
+
+  Add internal contact migration preflight for reviewed person and organization
+  classifications. Preserve stored history and claims in reversible in-memory
+  projections and refuse collisions in either target population.
+
+  Qualify issued statement snapshots and challenge receipts in a read-only
+  preflight with source-scoped replay checks, exact inverse rows and historical
+  approval and client ownership evidence.
+- Add revision-bound personnel evidence file qualification and inverse preflight with ordered file item preservation. Hosts verify access, protected file identity and existing grant inventory.
+- Add internal signed-document qualification for verified retries, append
+  intent and preservation of existing attachment and mapping records.
+- Register internal workforce entity types for profile evidence, staff onboard
+  submissions, workforce relationships and workforce entitlements. Access
+  denies by default. Invitation storage stays a digest-keyed port.
+- Add a default-denying workforce profile reader with verified identity and
+  entitlement checks, uniform identity refusals and signed Audit Chain evidence.
+- Host adapters load Agency-side rows through an authority-gated reader.
+  At legacy, shadow or removed, or when a domain is unregistered, the load
+  is refused with the recorded state as the reason and a minimized outbox
+  intent. Entity API loads remain ungated.
+- Register career posting and application entity types in an
+  `agency_recruiting` submodule. Storage is deny-by-default and ID-preserving.
+  Published postings require a future close date. No routes, copiers or
+  recruiting authority ship in this change. GitHub CI runs the recruiting
+  kernel tests on the 11.x lanes.
+- Register workforce and recruiting migration-authority domains at legacy on
+  install and on existing sites. Already recorded domain rows and their states
+  are left unchanged. Slice 2 proving tests cover unmapped-property refusal,
+  legacy-authority reads, and identity-preserving File Gate UUID copy.
+  An unmapped-marking stop records a minimized outbox intent so the refused
+  write leaves an Audit Chain trace. Migration docs record that install and
+  update 10003 seed those two rows.
+- Add tenant-neutral `agency_commercial` and `agency_intake` scaffolding with
+  refusing ports. No entity types, copiers or authority rows. Slice 3 G1 remains
+  open.
+- Add an `agency_engagement` submodule with refusing engagement,
+  assignment, time-submission and statement-snapshot ports and a
+  storage-free review-path policy. No entity types are registered.
+  Slice 4 G1 remains open.
+
+### Changed
+- Move the reviewed Externalauth binding reference from 2.0.13 to 2.0.15. Writer hashes are unchanged; the fingerprint digest changes because the version string is part of it. Unreviewed Composer references and mismatched writer bytes still fail closed.
+- Record minimized, signed workforce invitation lifecycle evidence. Provide a separate application acceptance boundary that returns the same refusal for used and expired invitations.
+
+### Fixed
+- Preserve typed values in stored map fields when capturing and reconstructing
+  revision history. Require a new snapshot format for layouts containing maps.
+  Apply the same preservation to persisted copy, merge and overwrite. Journal
+  qualification requires explicitly covered properties and refuses dynamic maps.
+  Verify native shared map storage against the hydrated current row and every
+  revision and translation. Refuse maps whose raw shape changes during hydration
+  and layouts with dedicated map storage. Map writes require target storage on
+  the writer's transaction connection. Shared map overwrites verify current and
+  revision values before committing.
+- Added a validated revision snapshot and atomic history merge helper that preserves
+  target-only revisions, original metadata and translations, and exact default
+  selection. Conflicting identities and revision IDs refuse. Nonempty rollback
+  remains unqualified pending operation evidence and integrated replay.
+- Refuse backup restoration requests before migration status, registration,
+  transition or journal replay, with minimized durable refusal evidence.
+- Restore Drush service discovery and typed authority command options.
+- Apply the recruiting close deadline only to published open postings, so paused and filled postings can stay visible with a missing or elapsed deadline.
+
 ## [1.0.0-alpha6] - 2026-11-12
 
 ### Added

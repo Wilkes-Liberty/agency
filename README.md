@@ -48,13 +48,19 @@ or menu links. A published open posting requires a future close deadline. An
 application may omit a posting. Résumé bytes stay in File Gate; the row stores a
 File Gate UUID. See the [recruiting module note](modules/agency_recruiting/README.md).
 
-The alpha6 migration scope includes complete revision/translation copying,
-atomic resumable batches and complete-population reconciliation. A rollback with
-no pending journal writes can restore legacy authority only after full domain
-reconciliation under a qualified host fence. Existing nonempty journals lack
-the operation snapshots needed for safe replay and are refused. This release
-does not qualify a production cutover or complete the broader workforce, CRM,
-intake and time extraction.
+The alpha7 migration scope adds a value-based post-cutover writer with a durable
+operation journal, ordered replay for reviewed equal-layout copiers, and
+rollback that reconciles the whole domain and commits the authority handover
+with its receipts in one transaction. Backup restoration requests are refused.
+Stored map fields keep their exact values through capture, copy, merge and
+overwrite; unsupported map layouts and writes outside the writer's transaction
+connection are refused. Read-only preflights qualify contact, issued statement,
+personnel evidence file and signed-document histories without writing.
+
+The host supplies the reviewed copier compatibility and the writer fence. This
+release does not qualify a production cutover. The commercial, intake and
+engagement modules remain refusing scaffolds, and the workforce, CRM, intake and
+time extraction is not complete.
 
 ## Host contract (`agency_host`)
 
