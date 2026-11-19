@@ -5,6 +5,7 @@
  * Synthetic types used only by agency_migrate kernel tests.
  */
 
+use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
 
@@ -31,7 +32,16 @@ function agency_migrate_test_agency_migrate_copier_info_alter(array &$definition
  */
 function agency_migrate_test_entity_base_field_info(EntityTypeInterface $entity_type): array {
   if ($entity_type->id() === 'agency_migrate_agency_item' && \Drupal::state()->get('agency_migrate_test.map_target')) {
-    return ['data' => BaseFieldDefinition::create('map')->setRevisionable(TRUE)];
+    return ['data' => BaseFieldDefinition::create('map')->setRevisionable(TRUE)->setTranslatable(TRUE)];
   }
   return [];
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_presave() for the synthetic target.
+ */
+function agency_migrate_test_agency_migrate_agency_item_presave(ContentEntityInterface $entity): void {
+  if (\Drupal::state()->get('agency_migrate_test.rewrite_map')) {
+    $entity->set('data', [['tag' => 'rewritten']]);
+  }
 }

@@ -27,13 +27,21 @@ final class RevisionHistorySnapshot {
    *   The explicitly selected persisted default revision.
    * @param list<\Drupal\Core\Entity\ContentEntityInterface> $history
    *   Persisted revisions, including the selected default.
+   * @param \Drupal\agency_migrate\SharedSqlMapVerifier|null $maps
+   *   Required for layouts containing dynamic maps.
    *
    * @return array<string, mixed>
    *   Versioned reconstruction payload.
    */
-  public static function capture(ContentEntityInterface $current, array $history): array {
+  public static function capture(ContentEntityInterface $current, array $history, ?SharedSqlMapVerifier $maps = NULL): array {
+    $layout = self::layout($current);
+    if (self::formatVersion($layout) === 2 && $maps === NULL) {
+      throw new MigrateRefusal('history_unverified');
+    }
+    $maps?->assertCurrent($current);
     $revisions = [];
     foreach ($history as $revision) {
+      $maps?->assertStored($revision, FALSE);
       $fields = self::fields($revision);
       $revisions[] = [
         'revision_id' => (int) $revision->getRevisionId(),
@@ -43,7 +51,6 @@ final class RevisionHistorySnapshot {
         'fields' => $fields,
       ];
     }
-    $layout = self::layout($current);
     return [
       'version' => self::formatVersion($layout),
       'source_type' => $current->getEntityTypeId(),

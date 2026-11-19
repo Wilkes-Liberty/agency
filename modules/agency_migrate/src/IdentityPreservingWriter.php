@@ -18,10 +18,17 @@ use Drupal\agency_migrate\Exception\MigrateRefusal;
  */
 final class IdentityPreservingWriter {
 
+  /**
+   * Checks stored map values against Drupal's hydrated values.
+   */
+  private readonly SharedSqlMapVerifier $maps;
+
   public function __construct(
     private readonly EntityTypeManagerInterface $entityTypeManager,
     private readonly Connection $database,
-  ) {}
+  ) {
+    $this->maps = new SharedSqlMapVerifier($database, $entityTypeManager);
+  }
 
   /**
    * Creates a target entity that reuses the source identity fields.
@@ -51,7 +58,7 @@ final class IdentityPreservingWriter {
       throw new MigrateRefusal('history_unverified');
     }
     $history = $this->loadHistory($entity);
-    $snapshot = RevisionHistorySnapshot::capture($entity, $history);
+    $snapshot = RevisionHistorySnapshot::capture($entity, $history, $this->maps);
     $this->validateHistorySnapshot($snapshot, $entity->getEntityTypeId());
     return $snapshot;
   }
@@ -81,6 +88,7 @@ final class IdentityPreservingWriter {
     }
     // Validate the entire payload before starting any target mutation.
     $incoming = RevisionHistorySnapshot::decode($snapshot, $storage);
+    $this->maps->columns($incoming[$snapshot['default_revision_id']]);
     $id = $snapshot['id'];
     $default_id = $snapshot['default_revision_id'];
     $transaction = $this->database->startTransaction();
@@ -227,6 +235,7 @@ final class IdentityPreservingWriter {
       throw new MigrateRefusal('incompatible_field_layout');
     }
     $this->assertCompatibleLayout($source, $probe);
+    $map_columns = $this->maps->columns($probe);
     foreach ($history as $revision) {
       $this->assertCompatibleLayout($revision, $probe);
       if ($source->getEntityType()->isRevisionable()
@@ -253,6 +262,11 @@ final class IdentityPreservingWriter {
       throw new MigrateRefusal('identity_not_preserved');
     }
     $this->assertSameIdentity($source, $reloaded);
+    $this->maps->assertCurrent($reloaded);
+    if ($map_columns !== []
+      && array_intersect_key($this->canonicalize($source), $map_columns) !== array_intersect_key($this->canonicalize($reloaded), $map_columns)) {
+      throw new MigrateRefusal('history_drift');
+    }
     $storage->resetCache([(int) $source->id()]);
     return $reloaded;
   }
@@ -273,6 +287,7 @@ final class IdentityPreservingWriter {
       || $this->canonicalize($current) !== $this->canonicalize($entity)) {
       throw new MigrateRefusal('history_drift');
     }
+    $this->maps->assertCurrent($current);
     // Cached snapshot rows must not outlive an outer rollback.
     $storage->resetCache([(int) $entity->id()]);
     if (!$entity->getEntityType()->isRevisionable()) {
@@ -289,14 +304,17 @@ final class IdentityPreservingWriter {
     if ($ids === [] || count($revisions) !== count($ids)) {
       throw new MigrateRefusal('history_drift');
     }
+    $history = [];
     foreach ($revisions as $revision) {
       if (!$revision instanceof ContentEntityInterface
         || (int) $revision->id() !== (int) $entity->id()
         || $revision->uuid() !== $entity->uuid()) {
         throw new MigrateRefusal('history_conflict');
       }
+      $this->maps->assertStored($revision, FALSE);
+      $history[] = $revision;
     }
-    return array_values($revisions);
+    return $history;
   }
 
   /**
@@ -352,6 +370,7 @@ final class IdentityPreservingWriter {
       throw new MigrateRefusal('identity_not_preserved');
     }
     $this->assertSameIdentity($source, $reloaded);
+    $this->maps->assertStored($reloaded, FALSE);
     if ($this->canonicalize($source) !== $this->canonicalize($reloaded)
       || $reloaded->isDefaultRevision() !== $default) {
       throw new MigrateRefusal('history_drift');
@@ -361,6 +380,8 @@ final class IdentityPreservingWriter {
 
   /**
    * Overwrites content fields on an existing entity without changing identity.
+   *
+   * Map-bearing entities require persisted sources and exact SQL readback.
    */
   public function overwriteContent(ContentEntityInterface $existing, ContentEntityInterface $from): ContentEntityInterface {
     $existing = $existing->getUntranslated();
@@ -369,21 +390,49 @@ final class IdentityPreservingWriter {
     if ($existing->language()->getId() !== $from->language()->getId()) {
       throw new MigrateRefusal('incompatible_field_layout');
     }
-    $existing->setSyncing(TRUE);
-    foreach ($this->fieldValues($from) as $name => $value) {
-      if (!$this->isIdentityField($existing, $name)) {
-        $existing->set($name, $value);
-      }
-    }
-    $this->copyTranslations($from, $existing, TRUE);
-    $existing->save();
+    $map_columns = $this->maps->columns($existing);
     $storage = $this->entityTypeManager->getStorage($existing->getEntityTypeId());
-    $storage->resetCache([(int) $existing->id()]);
-    $reloaded = $storage->load($existing->id());
-    if (!$reloaded instanceof ContentEntityInterface) {
-      throw new MigrateRefusal('identity_not_preserved');
+    $transaction = NULL;
+    if ($map_columns !== []) {
+      $this->maps->assertCurrent($existing);
+      $this->maps->assertCurrent($from);
+      $expected = array_intersect_key(RevisionHistorySnapshot::fields($from), $map_columns);
+      $transaction = $this->database->startTransaction();
     }
-    return $reloaded;
+    try {
+      $existing->setSyncing(TRUE);
+      foreach ($this->fieldValues($from) as $name => $value) {
+        if (!$this->isIdentityField($existing, $name)) {
+          $existing->set($name, $value);
+        }
+      }
+      $this->copyTranslations($from, $existing, TRUE);
+      $existing->save();
+      $storage->resetCache([(int) $existing->id()]);
+      $reloaded = $storage->load($existing->id());
+      if (!$reloaded instanceof ContentEntityInterface) {
+        throw new MigrateRefusal('identity_not_preserved');
+      }
+      if ($transaction !== NULL) {
+        $this->maps->assertStored($reloaded, TRUE);
+        $revision = $storage instanceof ContentEntityStorageInterface ? $storage->loadRevision($reloaded->getRevisionId()) : NULL;
+        if (!$revision instanceof ContentEntityInterface
+          || array_intersect_key(RevisionHistorySnapshot::fields($reloaded), $map_columns) !== $expected
+          || array_intersect_key(RevisionHistorySnapshot::fields($revision), $map_columns) !== $expected) {
+          throw new MigrateRefusal('history_drift');
+        }
+        $this->maps->assertStored($revision, FALSE);
+        TransactionBoundary::commit($transaction);
+      }
+      return $reloaded;
+    }
+    catch (\Throwable $exception) {
+      if ($transaction !== NULL) {
+        $transaction->rollBack();
+        $storage->resetCache([(int) $existing->id()]);
+      }
+      throw $exception;
+    }
   }
 
   /**

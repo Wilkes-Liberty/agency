@@ -74,7 +74,7 @@ final class SyntheticMapItem extends SyntheticItem {
    */
   public static function baseFieldDefinitions(EntityTypeInterface $entity_type): array {
     $fields = parent::baseFieldDefinitions($entity_type);
-    $fields['data'] = BaseFieldDefinition::create('map')->setRevisionable(TRUE);
+    $fields['data'] = BaseFieldDefinition::create('map')->setRevisionable(TRUE)->setTranslatable(TRUE);
     return $fields;
   }
 
