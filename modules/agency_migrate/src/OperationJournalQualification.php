@@ -60,7 +60,8 @@ final class OperationJournalQualification {
     }
     foreach ($layout['fields'] as $name => $field) {
       $properties = $markings[$name] ?? NULL;
-      if (!is_array($properties) || count($properties) !== count($field['properties'])) {
+      // An empty static property list establishes no coverage for map keys.
+      if ($field['type'] === 'map' || !is_array($properties) || count($properties) !== count($field['properties'])) {
         throw new \UnexpectedValueException();
       }
       foreach (array_keys($field['properties']) as $property) {

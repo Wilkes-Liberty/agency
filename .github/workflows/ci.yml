@@ -448,6 +448,13 @@ jobs:
               "testPopulatedRecoveryTablesBlockUninstall with data set \"rollback provenance\"",
             ]);
             $required = array_merge($required, [
+              "testStoredMapValuesSurviveSnapshotAndDecode",
+              "testMapValuesSurvivePersistentWriterPaths",
+              "testPersistedMapHydrationMustMatchSourceStorage",
+              "testEmptyUntranslatedMapRequiresNativeSqlShape",
+              "testDedicatedMapOverwriteRefusesAtomically",
+              "testSharedMapOverwriteReadbackRollsBackOtherFields",
+              "testSharedMapOverwriteRefusesForeignConnection",
               "testMergePreservesBothHistoriesAndExactDefault",
               "testPromotionPreservesUnaffectedTranslationMetadata",
               "testBundledSnapshotRestoresConfigurableHistory",
@@ -544,6 +551,7 @@ jobs:
               "testOperationJournalPolicyRefusesBeforeSave with data set \"unqualified recovery\"",
               "testOperationJournalPolicyRefusesBeforeSave with data set \"incompatible retention\"",
               "testOperationJournalPolicyRefusesBeforeSave with data set \"policy failure\"",
+              "testOperationJournalRefusesDynamicMapBeforeSave",
               "testOperationJournalQualificationCoversHistoricalTranslation",
               "testOperationJournalQualificationRechecksSavedBundle",
               "testOperationJournalQualificationRechecksDeletedHistory with data set \"policy revoked\"",

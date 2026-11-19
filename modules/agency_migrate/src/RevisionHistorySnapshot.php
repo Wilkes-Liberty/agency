@@ -8,6 +8,8 @@ use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\ContentEntityStorageInterface;
 use Drupal\Core\Entity\ContentEntityTypeInterface;
+use Drupal\Core\Field\FieldItemInterface;
+use Drupal\Core\Field\Plugin\Field\FieldType\MapItem;
 use Drupal\Core\TypedData\PrimitiveInterface;
 use Drupal\Core\TypedData\ComplexDataDefinitionInterface;
 
@@ -25,13 +27,21 @@ final class RevisionHistorySnapshot {
    *   The explicitly selected persisted default revision.
    * @param list<\Drupal\Core\Entity\ContentEntityInterface> $history
    *   Persisted revisions, including the selected default.
+   * @param \Drupal\agency_migrate\SharedSqlMapVerifier|null $maps
+   *   Required for layouts containing dynamic maps.
    *
    * @return array<string, mixed>
-   *   Version 1 reconstruction payload.
+   *   Versioned reconstruction payload.
    */
-  public static function capture(ContentEntityInterface $current, array $history): array {
+  public static function capture(ContentEntityInterface $current, array $history, ?SharedSqlMapVerifier $maps = NULL): array {
+    $layout = self::layout($current);
+    if (self::formatVersion($layout) === 2 && $maps === NULL) {
+      throw new MigrateRefusal('history_unverified');
+    }
+    $maps?->assertCurrent($current);
     $revisions = [];
     foreach ($history as $revision) {
+      $maps?->assertStored($revision, FALSE);
       $fields = self::fields($revision);
       $revisions[] = [
         'revision_id' => (int) $revision->getRevisionId(),
@@ -42,12 +52,12 @@ final class RevisionHistorySnapshot {
       ];
     }
     return [
-      'version' => 1,
+      'version' => self::formatVersion($layout),
       'source_type' => $current->getEntityTypeId(),
       'id' => (int) $current->id(),
       'uuid' => $current->uuid(),
       'default_revision_id' => (int) $current->getRevisionId(),
-      'layout' => self::layout($current),
+      'layout' => $layout,
       'revision_count' => count($revisions),
       'revisions' => $revisions,
     ];
@@ -68,12 +78,12 @@ final class RevisionHistorySnapshot {
       'layout', 'revision_count', 'revisions',
     ];
     if (!self::keys($snapshot, $keys)
-      || $snapshot['version'] !== 1
       || !is_string($snapshot['source_type']) || $snapshot['source_type'] === ''
       || !is_int($snapshot['id']) || $snapshot['id'] < 1
       || !is_string($snapshot['uuid']) || !preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i', $snapshot['uuid'])
       || !is_int($snapshot['default_revision_id']) || $snapshot['default_revision_id'] < 1
-      || !is_array($snapshot['layout'])
+      || !is_array($snapshot['layout']) || !is_array($snapshot['layout']['fields'] ?? NULL)
+      || $snapshot['version'] !== self::formatVersion($snapshot['layout'])
       || !is_int($snapshot['revision_count']) || $snapshot['revision_count'] < 1
       || !is_array($snapshot['revisions']) || !array_is_list($snapshot['revisions']) || count($snapshot['revisions']) !== $snapshot['revision_count']) {
       throw new MigrateRefusal('history_unverified');
@@ -114,9 +124,11 @@ final class RevisionHistorySnapshot {
           if ($cardinality > 0 && count($items) > $cardinality) {
             throw new MigrateRefusal('history_unverified');
           }
-          $properties = array_keys($snapshot['layout']['fields'][$name]['properties']);
+          $definition = $snapshot['layout']['fields'][$name];
+          $properties = array_keys($definition['properties']);
+          $dynamicMap = $definition['type'] === 'map' && $properties === [];
           foreach ($items as $item) {
-            if (!is_array($item) || array_keys($item) !== $properties) {
+            if (!is_array($item) || (!$dynamicMap && array_keys($item) !== $properties)) {
               throw new MigrateRefusal('incompatible_field_layout');
             }
           }
@@ -221,6 +233,11 @@ final class RevisionHistorySnapshot {
         }
         $result[$name][$langcode] = [];
         foreach ($field as $item) {
+          // Core maps have dynamic keys and an empty property definition.
+          if ($field->getFieldDefinition()->getType() === 'map') {
+            $result[$name][$langcode][] = self::mapValues($item);
+            continue;
+          }
           $properties = [];
           foreach ($item->getProperties(FALSE) as $property_name => $property) {
             $value = $property->getValue();
@@ -238,6 +255,19 @@ final class RevisionHistorySnapshot {
     }
     self::assertValues($result);
     return $result;
+  }
+
+  /**
+   * Returns the exact object-free values of a stored core map item.
+   *
+   * Key order and scalar types are part of the persisted map value.
+   */
+  public static function mapValues(FieldItemInterface $item): array {
+    if (!$item instanceof MapItem || !is_array($values = $item->getValue())) {
+      throw new MigrateRefusal('history_unverified');
+    }
+    self::assertValues($values);
+    return $values;
   }
 
   /**
@@ -290,6 +320,13 @@ final class RevisionHistorySnapshot {
       'translatable' => $entity->getEntityType()->isTranslatable(),
       'fields' => $fields,
     ];
+  }
+
+  /**
+   * Rejects older map snapshots whose capture could discard stored keys.
+   */
+  private static function formatVersion(array $layout): int {
+    return in_array('map', array_column($layout['fields'], 'type'), TRUE) ? 2 : 1;
   }
 
   /**

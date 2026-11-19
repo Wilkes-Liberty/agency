@@ -4,9 +4,15 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\agency\Kernel\Migrate;
 
+use Drupal\agency_migrate\Exception\MigrateRefusal;
+use Drupal\agency_migrate\IdentityPreservingWriter;
 use Drupal\agency_migrate\Plugin\HistoryCopierInterface;
+use Drupal\agency_migrate\RevisionHistorySnapshot;
+use Drupal\agency_migrate\SharedSqlMapVerifier;
 use Drupal\agency_migrate_test\Entity\SyntheticItem;
+use Drupal\Core\Database\Database;
 use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\Core\Entity\ContentEntityStorageInterface;
@@ -90,6 +96,343 @@ final class MigrateRevisionHistoryTest extends MigrateKernelTestBase {
     $default->set('payload', 'New target revision');
     $default->save();
     $this->assertGreaterThan((int) $next->getRevisionId(), (int) $default->getRevisionId());
+  }
+
+  /**
+   * Map fields retain dynamic typed values across stored revisions.
+   */
+  public function testStoredMapValuesSurviveSnapshotAndDecode(): void {
+    $type = 'agency_migrate_map_item';
+    $this->installEntitySchema($type);
+    $original = [
+      'nested' => ['empty' => [], 'nullable' => NULL, 'ordered' => [0, FALSE, '0']],
+      'blank' => '',
+    ];
+    $replacement = ['nested' => ['empty' => [NULL], 'nullable' => ''], 'blank' => NULL];
+    $storage = $this->storage($type);
+    $current = $storage->create(['title' => 'Mapped history', 'data' => [$original]]);
+    $this->assertInstanceOf(ContentEntityInterface::class, $current);
+    $current->save();
+    $defaultId = (int) $current->getRevisionId();
+    $current->setNewRevision(TRUE);
+    $current->isDefaultRevision(FALSE);
+    $current->set('data', [$replacement]);
+    $current->save();
+    $draftId = (int) $current->getRevisionId();
+
+    $default = $this->revision($type, $defaultId);
+    $draft = $this->revision($type, $draftId);
+    $maps = new SharedSqlMapVerifier($this->container->get('database'), $this->container->get('entity_type.manager'));
+    $this->assertRefused(fn () => RevisionHistorySnapshot::capture($default, [$default, $draft]), 'history_unverified');
+    $snapshot = RevisionHistorySnapshot::capture($default, [$default, $draft], $maps);
+    $langcode = $default->language()->getId();
+    $this->assertSame([$original], $snapshot['revisions'][0]['fields']['data'][$langcode]);
+    $this->assertSame([$replacement], $snapshot['revisions'][1]['fields']['data'][$langcode]);
+    $this->assertSame(2, $snapshot['version']);
+    $decoded = RevisionHistorySnapshot::decode($snapshot, $storage);
+    $this->assertSame([$original], $decoded[$defaultId]->get('data')->getValue());
+    $this->assertSame([$replacement], $decoded[$draftId]->get('data')->getValue());
+    $this->assertSame($snapshot['revisions'][0]['fields'], RevisionHistorySnapshot::fields($decoded[$defaultId]));
+    $this->assertSame($snapshot['revisions'][1]['fields'], RevisionHistorySnapshot::fields($decoded[$draftId]));
+
+    $draft->set('data', [['forbidden' => new \stdClass()]]);
+    $this->assertRefused(fn () => RevisionHistorySnapshot::capture($default, [$default, $draft], $maps), 'history_unverified');
+    $oldMap = $snapshot;
+    $oldMap['version'] = 1;
+    $this->assertRefused(fn () => RevisionHistorySnapshot::decode($oldMap, $storage), 'history_unverified');
+    $unknownLayout = $snapshot;
+    $unknownLayout['layout']['fields']['data']['properties']['unknown'] = 'string';
+    $this->assertRefused(fn () => RevisionHistorySnapshot::decode($unknownLayout, $storage), 'incompatible_field_layout');
+    $unknownProperty = $snapshot;
+    $unknownProperty['revisions'][0]['fields']['title'][$langcode][0]['unknown'] = 'extension';
+    $this->assertRefused(fn () => RevisionHistorySnapshot::decode($unknownProperty, $storage), 'incompatible_field_layout');
+  }
+
+  /**
+   * Copy, merge and overwrite keep typed maps in real revision storage.
+   */
+  public function testMapValuesSurvivePersistentWriterPaths(): void {
+    $sourceType = 'agency_migrate_map_item';
+    $targetType = 'agency_migrate_agency_item';
+    $this->installMapSource();
+    $this->installMapTarget();
+    $sourceStorage = $this->storage($sourceType);
+    $map = ['nested' => [9 => NULL, 'ordered' => [0, FALSE, '0']], 'count' => 1, 4 => ''];
+    $next = ['nested' => [9 => '', 'ordered' => [1, TRUE, '1']], 'count' => 1.0, 4 => ''];
+    $source = $sourceStorage->create(['title' => 'Stored map', 'data' => [$map]]);
+    $this->assertInstanceOf(ContentEntityInterface::class, $source);
+    $source->addTranslation('fr', ['title' => 'Synthetic translation', 'data' => [['localized' => [NULL, 1.0, []]]]]);
+    $source->save();
+    $past = (int) $source->getRevisionId();
+    $source->setNewRevision(TRUE);
+    $source->set('data', [$next]);
+    $source->save();
+    $writer = $this->container->get('agency_migrate.identity_writer');
+
+    $target = $writer->insertCopy($source, $targetType);
+    $this->assertSame([$map], $this->revision($targetType, $past)->get('data')->getValue());
+    $this->assertSame([$next], $target->get('data')->getValue());
+    $this->assertSame([['localized' => [NULL, 1.0, []]]], $target->getTranslation('fr')->get('data')->getValue());
+
+    $source->setNewRevision(TRUE);
+    $source->set('data', [$map]);
+    $source->save();
+    $expected = $writer->captureHistory($source);
+    $target = $writer->mergeHistory($expected, $targetType);
+    $this->assertSame([$map], $target->get('data')->getValue());
+    $this->assertSame($expected['revisions'], $writer->captureHistory($target)['revisions']);
+
+    $reordered = ['count' => 1, 4 => '', 'nested' => $map['nested']];
+    $overwrite = $sourceStorage->create(['title' => 'Stored map', 'data' => [$reordered]]);
+    $this->assertInstanceOf(ContentEntityInterface::class, $overwrite);
+    $overwrite->addTranslation('fr', ['title' => 'Synthetic translation', 'data' => [['localized' => [NULL, 1.0, []]]]]);
+    $overwrite->save();
+    $target = $writer->overwriteContent($target, $this->unchanged($sourceStorage, $overwrite->id()));
+    $this->assertSame([$reordered], $target->get('data')->getValue());
+    $vid = (int) $target->getRevisionId();
+    foreach ([array_reverse($map, TRUE), ['01' => 'numeric string key'] + $map] as $numericFirst) {
+      $unsupported = clone $source;
+      $unsupported->set('data', [$numericFirst]);
+      $this->assertRefused(fn () => $writer->overwriteContent($target, $unsupported), 'history_unverified');
+      $this->assertSame([$reordered], $this->revision($targetType, $vid)->get('data')->getValue());
+    }
+    $this->assertRefused(fn () => $writer->mergeHistory($expected, $targetType), 'history_conflict');
+
+    // Reloaded revisions at the same VID can differ only by map key order
+    // or by the scalar type of a single item.
+    foreach ([$reordered, array_replace($map, ['count' => 1.0])] as $modified) {
+      $target->set('data', [$map]);
+      $target->setNewRevision(FALSE);
+      $target->save();
+      $stale = clone $target;
+      $target->set('data', [$modified]);
+      $target->setNewRevision(FALSE);
+      $target->save();
+      $this->assertSame($stale->getRevisionId(), $target->getRevisionId());
+      $fresh = $this->revision($targetType, (int) $target->getRevisionId());
+      $this->assertSame([$modified], $fresh->get('data')->getValue());
+      $before = $writer->canonicalize($stale);
+      $after = $writer->canonicalize($fresh);
+      $this->assertNotSame($before['data'], $after['data']);
+      unset($before['data'], $after['data']);
+      $this->assertSame($before, $after);
+      $this->assertRefused(fn () => $writer->captureHistory($stale), 'history_drift');
+      $this->assertRefused(fn () => $writer->mergeHistory($expected, $targetType), 'history_conflict');
+    }
+  }
+
+  /**
+   * Numeric-leading persisted maps cannot pass by flattening on reload.
+   */
+  public function testPersistedMapHydrationMustMatchSourceStorage(): void {
+    $type = 'agency_migrate_map_item';
+    $this->installMapSource();
+    $storage = $this->storage($type);
+    $value = [0 => ['nested' => 'synthetic retained value']];
+    $this->installMapTarget();
+    $source = $storage->create(['title' => 'Stored map', 'data' => [$value]]);
+    $this->assertInstanceOf(ContentEntityInterface::class, $source);
+    $source->save();
+    $past = (int) $source->getRevisionId();
+    $id = (int) $source->id();
+    $raw = $this->container->get('database')->select('agency_migrate_map_item_field_revision', 'r')
+      ->fields('r', ['data'])->condition('revision_id', $past)->execute()->fetchField();
+    $this->assertSame(serialize($value), is_resource($raw) ? stream_get_contents($raw) : $raw);
+    $loaded = $storage->loadUnchanged($id);
+    $this->assertInstanceOf(ContentEntityInterface::class, $loaded);
+    $this->assertSame([['nested' => 'synthetic retained value']], $loaded->get('data')->getValue());
+    $writer = $this->container->get('agency_migrate.identity_writer');
+    $this->assertRefused(fn () => $writer->captureHistory($loaded), 'history_unverified');
+    $target = $this->storage('agency_migrate_agency_item')->create([
+      'id' => 99,
+      'title' => 'Original title',
+      'data' => [['valid' => 'original']],
+    ]);
+    $this->assertInstanceOf(ContentEntityInterface::class, $target);
+    $target->save();
+    $this->assertRefused(fn () => $writer->overwriteContent($target, $loaded), 'history_unverified');
+    $this->assertSame('Original title', $this->target(99)->label());
+    $this->assertSame([['valid' => 'original']], $this->target(99)->get('data')->getValue());
+
+    // Retain the ambiguous map in history after a representable default.
+    $source->setNewRevision(TRUE);
+    $source->set('data', [['map' => 'current source']]);
+    $source->save();
+    $fresh = $storage->loadUnchanged($id);
+    $this->assertInstanceOf(ContentEntityInterface::class, $fresh);
+    $this->assertSame([['map' => 'current source']], $fresh->get('data')->getValue());
+    $this->assertRefused(fn () => $writer->captureHistory($fresh), 'history_unverified');
+    $this->assertRefused(fn () => $writer->insertCopy($fresh, 'agency_migrate_agency_item'), 'history_unverified');
+    $this->assertNull($this->target($id));
+  }
+
+  /**
+   * Native empty shared maps qualify but ambiguous SQL NULL refuses.
+   */
+  public function testEmptyUntranslatedMapRequiresNativeSqlShape(): void {
+    $type = 'agency_migrate_map_item';
+    $this->container->get('state')->set('agency_migrate_test.untranslated_map', TRUE);
+    $this->installEntitySchema($type);
+    $storage = $this->storage($type);
+    $entity = $storage->create(['title' => 'Stored empty map']);
+    $this->assertInstanceOf(ContentEntityInterface::class, $entity);
+    $entity->addTranslation('fr', ['title' => 'Synthetic translation']);
+    $entity->save();
+    $id = (int) $entity->id();
+    $vid = (int) $entity->getRevisionId();
+    $maps = new SharedSqlMapVerifier($this->container->get('database'), $this->container->get('entity_type.manager'));
+    $expectedTables = [
+      'column' => 'fixture_global_map',
+      'current' => 'agency_migrate_map_item_field_data',
+      'revision' => 'agency_migrate_map_item_field_revision',
+    ];
+    $this->assertSame($expectedTables, $maps->columns($entity)['fixture_global_map']);
+    $database = $this->container->get('database');
+    foreach (['current', 'revision'] as $projection) {
+      $rows = $database->select($expectedTables[$projection], 'r')
+        ->fields('r', ['fixture_global_map'])->condition('id', $id)->condition('revision_id', $vid)
+        ->execute()->fetchCol();
+      $this->assertCount(2, $rows);
+      foreach ($rows as $raw) {
+        $this->assertSame(serialize([]), is_resource($raw) ? stream_get_contents($raw) : $raw);
+      }
+    }
+    $writer = $this->container->get('agency_migrate.identity_writer');
+    $snapshot = $writer->captureHistory($this->unchanged($storage, $id));
+    $this->assertSame(['en' => [], 'fr' => []], $snapshot['revisions'][0]['fields']['fixture_global_map']);
+
+    $database->update($expectedTables['revision'])->fields(['fixture_global_map' => NULL])
+      ->condition('id', $id)->condition('revision_id', $vid)->condition('langcode', 'fr')->execute();
+    $revision = $this->revision($type, $vid);
+    $this->assertTrue($revision->getTranslation('fr')->get('fixture_global_map')->isEmpty());
+    $this->assertRefused(fn () => $writer->captureHistory($this->unchanged($storage, $id)), 'history_unverified');
+  }
+
+  /**
+   * Unsupported dedicated map writes leave other fields and the map untouched.
+   */
+  public function testDedicatedMapOverwriteRefusesAtomically(): void {
+    $type = 'agency_migrate_agency_item';
+    FieldStorageConfig::create([
+      'entity_type' => $type,
+      'field_name' => 'fixture_map',
+      'type' => 'map',
+      'cardinality' => -1,
+    ])->save();
+    FieldConfig::create([
+      'entity_type' => $type,
+      'bundle' => $type,
+      'field_name' => 'fixture_map',
+    ])->save();
+    $storage = $this->storage($type);
+    $target = $storage->create([
+      'title' => 'Original title',
+      'fixture_map' => [['value' => ['count' => 1, 'tag' => 'same']]],
+    ]);
+    $source = $storage->create([
+      'title' => 'Overwritten title',
+      'fixture_map' => [['value' => ['tag' => 'same', 'count' => 1.0]]],
+    ]);
+    $target->save();
+    $source->save();
+    $target = $storage->loadUnchanged($target->id());
+    $source = $storage->loadUnchanged($source->id());
+    $this->assertInstanceOf(ContentEntityInterface::class, $target);
+    $this->assertInstanceOf(ContentEntityInterface::class, $source);
+    $this->assertSame([['value' => ['count' => 1, 'tag' => 'same']]], $target->get('fixture_map')->getValue());
+    $this->assertSame([['value' => ['tag' => 'same', 'count' => 1.0]]], $source->get('fixture_map')->getValue());
+    $writer = $this->container->get('agency_migrate.identity_writer');
+    $this->assertRefused(fn () => $writer->overwriteContent($target, $source), 'incompatible_field_layout');
+    $this->assertRefused(fn () => $writer->captureHistory($target), 'incompatible_field_layout');
+    $reloaded = $this->unchanged($storage, $target->id());
+    $this->assertSame('Original title', $reloaded->label());
+    $this->assertSame([['value' => ['count' => 1, 'tag' => 'same']]], $reloaded->get('fixture_map')->getValue());
+  }
+
+  /**
+   * A shared map changed during save rolls back the title and both SQL rows.
+   */
+  public function testSharedMapOverwriteReadbackRollsBackOtherFields(): void {
+    $this->installMapTarget();
+    $type = 'agency_migrate_agency_item';
+    $storage = $this->storage($type);
+    $original = [['tag' => 'original', 'count' => 1]];
+    $entity = $storage->create(['title' => 'Original title', 'data' => $original]);
+    $this->assertInstanceOf(ContentEntityInterface::class, $entity);
+    $entity->save();
+    $id = (int) $entity->id();
+    $vid = (int) $entity->getRevisionId();
+    $candidate = $storage->create(['title' => 'Requested title', 'data' => [['count' => 1.0, 'tag' => 'original']]]);
+    $this->assertInstanceOf(ContentEntityInterface::class, $candidate);
+    $candidate->save();
+    $writer = $this->container->get('agency_migrate.identity_writer');
+    $this->container->get('state')->set('agency_migrate_test.rewrite_map', TRUE);
+    $this->assertRefused(fn () => $writer->overwriteContent($entity, $candidate), 'history_drift');
+    $reloaded = $this->unchanged($storage, $id);
+    $this->assertSame('Original title', $reloaded->label());
+    $this->assertSame($original, $reloaded->get('data')->getValue());
+    $revision = $this->revision($type, $vid);
+    $this->assertSame('Original title', $revision->label());
+    $this->assertSame($original, $revision->get('data')->getValue());
+  }
+
+  /**
+   * A foreign connection cannot protect native map storage writes.
+   */
+  public function testSharedMapOverwriteRefusesForeignConnection(): void {
+    $this->installMapTarget();
+    $type = 'agency_migrate_agency_item';
+    $storage = $this->storage($type);
+    $original = [['tag' => 'original', 'count' => 1]];
+    $entity = $storage->create(['title' => 'Original title', 'data' => $original]);
+    $candidate = $storage->create(['title' => 'Requested title', 'data' => [['tag' => 'candidate', 'count' => 1.0]]]);
+    $this->assertInstanceOf(ContentEntityInterface::class, $entity);
+    $this->assertInstanceOf(ContentEntityInterface::class, $candidate);
+    $entity->save();
+    $candidate->save();
+    $id = (int) $entity->id();
+    $vid = (int) $entity->getRevisionId();
+    $database = $this->container->get('database');
+    Database::addConnectionInfo('migrate_map_foreign', 'default', $database->getConnectionOptions());
+    $other = Database::getConnection('default', 'migrate_map_foreign');
+    $this->assertNotSame($database->getClientConnection(), $other->getClientConnection());
+    $writer = new IdentityPreservingWriter($this->container->get('entity_type.manager'), $other);
+    $this->container->get('state')->set('agency_migrate_test.rewrite_map', TRUE);
+    $refusal = NULL;
+    try {
+      $writer->overwriteContent($entity, $candidate);
+    }
+    catch (MigrateRefusal $exception) {
+      $refusal = $exception->reason;
+    }
+    finally {
+      Database::removeConnection('migrate_map_foreign');
+    }
+    $reloaded = $this->unchanged($storage, $id);
+    $this->assertSame('Original title', $reloaded->label());
+    $this->assertSame($original, $reloaded->get('data')->getValue());
+    $this->assertSame($original, $this->revision($type, $vid)->get('data')->getValue());
+    $this->assertSame('writer_connection_mismatch', $refusal);
+  }
+
+  /**
+   * Installs a map source with the same field layout as the test target.
+   */
+  private function installMapSource(): void {
+    $sourceType = 'agency_migrate_map_item';
+    $this->installEntitySchema($sourceType);
+    FieldStorageConfig::create([
+      'field_name' => 'formatted',
+      'entity_type' => $sourceType,
+      'type' => 'text_with_summary',
+      'cardinality' => -1,
+    ])->save();
+    FieldConfig::create([
+      'field_name' => 'formatted',
+      'entity_type' => $sourceType,
+      'bundle' => $sourceType,
+      'translatable' => TRUE,
+    ])->save();
   }
 
   /**
@@ -389,6 +732,15 @@ final class MigrateRevisionHistoryTest extends MigrateKernelTestBase {
     $copier = $this->container->get('plugin.manager.agency_migrate.copier')->createInstance('synthetic_item');
     $this->assertInstanceOf(HistoryCopierInterface::class, $copier);
     return $copier;
+  }
+
+  /**
+   * Loads an entity from storage, bypassing the static cache.
+   */
+  private function unchanged(EntityStorageInterface $storage, int|string|null $id): ContentEntityInterface {
+    $entity = $storage->loadUnchanged($id);
+    $this->assertInstanceOf(ContentEntityInterface::class, $entity);
+    return $entity;
   }
 
   /**
