@@ -281,7 +281,7 @@ jobs:
             if (!in_array("testSeededFixtureFails", $names, TRUE)) { exit(1); }
             if (!in_array("testPublishedPackagePasses", $names, TRUE)) { exit(1); }
           '
-      - name: Run contact and statement preflight refusal tests
+      - name: Run contact, statement and signed-document preflight tests
         working-directory: drupal
         env:
           SYMFONY_DEPRECATIONS_HELPER: disabled
@@ -292,11 +292,23 @@ jobs:
           vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
             --log-junit "$PWD/statement-preflight-junit.xml" \
             "$PWD/web/modules/contrib/agency/modules/agency_engagement/tests/src/Unit/StatementPreflightTest.php"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/signed-document-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/SignedDocument/SignedDocumentPolicyTest.php"
           # PHP expressions are intentionally passed literally to PHP.
           # shellcheck disable=SC2016
           php -r '
             $required = [
               "contact-preflight-junit.xml" => ["testRequiresReviewForBothIdentitiesBeforeProjection"],
+              "signed-document-junit.xml" => [
+                "testVerificationRefusesChangedEvidenceAndStrictExpiry",
+                "testVerifiedRetryCannotSubstituteAnotherCleanDocument",
+                "testAppendKeepsOldPinsAndRequiresExplicitPermissions",
+                "testLeaseBoundaryAndTerminalSlots",
+                "testHistoricalQualificationAndMetadataBoundary",
+                "testHistoryRequiresContiguousOrderedDeltas",
+                "testHistoryRefusesConflictingProtectionForTheSameFile",
+              ],
               "statement-preflight-junit.xml" => [
                 "testKeepsExactSnapshotBytesAndDistinctAnchors",
                 "testDocumentReplayRefusesForeignNamespaceBeforeSlotReads",
@@ -773,5 +785,6 @@ jobs:
             drupal/tenant-strings-junit.xml
             drupal/contact-preflight-junit.xml
             drupal/statement-preflight-junit.xml
+            drupal/signed-document-junit.xml
             drupal/composer.lock
             drupal/server.log
