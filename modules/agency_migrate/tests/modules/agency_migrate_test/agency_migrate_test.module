@@ -31,6 +31,9 @@ function agency_migrate_test_agency_migrate_copier_info_alter(array &$definition
  * Implements hook_entity_base_field_info().
  */
 function agency_migrate_test_entity_base_field_info(EntityTypeInterface $entity_type): array {
+  if ($entity_type->id() === 'agency_migrate_map_item' && \Drupal::state()->get('agency_migrate_test.untranslated_map')) {
+    return ['fixture_global_map' => BaseFieldDefinition::create('map')->setRevisionable(TRUE)];
+  }
   if ($entity_type->id() === 'agency_migrate_agency_item' && \Drupal::state()->get('agency_migrate_test.map_target')) {
     return ['data' => BaseFieldDefinition::create('map')->setRevisionable(TRUE)->setTranslatable(TRUE)];
   }

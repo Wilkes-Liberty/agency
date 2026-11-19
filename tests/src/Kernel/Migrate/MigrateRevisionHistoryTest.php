@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\agency\Kernel\Migrate;
 
+use Drupal\agency_migrate\Exception\MigrateRefusal;
+use Drupal\agency_migrate\IdentityPreservingWriter;
 use Drupal\agency_migrate\Plugin\HistoryCopierInterface;
 use Drupal\agency_migrate\RevisionHistorySnapshot;
 use Drupal\agency_migrate\SharedSqlMapVerifier;
 use Drupal\agency_migrate_test\Entity\SyntheticItem;
+use Drupal\Core\Database\Database;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
@@ -263,6 +266,48 @@ final class MigrateRevisionHistoryTest extends MigrateKernelTestBase {
   }
 
   /**
+   * Native empty shared maps qualify but ambiguous SQL NULL refuses.
+   */
+  public function testEmptyUntranslatedMapRequiresNativeSqlShape(): void {
+    $type = 'agency_migrate_map_item';
+    $this->container->get('state')->set('agency_migrate_test.untranslated_map', TRUE);
+    $this->installEntitySchema($type);
+    $storage = $this->storage($type);
+    $entity = $storage->create(['title' => 'Stored empty map']);
+    $this->assertInstanceOf(ContentEntityInterface::class, $entity);
+    $entity->addTranslation('fr', ['title' => 'Synthetic translation']);
+    $entity->save();
+    $id = (int) $entity->id();
+    $vid = (int) $entity->getRevisionId();
+    $maps = new SharedSqlMapVerifier($this->container->get('database'), $this->container->get('entity_type.manager'));
+    $expectedTables = [
+      'column' => 'fixture_global_map',
+      'current' => 'agency_migrate_map_item_field_data',
+      'revision' => 'agency_migrate_map_item_field_revision',
+    ];
+    $this->assertSame($expectedTables, $maps->columns($entity)['fixture_global_map']);
+    $database = $this->container->get('database');
+    foreach (['current', 'revision'] as $projection) {
+      $rows = $database->select($expectedTables[$projection], 'r')
+        ->fields('r', ['fixture_global_map'])->condition('id', $id)->condition('revision_id', $vid)
+        ->execute()->fetchCol();
+      $this->assertCount(2, $rows);
+      foreach ($rows as $raw) {
+        $this->assertSame(serialize([]), is_resource($raw) ? stream_get_contents($raw) : $raw);
+      }
+    }
+    $writer = $this->container->get('agency_migrate.identity_writer');
+    $snapshot = $writer->captureHistory($storage->loadUnchanged($id));
+    $this->assertSame(['en' => [], 'fr' => []], $snapshot['revisions'][0]['fields']['fixture_global_map']);
+
+    $database->update($expectedTables['revision'])->fields(['fixture_global_map' => NULL])
+      ->condition('id', $id)->condition('revision_id', $vid)->condition('langcode', 'fr')->execute();
+    $revision = $this->revision($type, $vid);
+    $this->assertTrue($revision->getTranslation('fr')->get('fixture_global_map')->isEmpty());
+    $this->assertRefused(fn () => $writer->captureHistory($storage->loadUnchanged($id)), 'history_unverified');
+  }
+
+  /**
    * Unsupported dedicated map writes leave other fields and the map untouched.
    */
   public function testDedicatedMapOverwriteRefusesAtomically(): void {
@@ -328,6 +373,45 @@ final class MigrateRevisionHistoryTest extends MigrateKernelTestBase {
     $revision = $this->revision($type, $vid);
     $this->assertSame('Original title', $revision->label());
     $this->assertSame($original, $revision->get('data')->getValue());
+  }
+
+  /**
+   * A foreign connection cannot protect native map storage writes.
+   */
+  public function testSharedMapOverwriteRefusesForeignConnection(): void {
+    $this->installMapTarget();
+    $type = 'agency_migrate_agency_item';
+    $storage = $this->storage($type);
+    $original = [['tag' => 'original', 'count' => 1]];
+    $entity = $storage->create(['title' => 'Original title', 'data' => $original]);
+    $candidate = $storage->create(['title' => 'Requested title', 'data' => [['tag' => 'candidate', 'count' => 1.0]]]);
+    $this->assertInstanceOf(ContentEntityInterface::class, $entity);
+    $this->assertInstanceOf(ContentEntityInterface::class, $candidate);
+    $entity->save();
+    $candidate->save();
+    $id = (int) $entity->id();
+    $vid = (int) $entity->getRevisionId();
+    $database = $this->container->get('database');
+    Database::addConnectionInfo('migrate_map_foreign', 'default', $database->getConnectionOptions());
+    $other = Database::getConnection('default', 'migrate_map_foreign');
+    $this->assertNotSame($database->getClientConnection(), $other->getClientConnection());
+    $writer = new IdentityPreservingWriter($this->container->get('entity_type.manager'), $other);
+    $this->container->get('state')->set('agency_migrate_test.rewrite_map', TRUE);
+    $refusal = NULL;
+    try {
+      $writer->overwriteContent($entity, $candidate);
+    }
+    catch (MigrateRefusal $exception) {
+      $refusal = $exception->reason;
+    }
+    finally {
+      Database::removeConnection('migrate_map_foreign');
+    }
+    $reloaded = $storage->loadUnchanged($id);
+    $this->assertSame('Original title', $reloaded->label());
+    $this->assertSame($original, $reloaded->get('data')->getValue());
+    $this->assertSame($original, $this->revision($type, $vid)->get('data')->getValue());
+    $this->assertSame('writer_connection_mismatch', $refusal);
   }
 
   /**
