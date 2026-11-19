@@ -7,6 +7,7 @@ namespace Drupal\agency_migrate;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\ContentEntityStorageInterface;
+use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\Sql\DefaultTableMapping;
 use Drupal\Core\Entity\Sql\SqlEntityStorageInterface;
@@ -88,7 +89,9 @@ final class IdentityPreservingWriter {
     }
     // Validate the entire payload before starting any target mutation.
     $incoming = RevisionHistorySnapshot::decode($snapshot, $storage);
-    $this->maps->columns($incoming[$snapshot['default_revision_id']]);
+    if ($this->maps->columns($incoming[$snapshot['default_revision_id']]) !== []) {
+      $this->assertMapWriteConnection($storage);
+    }
     $id = $snapshot['id'];
     $default_id = $snapshot['default_revision_id'];
     $transaction = $this->database->startTransaction();
@@ -236,6 +239,9 @@ final class IdentityPreservingWriter {
     }
     $this->assertCompatibleLayout($source, $probe);
     $map_columns = $this->maps->columns($probe);
+    if ($map_columns !== []) {
+      $this->assertMapWriteConnection($storage);
+    }
     foreach ($history as $revision) {
       $this->assertCompatibleLayout($revision, $probe);
       if ($source->getEntityType()->isRevisionable()
@@ -394,6 +400,7 @@ final class IdentityPreservingWriter {
     $storage = $this->entityTypeManager->getStorage($existing->getEntityTypeId());
     $transaction = NULL;
     if ($map_columns !== []) {
+      $this->assertMapWriteConnection($storage);
       $this->maps->assertCurrent($existing);
       $this->maps->assertCurrent($from);
       $expected = array_intersect_key(RevisionHistorySnapshot::fields($from), $map_columns);
@@ -432,6 +439,18 @@ final class IdentityPreservingWriter {
         $storage->resetCache([(int) $existing->id()]);
       }
       throw $exception;
+    }
+  }
+
+  /**
+   * Requires map storage to participate in this writer's transaction.
+   */
+  private function assertMapWriteConnection(EntityStorageInterface $storage): void {
+    if (!$storage instanceof OperationStorageParticipantInterface) {
+      throw new MigrateRefusal('incompatible_field_layout');
+    }
+    if ($storage->operationConnection() !== $this->database) {
+      throw new MigrateRefusal('writer_connection_mismatch');
     }
   }
 

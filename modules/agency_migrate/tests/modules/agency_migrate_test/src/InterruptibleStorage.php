@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Drupal\agency_migrate_test;
 
+use Drupal\agency_migrate\OperationSqlContentEntityStorage;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
-use Drupal\Core\Entity\Sql\SqlContentEntityStorage;
 use Drupal\Core\State\StateInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Injects a failure after a real SQL revision restore in the synthetic target.
  */
-final class InterruptibleStorage extends SqlContentEntityStorage {
+final class InterruptibleStorage extends OperationSqlContentEntityStorage {
 
   /**
    * Synthetic fault controls supplied by the test host.
