@@ -162,10 +162,12 @@ disposition, and required audit completion.
 
 The read-only history check preserves mapping IDs and UUIDs, User attachment
 deltas, pinned Paragraph revisions, qualified file identities and the Profile
-NDA dates recorded by the source. It refuses ambiguous signed-document links
-and conflicting identities. Own-subject metadata includes only source,
-envelope, digest and signing time. The host remains responsible for protected
-references, field permission and file redemption.
+NDA dates recorded by the source. It requires contiguous deltas in field order
+and consistent protection evidence for each repeated file identity. It refuses
+ambiguous signed-document links and conflicting identities. Own-subject
+metadata includes only source, envelope, digest and signing time. The host
+remains responsible for protected references, field permission and file
+redemption.
 
 The policy and history check are unregistered. Writer adoption requires
 independent assurance of lease-holder exclusion, recoverable file

@@ -158,6 +158,30 @@ final class SignedDocumentPolicyTest extends UnitTestCase {
   }
 
   /**
+   * Retained field pins require every ordered delta from zero.
+   */
+  public function testHistoryRequiresContiguousOrderedDeltas(): void {
+    $first = $this->attachment('upload');
+    $second = $this->attachment('upload', 1);
+    $this->assertSame([$first, $second], HistorySnapshot::qualify([], [$first, $second], [])->attachments);
+    $this->refused(fn() => HistorySnapshot::qualify([], [$second], []));
+    $this->refused(fn() => HistorySnapshot::qualify([], [$second, $first], []));
+    $this->refused(fn() => HistorySnapshot::qualify([], [$first, $this->attachment('upload', 2)], []));
+    $this->refused(fn() => HistorySnapshot::qualify([], [$first, $first], []));
+  }
+
+  /**
+   * Repeated managed file identities must carry the same protection snapshot.
+   */
+  public function testHistoryRefusesConflictingProtectionForTheSameFile(): void {
+    $first = $this->attachment('upload');
+    $second = $this->attachment('upload', 1);
+    $conflict = $this->attachment('upload', 1, grantDigest: self::OTHER_DIGEST);
+    $this->assertSame([$first, $second], HistorySnapshot::qualify([], [$first, $second], [])->attachments);
+    $this->refused(fn() => HistorySnapshot::qualify([], [$first, $conflict], []));
+  }
+
+  /**
    * Builds one normalized legacy row with separate account identities.
    */
   private function mapping(string $state, array $changes = []): MappingSnapshot {
@@ -212,8 +236,13 @@ final class SignedDocumentPolicyTest extends UnitTestCase {
   /**
    * Makes a distinct evidence edge with the original private file item.
    */
-  private function attachment(string $source, int $delta = 0, string $class = 'staff_aal3'): AttachmentSnapshot {
-    $file = new EvidenceFileItem(new QualifiedFile(4, self::FILE, $class, self::DIGEST), FALSE, 'Original description');
+  private function attachment(
+    string $source,
+    int $delta = 0,
+    string $class = 'staff_aal3',
+    string $grantDigest = self::DIGEST,
+  ): AttachmentSnapshot {
+    $file = new EvidenceFileItem(new QualifiedFile(4, self::FILE, $class, $grantDigest), FALSE, 'Original description');
     return AttachmentSnapshot::fromSource([
       'uid' => 9,
       'uuid' => self::USER,

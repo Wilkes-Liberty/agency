@@ -24,7 +24,7 @@ final readonly class HistorySnapshot {
    * @param list<\Drupal\agency_workforce\SignedDocument\MappingSnapshot> $mappings
    *   Original mapping rows for the closed qualification scope.
    * @param list<\Drupal\agency_workforce\SignedDocument\AttachmentSnapshot> $attachments
-   *   Retained user attachment edges and pinned Paragraph values.
+   *   User attachment edges in field order and pinned Paragraph values.
    * @param list<array> $ndaDates
    *   Independently inventoried Profile revision date records.
    */
@@ -44,15 +44,16 @@ final readonly class HistorySnapshot {
       }
       $byEnvelope[$row['envelope_ref']] = $mapping;
     }
-    $edges = $paragraphs = $paragraphIds = $revisions = $parents = $files = $fileIds = [];
+    $nextDeltas = $paragraphs = $paragraphIds = $revisions = $parents = $files = $fileIds = $fileDigests = [];
     foreach ($attachments as $attachment) {
       $edge = $attachment->edge;
       $paragraph = $attachment->paragraph;
       $fields = $attachment->fields;
       self::bindIdentity($users, $userIds, $edge['uid'], $edge['uuid']);
       self::bindIdentity($paragraphs, $paragraphIds, $paragraph['id'], $paragraph['uuid']);
-      Qualification::require(!isset($edges[$edge['uid']][$edge['field']][$edge['delta']]), 'attachment_collision');
-      $edges[$edge['uid']][$edge['field']][$edge['delta']] = TRUE;
+      $expectedDelta = $nextDeltas[$edge['uid']][$edge['field']] ?? 0;
+      Qualification::require($edge['delta'] === $expectedDelta, 'attachment_order');
+      $nextDeltas[$edge['uid']][$edge['field']] = $expectedDelta + 1;
       $version = [$paragraph, $fields];
       $parent = [$edge['uid'], $edge['uuid'], $edge['field']];
       Qualification::require(($revisions[$paragraph['revision']] ?? $version) === $version
@@ -62,6 +63,8 @@ final readonly class HistorySnapshot {
       if ($attachment->file !== NULL) {
         $file = $attachment->file->file;
         self::bindIdentity($files, $fileIds, $file->fid, $file->uuid);
+        Qualification::require(hash_equals($fileDigests[$file->fid] ?? $file->grantDigest, $file->grantDigest), 'file_protection');
+        $fileDigests[$file->fid] = $file->grantDigest;
       }
       if ($fields['field_evidence_source'] !== 'docusign') {
         continue;
