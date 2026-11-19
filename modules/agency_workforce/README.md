@@ -142,3 +142,31 @@ removal. Empty installations can be uninstalled normally. Before retiring a used
 installation, stop its writers and complete an explicit retention and recovery
 procedure; this module supplies no automatic purge. An uninstall refusal is not
 a substitute for backup, a restore rehearsal or a writer fence.
+
+## Signed-document qualification
+
+The internal signed-document policy consumes evidence from a trusted host
+snapshot. It checks completed provider status, original envelope and account
+bindings, the host PDF gate, and agreement between the fetch and scan
+digests. A verified retry also compares the new evidence to the original
+recorded digest, signing time, and signer count. These checks qualify
+metadata agreement. Signer authenticity requires separate provider
+qualification.
+
+Attachment decisions carry the expected mapping, candidate lease and
+original ordered User field pins. Same-kind replacement requires explicit
+confirmation and both attach and replace permission. The proposed operation
+appends after the retained pins. The host owns the authoritative database
+clock, one-row compare-and-set, lease-holder fence, file and database
+disposition, and required audit completion.
+
+The read-only history check preserves mapping IDs and UUIDs, User attachment
+deltas, pinned Paragraph revisions, qualified file identities and the Profile
+NDA dates recorded by the source. It refuses ambiguous signed-document links
+and conflicting identities. Own-subject metadata includes only source,
+envelope, digest and signing time. The host remains responsible for protected
+references, field permission and file redemption.
+
+The policy and history check are unregistered. Writer adoption requires
+independent assurance of lease-holder exclusion, recoverable file
+disposition, retry, and audit failure behavior.
