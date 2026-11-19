@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\agency\Kernel\Migrate;
 
 use Drupal\agency_migrate\Plugin\HistoryCopierInterface;
+use Drupal\agency_migrate\RevisionHistorySnapshot;
 use Drupal\agency_migrate_test\Entity\SyntheticItem;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\field\Entity\FieldConfig;
@@ -90,6 +91,53 @@ final class MigrateRevisionHistoryTest extends MigrateKernelTestBase {
     $default->set('payload', 'New target revision');
     $default->save();
     $this->assertGreaterThan((int) $next->getRevisionId(), (int) $default->getRevisionId());
+  }
+
+  /**
+   * Map fields retain dynamic typed values across stored revisions.
+   */
+  public function testStoredMapValuesSurviveSnapshotAndDecode(): void {
+    $type = 'agency_migrate_map_item';
+    $this->installEntitySchema($type);
+    $original = [
+      'nested' => ['empty' => [], 'nullable' => NULL, 'ordered' => [0, FALSE, '0']],
+      'blank' => '',
+    ];
+    $replacement = ['nested' => ['empty' => [NULL], 'nullable' => ''], 'blank' => NULL];
+    $storage = $this->storage($type);
+    $current = $storage->create(['title' => 'Mapped history', 'data' => [$original]]);
+    $this->assertInstanceOf(ContentEntityInterface::class, $current);
+    $current->save();
+    $defaultId = (int) $current->getRevisionId();
+    $current->setNewRevision(TRUE);
+    $current->isDefaultRevision(FALSE);
+    $current->set('data', [$replacement]);
+    $current->save();
+    $draftId = (int) $current->getRevisionId();
+
+    $default = $this->revision($type, $defaultId);
+    $draft = $this->revision($type, $draftId);
+    $snapshot = RevisionHistorySnapshot::capture($default, [$default, $draft]);
+    $langcode = $default->language()->getId();
+    $this->assertSame([$original], $snapshot['revisions'][0]['fields']['data'][$langcode]);
+    $this->assertSame([$replacement], $snapshot['revisions'][1]['fields']['data'][$langcode]);
+    $this->assertSame(2, $snapshot['version']);
+    $decoded = RevisionHistorySnapshot::decode($snapshot, $storage);
+    $this->assertSame([$original], $decoded[$defaultId]->get('data')->getValue());
+    $this->assertSame([$replacement], $decoded[$draftId]->get('data')->getValue());
+    $this->assertSame($snapshot, RevisionHistorySnapshot::capture($decoded[$defaultId], array_values($decoded)));
+
+    $draft->set('data', [['forbidden' => new \stdClass()]]);
+    $this->assertRefused(fn () => RevisionHistorySnapshot::capture($default, [$default, $draft]), 'history_unverified');
+    $oldMap = $snapshot;
+    $oldMap['version'] = 1;
+    $this->assertRefused(fn () => RevisionHistorySnapshot::decode($oldMap, $storage), 'history_unverified');
+    $unknownLayout = $snapshot;
+    $unknownLayout['layout']['fields']['data']['properties']['unknown'] = 'string';
+    $this->assertRefused(fn () => RevisionHistorySnapshot::decode($unknownLayout, $storage), 'incompatible_field_layout');
+    $unknownProperty = $snapshot;
+    $unknownProperty['revisions'][0]['fields']['title'][$langcode][0]['unknown'] = 'extension';
+    $this->assertRefused(fn () => RevisionHistorySnapshot::decode($unknownProperty, $storage), 'incompatible_field_layout');
   }
 
   /**

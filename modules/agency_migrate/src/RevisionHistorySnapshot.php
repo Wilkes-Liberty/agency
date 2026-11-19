@@ -8,6 +8,7 @@ use Drupal\agency_migrate\Exception\MigrateRefusal;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\ContentEntityStorageInterface;
 use Drupal\Core\Entity\ContentEntityTypeInterface;
+use Drupal\Core\Field\Plugin\Field\FieldType\MapItem;
 use Drupal\Core\TypedData\PrimitiveInterface;
 use Drupal\Core\TypedData\ComplexDataDefinitionInterface;
 
@@ -27,7 +28,7 @@ final class RevisionHistorySnapshot {
    *   Persisted revisions, including the selected default.
    *
    * @return array<string, mixed>
-   *   Version 1 reconstruction payload.
+   *   Versioned reconstruction payload.
    */
   public static function capture(ContentEntityInterface $current, array $history): array {
     $revisions = [];
@@ -41,13 +42,14 @@ final class RevisionHistorySnapshot {
         'fields' => $fields,
       ];
     }
+    $layout = self::layout($current);
     return [
-      'version' => 1,
+      'version' => self::formatVersion($layout),
       'source_type' => $current->getEntityTypeId(),
       'id' => (int) $current->id(),
       'uuid' => $current->uuid(),
       'default_revision_id' => (int) $current->getRevisionId(),
-      'layout' => self::layout($current),
+      'layout' => $layout,
       'revision_count' => count($revisions),
       'revisions' => $revisions,
     ];
@@ -68,12 +70,12 @@ final class RevisionHistorySnapshot {
       'layout', 'revision_count', 'revisions',
     ];
     if (!self::keys($snapshot, $keys)
-      || $snapshot['version'] !== 1
       || !is_string($snapshot['source_type']) || $snapshot['source_type'] === ''
       || !is_int($snapshot['id']) || $snapshot['id'] < 1
       || !is_string($snapshot['uuid']) || !preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i', $snapshot['uuid'])
       || !is_int($snapshot['default_revision_id']) || $snapshot['default_revision_id'] < 1
-      || !is_array($snapshot['layout'])
+      || !is_array($snapshot['layout']) || !is_array($snapshot['layout']['fields'] ?? NULL)
+      || $snapshot['version'] !== self::formatVersion($snapshot['layout'])
       || !is_int($snapshot['revision_count']) || $snapshot['revision_count'] < 1
       || !is_array($snapshot['revisions']) || !array_is_list($snapshot['revisions']) || count($snapshot['revisions']) !== $snapshot['revision_count']) {
       throw new MigrateRefusal('history_unverified');
@@ -114,9 +116,11 @@ final class RevisionHistorySnapshot {
           if ($cardinality > 0 && count($items) > $cardinality) {
             throw new MigrateRefusal('history_unverified');
           }
-          $properties = array_keys($snapshot['layout']['fields'][$name]['properties']);
+          $definition = $snapshot['layout']['fields'][$name];
+          $properties = array_keys($definition['properties']);
+          $dynamicMap = $definition['type'] === 'map' && $properties === [];
           foreach ($items as $item) {
-            if (!is_array($item) || array_keys($item) !== $properties) {
+            if (!is_array($item) || (!$dynamicMap && array_keys($item) !== $properties)) {
               throw new MigrateRefusal('incompatible_field_layout');
             }
           }
@@ -221,6 +225,15 @@ final class RevisionHistorySnapshot {
         }
         $result[$name][$langcode] = [];
         foreach ($field as $item) {
+          // Core maps have dynamic keys and an empty property definition.
+          if ($item instanceof MapItem && $field->getFieldDefinition()->getType() === 'map') {
+            $values = $item->getValue();
+            if (!is_array($values)) {
+              throw new MigrateRefusal('history_unverified');
+            }
+            $result[$name][$langcode][] = $values;
+            continue;
+          }
           $properties = [];
           foreach ($item->getProperties(FALSE) as $property_name => $property) {
             $value = $property->getValue();
@@ -290,6 +303,13 @@ final class RevisionHistorySnapshot {
       'translatable' => $entity->getEntityType()->isTranslatable(),
       'fields' => $fields,
     ];
+  }
+
+  /**
+   * Rejects older map snapshots whose capture could discard stored keys.
+   */
+  private static function formatVersion(array $layout): int {
+    return in_array('map', array_column($layout['fields'], 'type'), TRUE) ? 2 : 1;
   }
 
   /**
