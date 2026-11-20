@@ -345,6 +345,9 @@ final class DiscoveryDomainTest extends KernelTestBase {
     $this->identity->principal = new Principal('https://identity.example.test', 'person-one', FALSE);
     $this->assertSame($denied, $reads->forActor($id));
     $this->assertSame($denied, $reads->forActor($missing));
+    $this->identity->principal = new Principal('https://identity.example.test', 'rebound-person');
+    $this->assertSame($denied, $reads->forActor($id));
+    $this->assertSame($denied, $reads->forActor($missing));
     $this->identity->principal = NULL;
     $unavailable = ['outcome' => 'refused', 'reason' => 'identity_unavailable'];
     $this->assertSame($unavailable, $reads->forActor($id));
@@ -353,6 +356,86 @@ final class DiscoveryDomainTest extends KernelTestBase {
     $this->assertSame($unavailable, $reads->summary($missing));
     $this->identity->principal = new Principal('https://identity.example.test', 'person-one');
     $this->assertSame('exploring', $reads->forActor($id)['workspace']['state']);
+  }
+
+  /**
+   * Reads resolve identity and entitlement again, not a prior projection.
+   */
+  public function testReadsRevalidateIdentityAndEntitlement(): void {
+    [$id] = $this->accepted();
+    $reads = $this->container->get('agency_staff.reads');
+    $commands = $this->container->get('agency_staff.commands');
+    $denied = ['outcome' => 'refused', 'reason' => 'not_found'];
+    $missing = '00000000-0000-4000-8000-000000000000';
+
+    $before = $this->identity->currentCalls;
+    $this->assertSame('exploring', $reads->forActor($id)['workspace']['state']);
+    $afterFirst = $this->identity->currentCalls;
+    $this->assertGreaterThan($before, $afterFirst);
+    $this->assertSame('exploring', $reads->forActor($id)['workspace']['state']);
+    $this->assertGreaterThan($afterFirst, $this->identity->currentCalls);
+
+    $this->identity->principal = new Principal('https://identity.example.test', 'rebound-person');
+    $this->assertSame($denied, $reads->forActor($id));
+    $this->assertSame($denied, $reads->forActor($missing));
+    $this->identity->principal = new Principal('https://identity.example.test', 'person-one');
+    $this->assertSame('exploring', $reads->forActor($id)['workspace']['state']);
+
+    $this->assertSame('committed', $commands->suspendAccess($id, [], 'revoke-workspace', 0)['outcome']);
+    $this->assertSame($denied, $reads->forActor($id));
+    $this->assertSame($denied, $reads->forActor($missing));
+    $this->assertSame($denied, $reads->summary($id));
+    $this->assertSame($denied, $reads->summary($missing));
+  }
+
+  /**
+   * Coordinator commands need both explicit permission and assignment.
+   */
+  public function testCoordinatorPermissionAndAssignmentAreRequired(): void {
+    [$id, $version] = $this->accepted();
+    $reads = $this->container->get('agency_staff.reads');
+    $commands = $this->container->get('agency_staff.commands');
+    $denied = ['outcome' => 'refused', 'reason' => 'not_found'];
+    $missing = '00000000-0000-4000-8000-000000000000';
+    $action = $this->input()['next_action'];
+
+    $this->assertCount(1, $reads->queue()['contexts']);
+    $role = Role::load('discovery_coordinator');
+    $role->revokePermission('coordinate agency discovery')->save();
+    $this->assertSame($denied, $reads->queue());
+    $this->assertSame($denied, $commands->setNextAction($id, $action, 'no-coordinate', $version));
+    $this->assertSame($denied, $commands->setNextAction($missing, $action, 'no-coordinate-missing', $version));
+    $this->assertSame($denied, $commands->startDiscovery($this->input(), 'no-coordinate-start'));
+    $role->revokePermission('suspend agency discovery access')->save();
+    $this->assertSame($denied, $commands->suspendAccess($id, [], 'no-suspend', 0));
+    $this->assertSame($denied, $commands->suspendAccess($missing, [], 'no-suspend-missing', 0));
+
+    $role->grantPermission('coordinate agency discovery')
+      ->grantPermission('suspend agency discovery access')
+      ->save();
+    $this->assertCount(1, $reads->queue()['contexts']);
+    $next = User::create([
+      'name' => 'scope-coordinator',
+      'status' => 1,
+      'roles' => ['discovery_coordinator'],
+    ]);
+    $next->save();
+    $reassign = $action;
+    $reassign['owner'] = [
+      'uid' => (int) $next->id(),
+      'contact' => $this->input()['owner_contact'],
+    ];
+    $moved = $commands->setNextAction($id, $reassign, 'reassign-for-scope', $version);
+    $this->assertSame('committed', $moved['outcome']);
+    $this->assertSame([], $reads->queue()['contexts']);
+    $this->assertSame($denied, $commands->setNextAction($id, $action, 'former-owner', $moved['version']));
+    $this->assertSame($denied, $commands->setNextAction($missing, $action, 'former-owner-missing', $moved['version']));
+    $this->assertSame($denied, $commands->suspendAccess($id, [], 'former-owner-suspend', 0));
+    $this->assertSame($denied, $commands->suspendAccess($missing, [], 'former-owner-suspend-missing', 0));
+
+    $this->container->get('current_user')->setAccount($next);
+    $this->assertCount(1, $reads->queue()['contexts']);
+    $this->assertSame('committed', $commands->suspendAccess($id, [], 'assigned-suspend', 0)['outcome']);
   }
 
   /**
