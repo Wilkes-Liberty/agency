@@ -45,7 +45,7 @@ final class AgencyInstallTest extends BrowserTestBase {
     $requirements = agency_requirements('runtime');
     $expected_severity = class_exists(RequirementSeverity::class)
       ? RequirementSeverity::Error
-      : REQUIREMENT_ERROR;
+      : 2;
     $this->assertSame($expected_severity, $requirements['agency_display_name']['severity']);
     $this->assertSame('Agency name is not configured', (string) $requirements['agency_display_name']['value']);
 
