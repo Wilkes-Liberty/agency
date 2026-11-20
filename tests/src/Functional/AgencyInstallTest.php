@@ -43,7 +43,10 @@ final class AgencyInstallTest extends BrowserTestBase {
     $this->container->get('module_handler')->loadInclude('agency', 'install');
 
     $requirements = agency_requirements('runtime');
-    $this->assertSame(RequirementSeverity::Error, $requirements['agency_display_name']['severity']);
+    $expected_severity = class_exists(RequirementSeverity::class)
+      ? RequirementSeverity::Error
+      : 2;
+    $this->assertSame($expected_severity, $requirements['agency_display_name']['severity']);
     $this->assertSame('Agency name is not configured', (string) $requirements['agency_display_name']['value']);
 
     $admin = $this->drupalCreateUser(['administer site configuration']);
