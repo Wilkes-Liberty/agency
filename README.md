@@ -24,7 +24,8 @@ engines remain independent dependencies.
   it copies no host data and transfers no recruiting authority.
 - `agency_migrate` copies host records into Agency types with lineage, shadow
   reconciliation and operational authority. Host adapters supply copier plugins
-  and verified writer exclusion. Nonempty rollback replay remains unavailable.
+  and verified writer exclusion. Qualified nonempty rollback is available for
+  reviewed equal-layout copiers under a verified writer fence.
 
 `agency_staff` provides invitation-only Discovery domain services, internal
 entity storage, scoped workspace/summary projections and a durable evidence
