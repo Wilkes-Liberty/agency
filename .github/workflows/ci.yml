@@ -397,6 +397,10 @@ jobs:
               "testEqualCountsWithoutCoverageCannotQualify",
               "testInventoryDiscardsUnsavedEntityCacheChanges",
               "testInventoryReadsPersistedChangesBehindCache",
+              "testSampleReportsIdentityDriftWhenTargetUuidChanges",
+              "testSampleReportsIdentityDriftWhenTargetRevisionChanges",
+              "testSampleReportsIdentityDriftWhenLineageMatchesDivergentUuids",
+              "testSampleReportsIdentityDriftWhenLineageRevisionDiverges",
             ]);
             $required = array_merge($required, [
               "testLegacyJournalRefusesPreviewAndExecution",

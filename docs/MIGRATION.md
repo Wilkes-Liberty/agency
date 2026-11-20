@@ -44,9 +44,11 @@ Observed in the kernel suite against synthetic entity types:
   public `logKeyed()` contract so a verifier can resolve a legacy reference to
   its Agency counterpart. The unmapped-marking stop and a refused
   Agency-side load at non-agency authority use the same outbox.
-- A reconciler reports counts, per-field digests, integer-reference integrity
+- A reconciler reports counts, per-field digests, identity (UUID and current
+  revision id, including the lineage row), integer-reference integrity
   and access-decision parity (same principal token, same allow/deny on both
-  sides) as JSON with a pass/fail and explained exceptions.
+  sides) as JSON with a pass/fail and explained exceptions. UUID and revision
+  mismatches are `identity_drift`; they are not skipped as content fields.
 - An operational SQL authority register holds one versioned state per domain:
   `legacy`, `shadow`, `agency`, `removed`. Transitions move forward, except the
   rollback edge `agency → legacy`. Each change requires
@@ -169,6 +171,9 @@ by `EntityCopierBase`. Existing custom copiers remain loadable, but full
 reconciliation reports `coverage_unverified` until they can enumerate their
 complete target population. Explicit source samples remain available through
 `compare($plugin_id, $sample_ids)`. Duplicate sample ids are inspected once.
+A sampled record with the right integer id still fails when its source UUID or
+current revision id differs from the target, or from the lineage row, with
+`identity_drift` rather than a clean comparison.
 
 Reports retain `passed`, `counts`, `field_digests` and `exceptions`, and add
 `coverage` and `full_passed`. Coverage identifies `full` versus `sample`, the

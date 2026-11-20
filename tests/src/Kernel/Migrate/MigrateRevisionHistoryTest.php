@@ -659,7 +659,9 @@ final class MigrateRevisionHistoryTest extends MigrateKernelTestBase {
     $this->container->get('database')->update('agency_migrate_lineage')->fields(['target_uuid' => $this->container->get('uuid')->generate()])->execute();
     $this->assertRefused(fn () => $this->copyAll(), 'history_drift');
     $report = $this->container->get('agency_migrate.reconciler')->compare('synthetic_item', [1]);
-    $this->assertContains('history_drift', array_column($report->exceptions(), 'type'));
+    $types = array_column($report->exceptions(), 'type');
+    $this->assertContains('identity_drift', $types);
+    $this->assertContains('history_drift', $types);
   }
 
   /**
