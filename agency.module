@@ -45,15 +45,17 @@ function agency_display_name_requirements(): array {
     // The status report surfaces the same guard used by runtime consumers.
   }
 
-  $error_severity = class_exists(RequirementSeverity::class)
+  // Drupal 10.6 has no RequirementSeverity enum. 2 matches REQUIREMENT_ERROR
+  // without using that Drupal 12-removed constant.
+  $severity = class_exists(RequirementSeverity::class)
     ? RequirementSeverity::Error
-    : REQUIREMENT_ERROR;
+    : 2;
 
   return [
     'agency_display_name' => [
       'title' => t('Agency configuration'),
       'value' => t('Agency name is not configured'),
-      'severity' => $error_severity,
+      'severity' => $severity,
       'description' => t('Set the agency name before inviting anyone or rendering a participant workspace.'),
     ],
   ];

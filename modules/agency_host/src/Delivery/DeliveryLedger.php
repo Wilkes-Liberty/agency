@@ -174,10 +174,7 @@ final class DeliveryLedger {
    * Returns associative rows on Drupal 10 PDO modes and Drupal 11 FetchAs.
    */
   private function fetchAssociative(StatementInterface $statement): array {
-    if (class_exists(FetchAs::class)) {
-      return $statement->fetchAll(FetchAs::Associative);
-    }
-    return $statement->fetchAll(\PDO::FETCH_ASSOC);
+    return $statement->fetchAll(class_exists(FetchAs::class) ? FetchAs::Associative : \PDO::FETCH_ASSOC);
   }
 
 }
