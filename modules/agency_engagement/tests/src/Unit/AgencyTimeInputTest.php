@@ -82,13 +82,14 @@ final class AgencyTimeInputTest extends TestCase {
       ],
     ];
     foreach ($cases as $change) {
+      $caught = FALSE;
       try {
         TimeInput::normalize(array_replace($base, $change));
-        $this->fail('Invalid input was accepted.');
       }
       catch (\InvalidArgumentException) {
-        $this->addToAssertionCount(1);
+        $caught = TRUE;
       }
+      $this->assertTrue($caught, 'Invalid input was accepted.');
     }
   }
 

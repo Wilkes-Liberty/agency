@@ -90,6 +90,8 @@ final class CommercialAccountProjection {
   /**
    * Returns the configured label for an allowlisted payment method.
    *
+   * @param mixed $method
+   *   Payment-method machine value from the host record.
    * @param array<string, mixed> $labels
    *   Machine value to label map supplied by the host adapter.
    */

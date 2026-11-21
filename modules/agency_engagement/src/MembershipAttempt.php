@@ -64,14 +64,13 @@ final class MembershipAttempt {
       $this->protectedAccountNames,
     ] as $list) {
       foreach ($list as $item) {
-        if (!is_string($item) || str_contains($item, "\0")) {
+        if (str_contains($item, "\0")) {
           throw new \InvalidArgumentException('invalid');
         }
       }
     }
     foreach ($this->groupRoleMap as $group => $role) {
-      if (!is_string($group) || !is_string($role)
-        || str_contains($group, "\0") || str_contains($role, "\0")) {
+      if (str_contains($group, "\0") || str_contains($role, "\0")) {
         throw new \InvalidArgumentException('invalid');
       }
     }
