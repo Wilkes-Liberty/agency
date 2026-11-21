@@ -348,6 +348,9 @@ jobs:
               "testAppliesRecordsRouteCacheMetadata",
               "testMap",
               "testMapDoesNotHonorHighestPriority",
+              "testLookupMissingTenantClaim",
+              "testLookupShareNotFoundWithoutPayload",
+              "testClaimNeverCreatesOpportunity",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
