@@ -81,11 +81,7 @@ abstract class AgreementKernelTestBase extends KernelTestBase {
    * PHPStan treats ContainerInterface::has() as false for unknown ids.
    */
   protected function hasService(string $id): bool {
-    $container = $this->container;
-    if (!method_exists($container, 'getServiceIds')) {
-      return FALSE;
-    }
-    return in_array($id, $container->getServiceIds(), TRUE);
+    return in_array($id, $this->container->getServiceIds(), TRUE);
   }
 
   /**
