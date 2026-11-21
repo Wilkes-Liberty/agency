@@ -24,6 +24,8 @@ final class CommercialSeparationTest extends TestCase {
     'Drupal\\agency_staff\\RelationshipReads',
     'Drupal\\agency_workforce\\',
     'Drupal\\agency_recruiting\\',
+    'Drupal\\agency_intake\\',
+    'submitIntake',
   ];
 
   /**
@@ -59,6 +61,14 @@ final class CommercialSeparationTest extends TestCase {
       }
     }
     $this->assertGreaterThan(0, $scanned);
+    foreach ([
+      'agency_commercial.routing.yml',
+      'agency_commercial.links.menu.yml',
+      'agency_commercial.links.task.yml',
+      'agency_commercial.links.action.yml',
+    ] as $ui_file) {
+      $this->assertFileDoesNotExist($root . '/' . $ui_file);
+    }
   }
 
 }

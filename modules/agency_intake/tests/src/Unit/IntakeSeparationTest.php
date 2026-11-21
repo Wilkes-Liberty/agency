@@ -26,6 +26,8 @@ final class IntakeSeparationTest extends TestCase {
     'Drupal\\agency_recruiting\\',
     'Drupal\\agency_commercial\\Opportunity',
     'Drupal\\agency_commercial\\Activity',
+    'Drupal\\agency_commercial\\Entity\\Opportunity',
+    'Drupal\\agency_commercial\\Entity\\Activity',
     'createOpportunity',
     'closeOpportunity',
     'recordActivity',
@@ -64,6 +66,14 @@ final class IntakeSeparationTest extends TestCase {
       }
     }
     $this->assertGreaterThan(0, $scanned);
+    foreach ([
+      'agency_intake.routing.yml',
+      'agency_intake.links.menu.yml',
+      'agency_intake.links.task.yml',
+      'agency_intake.links.action.yml',
+    ] as $ui_file) {
+      $this->assertFileDoesNotExist($root . '/' . $ui_file);
+    }
   }
 
 }
