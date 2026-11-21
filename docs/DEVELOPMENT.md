@@ -79,6 +79,8 @@ vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
   "$PWD/web/modules/contrib/agency/modules/agency_host/tests/src"
 vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
   "$PWD/web/modules/contrib/agency/modules/agency_recruiting/tests"
+vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+  "$PWD/web/modules/contrib/agency/modules/agency_campaign/tests"
 ```
 
 The GitHub matrix installs the host identity/OAuth stack and Drush so
@@ -129,7 +131,8 @@ retention removal and Discovery access-denial cases ran without skips. The domai
 all named operation-journal cases, including real SQL faults and independent
 authority and retry workers. The same lanes run `modules/agency_host` unit and
 kernel tests. The 11.x lanes, including
-PostgreSQL 16, also run `modules/agency_recruiting` kernel tests. The PostgreSQL 16 leg must
+PostgreSQL 16, also run `modules/agency_recruiting` and
+`modules/agency_campaign` kernel tests. The PostgreSQL 16 leg must
 execute the deferred clean-origin COMMIT-fault cases; it must not skip them.
 smtp and postmark_webhooks cases may skip when those modules are absent.
 The CLI-only workers accept kernel-test-prefixed connection options via
