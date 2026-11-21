@@ -28,6 +28,9 @@ its [service contract](DISCOVERY_CONTRACT.md) through explicit adapters.
 The four product loops are journeys across domains. Final package boundaries should
 follow cohesive responsibilities and dependency direction, not the four loop names.
 
+Slice 5 credential, availability and roster placement is still proposed;
+see [Slice 5 remaining placement](S5_OPEN_QUESTIONS.md).
+
 ## Domain ownership
 
 The intended business domain includes relationships and CRM, marketing and intake,

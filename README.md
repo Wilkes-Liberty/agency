@@ -72,6 +72,8 @@ coordinator grant. Amounts stay off the evidence metadata. See the
 `agency_agreement` stores `agency_agreement` records. Entity access is
 denied by default. There is no named write action yet. See the
 [agreement module note](modules/agency_agreement/README.md).
+Credential, availability and roster placement is still proposed; see
+[Slice 5 remaining placement](docs/S5_OPEN_QUESTIONS.md).
 
 The alpha7 migration scope adds a value-based post-cutover writer with a durable
 operation journal, ordered replay for reviewed equal-layout copiers, and
