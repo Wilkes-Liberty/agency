@@ -346,6 +346,8 @@ jobs:
               "testUnknownActionAndFailureCode",
               "testAppliesMatchesCommercialRoutesOnly",
               "testAppliesRecordsRouteCacheMetadata",
+              "testMap",
+              "testMapDoesNotHonorHighestPriority",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
