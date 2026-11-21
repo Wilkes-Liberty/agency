@@ -320,7 +320,8 @@ jobs:
         run: |
           vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
             --log-junit "$PWD/contact-preflight-junit.xml" \
-            "$PWD/web/modules/contrib/agency/tests/src/Unit/ContactPreflightTest.php"
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/ContactPreflightTest.php" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/ContactFieldContractTest.php"
           vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
             --log-junit "$PWD/statement-preflight-junit.xml" \
             "$PWD/web/modules/contrib/agency/modules/agency_engagement/tests/src/Unit/StatementPreflightTest.php"
@@ -334,7 +335,11 @@ jobs:
           # shellcheck disable=SC2016
           php -r '
             $required = [
-              "contact-preflight-junit.xml" => ["testRequiresReviewForBothIdentitiesBeforeProjection"],
+              "contact-preflight-junit.xml" => [
+                "testRequiresReviewForBothIdentitiesBeforeProjection",
+                "testReviewedLayoutKeepsTypedContactFields",
+                "testStringStandInsForContactFieldsAreUnreviewed",
+              ],
               "workforce-unit-junit.xml" => [
                 "testStaffClassificationRefusesHostRoleIds",
                 "testInviteStaffRejectsCrossDomainClassification",
