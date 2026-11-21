@@ -1,0 +1,81 @@
+<?php
+
+/**
+ * @file
+ * Campaign records use the Entity API; intents and evidence are local.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function agency_campaign_schema(): array {
+  return [
+    'agency_campaign_outbox' => [
+      'description' => 'Required minimized campaign intents.',
+      'fields' => [
+        'id' => [
+          'type' => 'varchar',
+          'length' => 36,
+          'not null' => TRUE,
+        ],
+        'campaign_uuid' => [
+          'type' => 'varchar',
+          'length' => 128,
+          'not null' => TRUE,
+        ],
+        'operation' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'metadata' => [
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+        'recorded' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+        'delivered' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+        'attempts' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+      ],
+      'primary key' => ['id'],
+      'indexes' => [
+        'queued' => ['delivered', 'recorded'],
+        'campaign' => ['campaign_uuid'],
+      ],
+    ],
+    'agency_campaign_intent' => [
+      'description' => 'Idempotency fingerprints and campaign receipts.',
+      'fields' => [
+        'id' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'payload_hash' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'receipt' => [
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+      ],
+      'primary key' => ['id'],
+    ],
+  ];
+}

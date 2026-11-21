@@ -1,0 +1,16 @@
+services:
+  agency_campaign.committer:
+    class: Drupal\agency_campaign\TransactionCommitter
+  agency_campaign.outbox:
+    class: Drupal\agency_campaign\CampaignOutbox
+    arguments: ['@database', '@audit_chain.logger', '@uuid', '@datetime.time']
+  agency_campaign.launch:
+    class: Drupal\agency_campaign\LaunchCampaign
+    arguments:
+      - '@database'
+      - '@entity_type.manager'
+      - '@current_user'
+      - '@field_guard.explicit_permission_checker'
+      - '@agency_campaign.outbox'
+      - '@datetime.time'
+      - '@agency_campaign.committer'

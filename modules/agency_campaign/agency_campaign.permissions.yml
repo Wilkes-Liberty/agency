@@ -1,0 +1,4 @@
+coordinate agency campaigns:
+  title: 'Coordinate marketing campaigns'
+  description: 'Requires an explicit grant. Does not grant relationship, roster or Discovery authority.'
+  restrict access: true
