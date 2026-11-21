@@ -338,6 +338,12 @@ jobs:
               "testUnsupportedForm",
               "testCatalogDefaultsOmitVendorFields",
               "testExplicitPolicyAndDenials",
+              "testSeatsExposeLifecycleActions",
+              "testHatchMissingTenantClaim",
+              "testHatchShareNotFoundWithoutPayload",
+              "testTypedActionsExcludeAuthorityInputs",
+              "testUnknownInputIsRejectedWithoutPayload",
+              "testUnknownActionAndFailureCode",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
