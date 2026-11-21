@@ -59,7 +59,7 @@ final class AgreementAccessTest extends AgreementKernelTestBase {
       'agency_agreement.terminate',
       'agency_agreement.write',
     ] as $id) {
-      $this->assertFalse($this->container->has($id), $id);
+      $this->assertFalse($this->hasService($id), $id);
     }
     $this->assertFileDoesNotExist(
       dirname(__DIR__, 3) . '/agency_agreement.services.yml',

@@ -223,10 +223,10 @@ final class ExpenseActionTest extends ExpenseKernelTestBase {
    * Submit, approve and reimburse are not registered container services.
    */
   public function testLaterExpenseStatesHaveNoRegisteredActions(): void {
-    $this->assertFalse($this->container->has('agency_expense.submit'));
-    $this->assertFalse($this->container->has('agency_expense.approve'));
-    $this->assertFalse($this->container->has('agency_expense.reimburse'));
-    $this->assertTrue($this->container->has('agency_expense.record'));
+    $this->assertFalse($this->hasService('agency_expense.submit'));
+    $this->assertFalse($this->hasService('agency_expense.approve'));
+    $this->assertFalse($this->hasService('agency_expense.reimburse'));
+    $this->assertTrue($this->hasService('agency_expense.record'));
     $result = $this->container->get('agency_expense.record')
       ->record(['amount' => '12.50'], 'record-later-key');
     $this->assertSame('drafted', $result['receipt']['state']);

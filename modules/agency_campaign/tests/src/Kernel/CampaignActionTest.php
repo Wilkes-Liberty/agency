@@ -297,9 +297,9 @@ final class CampaignActionTest extends CampaignKernelTestBase {
    * Pause and complete are not registered container services.
    */
   public function testPauseAndCompleteAreNotRegisteredServices(): void {
-    $this->assertFalse($this->container->has('agency_campaign.pause'));
-    $this->assertFalse($this->container->has('agency_campaign.complete'));
-    $this->assertTrue($this->container->has('agency_campaign.launch'));
+    $this->assertFalse($this->hasService('agency_campaign.pause'));
+    $this->assertFalse($this->hasService('agency_campaign.complete'));
+    $this->assertTrue($this->hasService('agency_campaign.launch'));
   }
 
   /**
