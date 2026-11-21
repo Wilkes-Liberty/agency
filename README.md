@@ -22,6 +22,9 @@ engines remain independent dependencies.
   and an audited own-profile read through explicitly configured host adapters.
 - `agency_recruiting` registers career posting and application storage. Enabling
   it copies no host data and transfers no recruiting authority.
+- `agency_campaign` registers marketing campaign storage and the launch
+  action. Enabling it creates no campaigns and grants no relationship or
+  roster authority.
 - `agency_migrate` copies host records into Agency types with lineage, shadow
   reconciliation and operational authority. Host adapters supply copier plugins
   and verified writer exclusion. Qualified nonempty rollback is available for
@@ -48,6 +51,11 @@ records. Entity access is denied by default. There are no routes, forms, Views
 or menu links. A published open posting requires a future close deadline. An
 application may omit a posting. Résumé bytes stay in File Gate; the row stores a
 File Gate UUID. See the [recruiting module note](modules/agency_recruiting/README.md).
+
+`agency_campaign` stores `agency_campaign` records. Entity access is denied
+by default. `launchCampaign` creates a draft or activates an owned draft
+after an explicit coordinator grant. Required evidence shares the write
+transaction. See the [campaign module note](modules/agency_campaign/README.md).
 
 The alpha7 migration scope adds a value-based post-cutover writer with a durable
 operation journal, ordered replay for reviewed equal-layout copiers, and
