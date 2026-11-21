@@ -336,6 +336,8 @@ jobs:
               "testInquiry",
               "testAccount",
               "testUnsupportedForm",
+              "testCatalogDefaultsOmitVendorFields",
+              "testExplicitPolicyAndDenials",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
