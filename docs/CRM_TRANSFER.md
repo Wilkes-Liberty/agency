@@ -1,13 +1,15 @@
 # CRM transfer (Slice 3)
 
-Status: **proposed design**. This is not an implementation contract, not a
-Slice 3 G-gate, and not operator approval. The source inventory and its
-verification receipts belong to the installing host's migration record.
+Status: **proposed design**. Slice 3 G1 is accepted in the host vault
+(2026-11-18, D1–D8). This package still ships no CRM or intake entity
+types. This is not an implementation contract for expand, not a
+Slice 3 G-gate for cutover, and not operator approval. The source
+inventory and its verification receipts belong to the installing
+host's migration record.
 See the [draft ontology](ONTOLOGY.md) for proposed object and action names.
 ID-preserving transfer
 Option A (ID-preserving copy plus lineage) is recorded as decided; it
-does not approve this slice. Slice 3 expand still waits on a later
-operator G1 after Slice 2.
+does not approve expand. This package still ships no entity types.
 
 The document distinguishes **observed** Agency Discovery and host-adapter
 behavior in this package from **proposed** Slice 3 transfer. Slice 3

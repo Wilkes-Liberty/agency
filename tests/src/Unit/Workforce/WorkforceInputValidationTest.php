@@ -47,6 +47,38 @@ final class WorkforceInputValidationTest extends UnitTestCase {
   }
 
   /**
+   * StaffClassification accepts only employee and contractor.
+   *
+   * Extra host role ids from StaffUserTypeTest stay refused here. Host
+   * role and profile maps are not part of this object.
+   */
+  public function testStaffClassificationRefusesHostRoleIds(): void {
+    foreach ([
+      'administrator',
+      'intern',
+      'publisher',
+      'content_editor',
+      'authenticated',
+    ] as $kind) {
+      try {
+        new StaffClassification($kind);
+        $this->fail('Classification ' . $kind . ' must be refused.');
+      }
+      catch (Refusal $exception) {
+        $this->assertSame('invalid', $exception->reason);
+      }
+    }
+    $this->assertSame(
+      StaffClassification::EMPLOYEE,
+      (new StaffClassification(StaffClassification::EMPLOYEE))->id,
+    );
+    $this->assertSame(
+      StaffClassification::CONTRACTOR,
+      (new StaffClassification(StaffClassification::CONTRACTOR))->id,
+    );
+  }
+
+  /**
    * InviteStaff refuses Discovery and client classifications.
    */
   public function testInviteStaffRejectsCrossDomainClassification(): void {

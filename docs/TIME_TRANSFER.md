@@ -1,5 +1,10 @@
 # Time transfer (Slice 4)
 
+Current status (vault, 2026-11-18): Slice 4 G1 is accepted (vault#1007,
+D1–D9). Expand remains at `legacy`. Record types stay unregistered until
+G2. This document's "proposed design" header is historical; where it
+conflicts with the vault plan, the vault plan wins.
+
 Status: **proposed design**. This is not an implementation contract and is
 not a slice-design (G1) approval. No `agency_*` record types, services,
 routes or copier plugins are registered by this change. The source inventory

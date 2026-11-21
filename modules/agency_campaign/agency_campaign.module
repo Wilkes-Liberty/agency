@@ -1,0 +1,20 @@
+<?php
+
+/**
+ * @file
+ * Access-checked campaign queries return no rows.
+ */
+
+use Drupal\Core\Database\Query\AlterableInterface;
+use Drupal\Core\Database\Query\SelectInterface;
+
+/**
+ * Implements hook_query_TAG_alter() for agency_campaign_access.
+ */
+function agency_campaign_query_agency_campaign_access_alter(
+  AlterableInterface $query,
+): void {
+  if ($query instanceof SelectInterface) {
+    $query->where('1 = 0');
+  }
+}
