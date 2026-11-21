@@ -24,8 +24,11 @@ final class ContactFieldContractTest extends UnitTestCase {
    * The reviewed layout accepts typed email, telephone and address fields.
    */
   public function testReviewedLayoutKeepsTypedContactFields(): void {
-    ContactFields::assertLayout($this->layout());
-    $this->addToAssertionCount(1);
+    $layout = $this->layout();
+    ContactFields::assertLayout($layout);
+    $this->assertSame('email', $layout['fields']['email']['type']);
+    $this->assertSame('telephone', $layout['fields']['phone']['type']);
+    $this->assertSame('address', $layout['fields']['address']['type']);
   }
 
   /**
