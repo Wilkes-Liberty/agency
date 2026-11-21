@@ -15,8 +15,8 @@ the sole authority for this type; there is no Chronicle source.
 | --- | --- | --- |
 | Expense | `agency_expense` | `drafted`, `submitted`, `approved`, `reimbursed` |
 
-Entity access is denied by default, including for user 1. Writes go
-through `recordExpense` only.
+Entity access is denied by default, including for user 1. Access-checked
+entity queries return no rows. Writes go through `recordExpense` only.
 
 ## recordExpense
 
