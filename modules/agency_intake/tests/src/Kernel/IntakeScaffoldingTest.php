@@ -7,12 +7,11 @@ namespace Drupal\Tests\agency_intake\Kernel;
 use Drupal\agency_intake\Exception\IntakeRefusal;
 use Drupal\agency_intake\UnavailableDispatchKeyStore;
 use Drupal\agency_intake\UnavailableIntakeDispatchGateway;
-use Drupal\KernelTests\KernelTestBase;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Proves intake scaffolding installs, refuses and leaves no types.
+ * Proves intake types install internally without a granting surface.
  *
  * @group agency
  *
@@ -20,54 +19,37 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  */
 #[Group('agency')]
 #[RunTestsInSeparateProcesses]
-final class IntakeScaffoldingTest extends KernelTestBase {
-
-  /**
-   * {@inheritdoc}
-   */
-  protected static $modules = [
-    'system',
-    'user',
-    'agency',
-    'agency_intake',
-  ];
+final class IntakeScaffoldingTest extends IntakeKernelTestBase {
 
   /**
    * {@inheritdoc}
    */
   protected function setUp(): void {
     parent::setUp();
-    $this->installEntitySchema('user');
-    $this->installSchema('user', ['users_data']);
     $this->installConfig(['user']);
   }
 
   /**
-   * Enabling the module creates no business surface.
+   * Enabling the module registers the internal type without granting access.
    */
-  public function testEnablementCreatesNoBusinessSurface(): void {
+  public function testEnablementRegistersInternalTypesWithoutRoutes(): void {
     $handler = $this->container->get('module_handler');
     $this->assertTrue($handler->moduleExists('agency'));
     $this->assertTrue($handler->moduleExists('agency_intake'));
     $this->assertFalse(function_exists('agency_intake_schema'));
 
-    $types = array_keys(
-      $this->container->get('entity_type.manager')->getDefinitions(),
-    );
-    foreach ([
-      'agency_opportunity',
-      'agency_activity',
-      'agency_intake_submission',
-    ] as $type) {
-      $this->assertNotContains($type, $types);
-    }
+    $definitions = $this->container->get('entity_type.manager')->getDefinitions();
+    $this->assertArrayHasKey('agency_intake_submission', $definitions);
+    $this->assertTrue($definitions['agency_intake_submission']->isInternal());
+    $this->assertArrayNotHasKey('agency_opportunity', $definitions);
+    $this->assertArrayNotHasKey('agency_activity', $definitions);
 
     $schema = $this->container->get('database')->schema();
     foreach ([
       'agency_intake_submission',
       'agency_intake_submission_revision',
     ] as $table) {
-      $this->assertFalse($schema->tableExists($table), $table);
+      $this->assertTrue($schema->tableExists($table), $table);
     }
 
     $this->container->get('router.builder')->rebuild();
@@ -146,7 +128,7 @@ final class IntakeScaffoldingTest extends KernelTestBase {
   }
 
   /**
-   * An empty install can be removed.
+   * An empty install can be removed and drops the registered type.
    */
   public function testEmptyModuleUninstalls(): void {
     $this->assertTrue(
@@ -155,6 +137,8 @@ final class IntakeScaffoldingTest extends KernelTestBase {
     $this->assertFalse(
       $this->container->get('module_handler')->moduleExists('agency_intake'),
     );
+    $definitions = $this->container->get('entity_type.manager')->getDefinitions();
+    $this->assertArrayNotHasKey('agency_intake_submission', $definitions);
   }
 
 }
