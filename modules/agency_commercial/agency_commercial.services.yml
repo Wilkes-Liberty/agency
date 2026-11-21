@@ -9,3 +9,7 @@ services:
     class: Drupal\agency_commercial\UnavailableOperatingRuns
   agency_commercial.private_search:
     class: Drupal\agency_commercial\UnavailablePrivateSearch
+  agency_commercial.seat_provisioner:
+    class: Drupal\agency_commercial\UnavailableSeatProvisioner
+  agency_commercial.account_issuance:
+    class: Drupal\agency_commercial\UnavailableAccountIssuance
