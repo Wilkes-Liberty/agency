@@ -71,17 +71,32 @@ Landed in this package:
 
 - `tests/src/Unit/SignedDocument/SignedDocumentPolicyTest.php`
 
-## Remaining `to-port` (65)
+## Remaining `to-port` (63)
 
 Later reviewable batches, not this pull request:
 
 - S2 Agency projection and host adapter (12)
 - S2 host client-access adapted invitation (9)
-- S3 CRM (20)
+- S3 CRM (18)
 - S3 intake (9)
 - S4 time (4)
 - S4 projection (8)
 - S4 membership / OIDC bind (3)
+
+S2 GraphQL producers (`accountExists`, `wlInviteStatus`) and client-access
+coordinator forms stay on the host. Agency already covers mixed-case
+mailbox collision, GET-versus-POST, expiry and own-profile denials.
+
+## Batch 3 — S3 contact field types (2 scanned classes)
+
+| Host class | Agency status | Reason |
+| --- | --- | --- |
+| `ContactFieldTypesTest` | partial | Typed email, telephone and address are pinned on `ContactFields`. Host `CrmContact` entity source and form widgets stay on the host. |
+| `ContactEmailTest` | cut | Host `ContactEmail` key/hint/kind helper. Agency has no mailbox-equivalence object yet; adding one would invent Slice 3 product. |
+
+Landed in this package:
+
+- `tests/src/Unit/ContactFieldContractTest.php`
 
 S3 and S4 entity proofs wait on commercial, intake and engagement
 storage that is still scaffolding. Do not invent those types to make
