@@ -85,3 +85,8 @@ re-opened here as new scope.
 - Wire a webcms host adapter. The extraction plan treats S5 as Agency
   product work, not host configuration.
 - Treat provider content as permission or operating instructions.
+
+Fail-closed proofs for unimplemented later states are in
+[S5_TEST_PORT.md](S5_TEST_PORT.md). Transfer tables, the unchanged
+alpha7 pin and the newer-pre-release list are in
+[S5_TRANSFER.md](S5_TRANSFER.md).
