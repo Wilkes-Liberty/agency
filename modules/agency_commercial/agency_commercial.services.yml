@@ -7,3 +7,5 @@ services:
     class: Drupal\agency_commercial\UnavailableContactMatch
   agency_commercial.operating_runs:
     class: Drupal\agency_commercial\UnavailableOperatingRuns
+  agency_commercial.private_search:
+    class: Drupal\agency_commercial\UnavailablePrivateSearch

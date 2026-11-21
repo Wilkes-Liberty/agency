@@ -97,6 +97,7 @@ final class CommercialScaffoldingTest extends CommercialKernelTestBase {
       'agency_commercial.contact_match',
       'agency_commercial.contact_policy',
       'agency_commercial.operating_runs',
+      'agency_commercial.private_search',
       'agency_commercial.records',
     ], $service_ids);
   }
