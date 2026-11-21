@@ -71,21 +71,15 @@ Landed in this package:
 
 - `tests/src/Unit/SignedDocument/SignedDocumentPolicyTest.php`
 
-## Remaining `to-port` (63)
+## Remaining `to-port` (42)
 
 Later reviewable batches, not this pull request:
 
-- S2 Agency projection and host adapter (12)
-- S2 host client-access adapted invitation (9)
 - S3 CRM (18)
 - S3 intake (9)
 - S4 time (4)
 - S4 projection (8)
 - S4 membership / OIDC bind (3)
-
-S2 GraphQL producers (`accountExists`, `wlInviteStatus`) and client-access
-coordinator forms stay on the host. Agency already covers mixed-case
-mailbox collision, GET-versus-POST, expiry and own-profile denials.
 
 ## Batch 3 — S3 contact field types (2 scanned classes)
 
@@ -97,6 +91,37 @@ mailbox collision, GET-versus-POST, expiry and own-profile denials.
 Landed in this package:
 
 - `tests/src/Unit/ContactFieldContractTest.php`
+
+## Batch 4 — S2 GraphQL projections and client-access ceremony (21 scanned classes)
+
+These rows stay on the webcms host. Agency already covers the generic
+deny, inspect and own-profile cases in `StaffInvitationTest` and
+`WorkforceProfileReaderTest`. Copying GraphQL producers, Paladin
+adapters or coordinator forms would invent host transport.
+
+| Host class | Agency status | Reason |
+| --- | --- | --- |
+| `AccountExistsTest` | cut | Host GraphQL `accountExists` plus identity-provider login hint. Mixed-case mailbox collision is already in `StaffInvitationTest`. |
+| `AccountProfileTest` | cut | Host GraphQL `wlAccountProfile`. Own-profile reads are `WorkforceProfileReaderTest`. |
+| `AccountProfileUpdatedAuditTest` | cut | Host GraphQL account-profile update plus recorder contract. |
+| `AccountSubjectResolverTest` | cut | Host identity-provider subject resolver. |
+| `InviteStatusSchemaTest` | cut | Host GraphQL schema for `wlInviteStatus`. |
+| `InviteStatusTest` | cut | Host `/invite` inspect door. GET never consumes; Agency inspect is already in `StaffInvitationTest`. |
+| `PersonProfileTest` | cut | Host GraphQL `personProfile`. |
+| `PersonProfileUpdatedAuditTest` | cut | Host GraphQL own-profile update plus signed evidence. |
+| `PersonProfileWriteResidualAuthzTest` | cut | Host GraphQL write residual authorization. |
+| `PersonProfileWriteTest` | cut | Host GraphQL `updatePersonProfile`. |
+| `PersonTranslationDraftConflictTest` | cut | Host CMS translation draft conflict on person profiles. |
+| `PortalOwnRecordAuthzGapTest` | cut | Host portal GraphQL own-record gap. Indistinguishable denials are in `WorkforceProfileReaderTest`. |
+| `InvitationPresentationTest` | cut | Host invitation presentation UI. Module stays disabled. |
+| `PortalDeadlineReviewTest` | cut | Host coordinator deadline-review chrome. |
+| `ReplacementProfileReviewTest` | cut | Host replacement-profile review UI. |
+| `CoordinatorTest` | cut | Host `wl_client_access` coordinator. |
+| `InvitationDenyPathTest` | cut | Host Paladin/mail adapters, accept-form copy and config_split enablement. GET-versus-POST and expiry are in `StaffInvitationTest`. |
+| `InvitationLifecycleHardenTest` | cut | Host coordinator lifecycle ceremony. |
+| `InvitationResidualLockTest` | cut | Host residual lock on the disabled client-access module. Replay refusal is in `StaffInvitationTest`. |
+| `InvitationStatusTest` | cut | Host invitation status projection on the coordinator. |
+| `StaffProvisioningWorkflowTest` | cut | Host coordinator workflow that must not grant client. Extra-role refusal is in `StaffInvitationTest`. |
 
 S3 and S4 entity proofs wait on commercial, intake and engagement
 storage that is still scaffolding. Do not invent those types to make
