@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\agency\Unit;
 
-use FilesystemIterator;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -82,10 +79,10 @@ final class SliceFiveTransitionTest extends TestCase {
       if (!is_dir($path)) {
         continue;
       }
-      $iterator = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator(
+      $iterator = new \RecursiveIteratorIterator(
+        new \RecursiveDirectoryIterator(
           $path,
-          FilesystemIterator::SKIP_DOTS,
+          \FilesystemIterator::SKIP_DOTS,
         ),
       );
       foreach ($iterator as $file) {
