@@ -3,3 +3,7 @@ services:
     class: Drupal\agency_intake\UnavailableIntakeDispatchGateway
   agency_intake.dispatch_keys:
     class: Drupal\agency_intake\UnavailableDispatchKeyStore
+  agency_intake.outbox:
+    class: Drupal\agency_intake\UnavailableIntakeOutbox
+  agency_intake.policy:
+    class: Drupal\agency_intake\UnavailableIntakePolicy
