@@ -443,6 +443,7 @@ jobs:
             AgencyClientMembershipPolicyTest.php
             AgencyTimeInputTest.php
             AgencyCommercialAccountProjectionTest.php
+            AgencyClientDocumentListingTest.php
           )
           i=0
           for name in "${tests[@]}"; do
@@ -491,6 +492,15 @@ jobs:
               "testVisitorRolesGrantedWithoutStaff",
               "testPostAuthorizeNeverRevokes",
               "testStaffRoleInGroupMapIsIgnored",
+              "testAuthorizedEmptyIsOk",
+              "testNotLinkedIsEmpty",
+              "testNotClientIsEmpty",
+              "testUnauthorizedIsRefused",
+              "testFloodIsUnavailable",
+              "testInvoiceKindOnlyOnInvoiceListing",
+              "testUnpublishedExpiredAndUnreachableAreOmitted",
+              "testExpiryUsesCallerToday",
+              "testPayKeysAreAbsent",
             ];
             if (array_diff($required, $executed)) { exit(1); }
             echo "engagement-deny-junit.xml: " . count($executed) . " cases executed\n";
