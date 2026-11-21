@@ -91,6 +91,8 @@ final class IntakeScaffoldingTest extends IntakeKernelTestBase {
     $this->assertSame([
       'agency_intake.dispatch_gateway',
       'agency_intake.dispatch_keys',
+      'agency_intake.outbox',
+      'agency_intake.policy',
     ], $service_ids);
   }
 
