@@ -54,4 +54,15 @@ final class IntakeAccessTest extends IntakeKernelTestBase {
     }
   }
 
+  /**
+   * Access-checked intake queries stay empty while rows exist.
+   */
+  public function testIntakeQueryRemainsDenied(): void {
+    $submission = $this->createSubmission();
+    $submission->save();
+    $storage = $this->container->get('entity_type.manager')
+      ->getStorage('agency_intake_submission');
+    $this->assertSame([], $storage->getQuery()->accessCheck(TRUE)->execute());
+  }
+
 }

@@ -801,6 +801,11 @@ jobs:
               "testSourceDoesNotReferenceWorkforceOrDiscoveryCommands",
               "testLoadedClassesDoNotExtendCommandTypes",
               "testContactPolicyPortRefuses",
+              "testMissingTenantClaimOnHatchAndMatch",
+              "testMissingAndForeignRecordsShareNotFound",
+              "testClaimOnlyNeverCreatesOpportunity",
+              "testOpportunityQueryRemainsDenied",
+              "testStageBypassIsRefused",
             ];
             echo "Executed commercial boundaries: " . count(array_intersect($required, $executed)) . "\n";
             if (array_diff($required, $executed)) { exit(1); }

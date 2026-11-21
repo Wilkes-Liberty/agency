@@ -8,6 +8,8 @@ use Drupal\agency_commercial\Access\DenyAccess;
 use Drupal\agency_commercial\Entity\Activity;
 use Drupal\agency_commercial\Entity\Opportunity;
 use Drupal\agency_commercial\Storage\IdentityPreservingStorage;
+use Drupal\agency_commercial\UnavailableCommercialRecords;
+use Drupal\agency_commercial\UnavailableContactMatch;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
@@ -86,6 +88,8 @@ final class CommercialSeparationTest extends CommercialKernelTestBase {
       Activity::class,
       DenyAccess::class,
       IdentityPreservingStorage::class,
+      UnavailableCommercialRecords::class,
+      UnavailableContactMatch::class,
     ];
     foreach ($classes as $class) {
       $reflection = new \ReflectionClass($class);
