@@ -3,6 +3,14 @@ no host data and transfers no CRM authority. Entity access is denied by
 default. Access-checked entity queries return no rows while stored
 records exist. There are no routes, forms, Views or menu links.
 
+Ratified source, stage, restriction and activity labels live on
+Vocabulary. TYPES lists agency_opportunity and agency_activity only;
+Agency has no contact entity type. ToolOperations adapts named inputs
+to a payload that preserves omissions and retry keys. Unknown inputs
+fail closed without dumping caller payload. Search metadata indexes
+opportunity and activity through an explicit projection. It does not
+read notes, labels or unrelated entity types.
+
 Default contact-policy, records and contact-match ports stay unavailable
 so legacy remains the only writer. Missing and foreign records share
 not_found without an entity payload. A claim never creates an
