@@ -45,7 +45,7 @@ final class Inquiry {
   /**
    * Generic platforms plus any injected catalog entries.
    *
-   * @param array<string, string> $catalog
+   * @param array<array-key, mixed> $catalog
    *   Optional product labels keyed by platform id. Default empty.
    *
    * @return array<string, string>
@@ -66,7 +66,7 @@ final class Inquiry {
    *
    * @param array<string, mixed> $data
    *   Untrusted inquiry fields.
-   * @param array<string, string> $catalog
+   * @param array<array-key, mixed> $catalog
    *   Optional product labels keyed by platform id. Default empty.
    *
    * @return array<string, string>
@@ -100,7 +100,7 @@ final class Inquiry {
    *
    * @param array<string, mixed> $data
    *   Inquiry fields after validation or from a historical record.
-   * @param array<string, string> $catalog
+   * @param array<array-key, mixed> $catalog
    *   Optional product labels keyed by platform id. Default empty.
    *
    * @return array<string, mixed>
@@ -143,7 +143,7 @@ final class Inquiry {
   /**
    * Validates an optional product catalog supplied by the caller.
    *
-   * @param array<string, string> $catalog
+   * @param array<array-key, mixed> $catalog
    *   Optional product labels keyed by platform id.
    *
    * @return array<string, string>
