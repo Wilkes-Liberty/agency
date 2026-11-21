@@ -58,7 +58,7 @@ final class EngagementLineageMap {
    * @param array<string, mixed> $identity
    *   Proposed id, UUID and revision id.
    *
-   * @return array{outcome: string, reason: string, lineage: array{}}
+   * @return array{outcome: string, reason: string, lineage: list<mixed>}
    *   Operator-visible stop. Empty lineage. Not not_found.
    */
   public function persist(array $identity): array {
@@ -74,7 +74,7 @@ final class EngagementLineageMap {
   /**
    * Shared refuse body.
    *
-   * @return array{outcome: string, reason: string, lineage: array{}}
+   * @return array{outcome: string, reason: string, lineage: list<mixed>}
    *   Unmapped stop.
    */
   private function stopped(): array {
