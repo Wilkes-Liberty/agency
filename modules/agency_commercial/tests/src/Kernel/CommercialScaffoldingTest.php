@@ -6,12 +6,11 @@ namespace Drupal\Tests\agency_commercial\Kernel;
 
 use Drupal\agency_commercial\Exception\CommercialRefusal;
 use Drupal\agency_commercial\UnavailableContactPolicyReader;
-use Drupal\KernelTests\KernelTestBase;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
 /**
- * Proves commercial scaffolding installs, refuses and leaves no types.
+ * Proves commercial types install internally without a granting surface.
  *
  * @group agency
  *
@@ -19,47 +18,31 @@ use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
  */
 #[Group('agency')]
 #[RunTestsInSeparateProcesses]
-final class CommercialScaffoldingTest extends KernelTestBase {
-
-  /**
-   * {@inheritdoc}
-   */
-  protected static $modules = [
-    'system',
-    'user',
-    'agency',
-    'agency_commercial',
-  ];
+final class CommercialScaffoldingTest extends CommercialKernelTestBase {
 
   /**
    * {@inheritdoc}
    */
   protected function setUp(): void {
     parent::setUp();
-    $this->installEntitySchema('user');
-    $this->installSchema('user', ['users_data']);
     $this->installConfig(['user']);
   }
 
   /**
-   * Enabling the module creates no business surface.
+   * Enabling the module registers internal types without granting access.
    */
-  public function testEnablementCreatesNoBusinessSurface(): void {
+  public function testEnablementRegistersInternalTypesWithoutRoutes(): void {
     $handler = $this->container->get('module_handler');
     $this->assertTrue($handler->moduleExists('agency'));
     $this->assertTrue($handler->moduleExists('agency_commercial'));
     $this->assertFalse(function_exists('agency_commercial_schema'));
 
-    $types = array_keys(
-      $this->container->get('entity_type.manager')->getDefinitions(),
-    );
-    foreach ([
-      'agency_opportunity',
-      'agency_activity',
-      'agency_intake_submission',
-    ] as $type) {
-      $this->assertNotContains($type, $types);
-    }
+    $definitions = $this->container->get('entity_type.manager')->getDefinitions();
+    $this->assertArrayHasKey('agency_opportunity', $definitions);
+    $this->assertArrayHasKey('agency_activity', $definitions);
+    $this->assertTrue($definitions['agency_opportunity']->isInternal());
+    $this->assertTrue($definitions['agency_activity']->isInternal());
+    $this->assertArrayNotHasKey('agency_intake_submission', $definitions);
 
     $schema = $this->container->get('database')->schema();
     foreach ([
@@ -68,7 +51,7 @@ final class CommercialScaffoldingTest extends KernelTestBase {
       'agency_activity',
       'agency_activity_revision',
     ] as $table) {
-      $this->assertFalse($schema->tableExists($table), $table);
+      $this->assertTrue($schema->tableExists($table), $table);
     }
 
     $this->container->get('router.builder')->rebuild();
@@ -135,7 +118,7 @@ final class CommercialScaffoldingTest extends KernelTestBase {
   }
 
   /**
-   * An empty install can be removed.
+   * An empty install can be removed and drops the registered types.
    */
   public function testEmptyModuleUninstalls(): void {
     $this->assertTrue(
@@ -144,6 +127,9 @@ final class CommercialScaffoldingTest extends KernelTestBase {
     $this->assertFalse(
       $this->container->get('module_handler')->moduleExists('agency_commercial'),
     );
+    $definitions = $this->container->get('entity_type.manager')->getDefinitions();
+    $this->assertArrayNotHasKey('agency_opportunity', $definitions);
+    $this->assertArrayNotHasKey('agency_activity', $definitions);
   }
 
 }

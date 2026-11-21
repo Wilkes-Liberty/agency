@@ -1,11 +1,15 @@
-Scaffolding only. No entity types, routes, permissions that grant access,
-copiers or authority rows. Slice 3 G1 is accepted. Default contact-policy
-port stays unavailable so legacy remains the only writer. ContactEmail is
-a value object and is not a runtime service.
+Registers internal opportunity and activity storage. Enabling it copies
+no host data and transfers no CRM authority. Entity access is denied by
+default. There are no routes, forms, Views or menu links.
+
+Default contact-policy port stays unavailable so legacy remains the only
+writer. ContactEmail is a value object and is not a runtime service.
+Activity is revisionable (accepted vault D4) even though the ontology
+draft marks it not revisionable. Opportunity amount is stored when
+supplied and is never given a default.
 
 InstructionReleasePolicy, PipelineStagePolicy, IntakeDraftPolicy and
 InquiryReviewPolicy are storage-free refuse/retry contracts for the
 remaining S3 CRM kernel tests (InstructionReleaseTest, PipelineTest,
 IntakeDraftTest, InquiryReviewTest). HTTP, Webform, Jira, Views and
-Gin stay host. Enabling this module still creates no commercial
-records.
+Gin stay host.

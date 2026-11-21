@@ -7,7 +7,7 @@ namespace Drupal\agency_commercial;
 use Drupal\agency_commercial\Exception\CommercialRefusal;
 
 /**
- * Storage-free commercial writes. Entity types stay unregistered.
+ * Storage-free commercial writes. Commands do not persist entity rows.
  *
  * Constructed in tests. The default container has no command service.
  */
