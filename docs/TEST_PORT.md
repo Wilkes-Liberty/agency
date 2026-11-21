@@ -71,15 +71,18 @@ Landed in this package:
 
 - `tests/src/Unit/SignedDocument/SignedDocumentPolicyTest.php`
 
-## Remaining `to-port` (42)
+## Remaining `to-port` (25)
 
 Later reviewable batches, not this pull request:
 
-- S3 CRM (18)
-- S3 intake (9)
-- S4 time (4)
-- S4 projection (8)
-- S4 membership / OIDC bind (3)
+- S3 CRM product still in flight or scaffolding (11)
+- S3 intake product still in flight (9)
+- S4 time `TimeInputTest` (1; in flight on agency#95)
+- S4 `CommercialAccountProjectionTest` (1; in flight on agency#95)
+- S4 membership / OIDC bind (3; in flight on agency#95)
+
+Do not duplicate those classes on this stack. They already have open
+product pull requests (`#89`–`#103`, `#86`, `#95`).
 
 ## Batch 3 — S3 contact field types (2 scanned classes)
 
@@ -123,6 +126,33 @@ adapters or coordinator forms would invent host transport.
 | `InvitationStatusTest` | cut | Host invitation status projection on the coordinator. |
 | `StaffProvisioningWorkflowTest` | cut | Host coordinator workflow that must not grant client. Extra-role refusal is in `StaffInvitationTest`. |
 
+## Batch 5 — S4 GraphQL feeds and host CRM/time ceremony (17 scanned classes)
+
+Host GraphQL commercial feeds, CRM chrome, private search, seat
+provisioning, time workspace and statement presentation stay on the
+webcms host. Generic commercial-account projection, time input and
+client-membership policy are already in flight on agency#95.
+
+| Host class | Agency status | Reason |
+| --- | --- | --- |
+| `ClientDeliverablesTest` | cut | Host GraphQL `clientDeliverables`. Payment engine stays shared. |
+| `ClientInvoicesTest` | cut | Host GraphQL `clientInvoices`. |
+| `ClientInvoicesResidualAuthzTest` | cut | Host GraphQL invoice residual authorization. |
+| `ClientProfileTest` | cut | Host GraphQL `clientProfile`. Do not merge with `personProfile`. |
+| `CommercialAccountResidualAuthzTest` | cut | Host GraphQL commercial-account residual authorization. |
+| `InstructionSourceAuthorityTest` | cut | Host GraphQL instruction-source authority. |
+| `InstructionSourceScopeConfigTest` | cut | Host GraphQL instruction-source scope config. |
+| `CrmBreadcrumbTest` | cut | Host commercial-route breadcrumb eligibility and route cache. |
+| `CrmContactUpdate10005Test` | cut | Host `hook_update_N` contact lineage. |
+| `SeatProvisionerTest` | cut | Host CRM seat, OAuth consumer and operator-role provisioning. Extra-role refusal for staff is in `StaffInvitationTest`. |
+| `LivePrivateSearchTest` | cut | Host private commercial search. |
+| `PrivateSearchIndexTest` | cut | Host private search index. |
+| `RecordSearchTest` | cut | Host record search. |
+| `SearchMetadataTest` | cut | Host search metadata. |
+| `TimeWorkspaceTest` | cut | Host time workspace UI. |
+| `TimeCommandsTest` | cut | Host Drush time commands. |
+| `ClientStatementsTest` | cut | Host statement presentation. Snapshot qualification is `StatementPreflightTest`. |
+
 S3 and S4 entity proofs wait on commercial, intake and engagement
-storage that is still scaffolding. Do not invent those types to make
-the tests compile.
+storage that is still scaffolding, or on the in-flight product stacks
+named above. Do not invent those types to make the tests compile.
