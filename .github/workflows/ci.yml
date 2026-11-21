@@ -319,6 +319,7 @@ jobs:
               "testMarkupCannotEnterDraft",
               "testOversizedDraftIsRefused",
               "testMissingWorkDeclarationIsNotSuccess",
+              "testSignedSignal",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
