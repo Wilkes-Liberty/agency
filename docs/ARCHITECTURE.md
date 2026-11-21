@@ -29,7 +29,9 @@ The four product loops are journeys across domains. Final package boundaries sho
 follow cohesive responsibilities and dependency direction, not the four loop names.
 
 Slice 5 credential, availability and roster placement is still proposed;
-see [Slice 5 remaining placement](S5_OPEN_QUESTIONS.md).
+see [Slice 5 remaining placement](S5_OPEN_QUESTIONS.md). Transfer tables
+and the unchanged alpha7 pin are in
+[Slice 5 transfer inventory](S5_TRANSFER.md).
 
 ## Domain ownership
 
