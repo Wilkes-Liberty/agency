@@ -38,6 +38,8 @@ Expense, Credential, Availability and Campaign stay proposed for slice 5
 in YAML. `agency_campaign` and `agency_expense` register storage and the
 named actions without flipping that status. `agency_agreement`
 registers storage with empty ontology transitions and no action.
+Credential, Availability and Roster placement questions are in
+[Slice 5 remaining placement](S5_OPEN_QUESTIONS.md).
 Organization, Membership, ProfileEvidence, StaffInvitation and
 StaffOnboard are proposed for slice 2 under `agency_workforce`.
 CareerPosting and Application storage is registered in
