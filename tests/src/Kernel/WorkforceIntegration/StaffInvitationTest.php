@@ -287,7 +287,6 @@ class StaffInvitationTest extends KernelTestBase {
       'mail' => 'Cased@Example.COM',
       'status' => 1,
     ])->save();
-    $this->container->get('current_user')->setAccount(User::load(2));
     $token = $this->legacy([
       'email' => 'cased@example.com',
       'type' => 'employee',
@@ -297,6 +296,7 @@ class StaffInvitationTest extends KernelTestBase {
       fn () => $this->service()->accept($token),
       'collision',
     );
+    $this->container->get('current_user')->setAccount(User::load(2));
     $this->assertRefused(
       fn () => $this->service()->issue('cased@example.com', 'employee'),
       'collision',
