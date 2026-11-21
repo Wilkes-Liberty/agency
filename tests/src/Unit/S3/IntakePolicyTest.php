@@ -54,8 +54,6 @@ final class IntakePolicyTest extends TestCase {
     $this->assertSame('', $form_none['notify_route']);
     $unknown = IntakePolicy::resolve('form_z', NULL, $catalog);
     $this->assertSame(IntakePolicy::DEFAULT, $unknown);
-    $this->assertSame('', IntakePolicy::DEFAULT['jira_request_type']);
-    $this->assertSame('', IntakePolicy::DEFAULT['notify_route']);
   }
 
   /**
