@@ -322,6 +322,9 @@ jobs:
             --log-junit "$PWD/contact-preflight-junit.xml" \
             "$PWD/web/modules/contrib/agency/tests/src/Unit/ContactPreflightTest.php"
           vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/contact-field-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/ContactFieldContractTest.php"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
             --log-junit "$PWD/statement-preflight-junit.xml" \
             "$PWD/web/modules/contrib/agency/modules/agency_engagement/tests/src/Unit/StatementPreflightTest.php"
           vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
@@ -346,7 +349,13 @@ jobs:
           # shellcheck disable=SC2016
           php -r '
             $required = [
-              "contact-preflight-junit.xml" => ["testRequiresReviewForBothIdentitiesBeforeProjection"],
+              "contact-preflight-junit.xml" => [
+                "testRequiresReviewForBothIdentitiesBeforeProjection",
+              ],
+              "contact-field-junit.xml" => [
+                "testReviewedLayoutKeepsTypedContactFields",
+                "testStringStandInsForContactFieldsAreUnreviewed",
+              ],
               "workforce-unit-junit.xml" => [
                 "testStaffClassificationRefusesHostRoleIds",
                 "testInviteStaffRejectsCrossDomainClassification",
@@ -1005,6 +1014,7 @@ jobs:
             drupal/tenant-strings-junit.xml
             drupal/s3-deny-junit.xml
             drupal/contact-preflight-junit.xml
+            drupal/contact-field-junit.xml
             drupal/statement-preflight-junit.xml
             drupal/signed-document-junit.xml
             drupal/workforce-unit-junit.xml
