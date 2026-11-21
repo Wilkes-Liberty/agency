@@ -5,3 +5,5 @@ services:
     class: Drupal\agency_commercial\UnavailableCommercialRecords
   agency_commercial.contact_match:
     class: Drupal\agency_commercial\UnavailableContactMatch
+  agency_commercial.operating_runs:
+    class: Drupal\agency_commercial\UnavailableOperatingRuns
