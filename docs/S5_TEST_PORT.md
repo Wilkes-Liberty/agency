@@ -25,10 +25,14 @@ exists in this 1.x stack:
 | Credential, availability and roster modules are absent | `SliceFiveTransitionTest` |
 | Service YAML omits those writes | `SliceFiveTransitionTest` |
 | Roster has no object or action | `SliceFiveTransitionTest` |
+| Enabling campaign, expense, agreement and workforce does not enable those modules, types, tables or services | `SliceFiveUnregisteredRuntimeTest` |
 
 Credential, Availability and Roster stay unregistered. Placement
 questions remain in [S5_OPEN_QUESTIONS.md](S5_OPEN_QUESTIONS.md). This
-change does not register them or choose a home.
+change does not register them or choose a home. Host ledger
+[webcms#1754](https://github.com/Wilkes-Liberty/webcms/issues/1754)
+records marketing, contracts, credentials, roster/availability and
+expenses as Agency capability gaps, not migrated Chronicle sources.
 
 ## Cuts
 
