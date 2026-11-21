@@ -157,7 +157,7 @@ final class CampaignOutbox {
   }
 
   /**
-   * Refuses metadata that names a forbidden or unknown field.
+   * Refuses metadata that names a field outside the allowlist.
    *
    * @param array<string, mixed> $metadata
    *   Candidate evidence.
