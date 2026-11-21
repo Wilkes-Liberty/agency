@@ -353,6 +353,13 @@ jobs:
               "testClaimNeverCreatesOpportunity",
               "testSearchMissingTenantClaim",
               "testSearchShareNotFoundWithoutPayload",
+              "testOperatingSeatsAreNotPortalRoles",
+              "testUnboundedOwnerScopeFailsClosed",
+              "testMachineDoesNotInheritHumanGrants",
+              "testProvisionMissingTenantClaim",
+              "testProvisionShareNotFoundWithoutPayload",
+              "testIssueMissingTenantClaim",
+              "testIssueShareNotFoundWithoutPayload",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
