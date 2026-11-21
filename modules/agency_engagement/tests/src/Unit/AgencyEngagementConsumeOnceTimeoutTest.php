@@ -13,6 +13,7 @@ use PHPUnit\Framework\Attributes\Group;
  * @group agency
  */
 #[Group('agency')]
+// phpcs:ignore Drupal.Files.LineLength.TooLong
 final class AgencyEngagementConsumeOnceTimeoutTest extends EngagementDenyTestCase {
 
   /**
