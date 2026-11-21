@@ -975,6 +975,74 @@ jobs:
             echo "Executed campaign boundaries: " . count(array_intersect($required, $executed)) . "\n";
             if (array_diff($required, $executed)) { exit(1); }
           '
+      - name: Run agency_expense kernel tests
+        working-directory: drupal
+        env:
+          SIMPLETEST_DB: ${{ matrix.driver }}://agency_test:test_only@127.0.0.1/agency_test
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          expense="$PWD/web/modules/contrib/agency/modules/agency_expense/tests/src"
+          test -d "$expense/Kernel"
+          # Drupal 10.6's PHPUnit 9 runner is the unit suite. Expense
+          # kernel proofs use PHPUnit 10 attributes and run on 11.x,
+          # including PostgreSQL 16.
+          if [ "${{ matrix.minor }}" = "10.6" ]; then
+            echo "Skipping agency_expense kernel tests on Drupal 10.6"
+            exit 0
+          fi
+          export BROWSERTEST_OUTPUT_DIRECTORY="$PWD/web/sites/simpletest/browser_output"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/agency-expense-junit.xml" \
+            "$expense/Kernel"
+          # PHP expressions are intentionally passed literally to PHP.
+          # shellcheck disable=SC2016
+          php -r '
+            $xml = simplexml_load_file("agency-expense-junit.xml");
+            if ($xml === false) { exit(1); }
+            $executed = [];
+            $skipped = [];
+            foreach ($xml->xpath("//testcase") as $case) {
+              $name = (string) $case["name"];
+              if (isset($case->failure) || isset($case->error)) { exit(1); }
+              if (isset($case->skipped)) {
+                $skipped[] = $name;
+                continue;
+              }
+              $executed[] = $name;
+            }
+            echo "Executed agency_expense tests: " . count($executed) . "\n";
+            echo "Skipped agency_expense tests: " . count($skipped) . "\n";
+            if ($skipped) { exit(1); }
+            $required = [
+              "testInstallRegistersEntityTypes",
+              "testEnablementCreatesNoBusinessRecords",
+              "testEmptyModuleCanBeUninstalled",
+              "testSchemaMatchesOntologyPropertiesAndMarkings",
+              "testExplicitIdentifiersArePreserved",
+              "testOccupiedIdIsRefused",
+              "testOccupiedUuidIsRefused",
+              "testOccupiedRevisionIdIsRefused",
+              "testDefaultAccessDeniesEverything",
+              "testAccessCheckedQueryReturnsNothing",
+              "testAnonymousIsForbidden",
+              "testAuthenticatedWithoutPermissionIsForbidden",
+              "testUserOneWithoutExplicitGrantIsForbidden",
+              "testTenantArgumentIsForbidden",
+              "testExpiredNotAfterIsTimeout",
+              "testInvalidIdempotencyKeyIsRefused",
+              "testInvalidAmountIsRefused",
+              "testReplayWithDifferentPayloadIsRefused",
+              "testReplayReturnsOriginalReceipt",
+              "testRecordCreatesDraftedWithRequiredEvidence",
+              "testRecordDoesNotCreateDiscoveryRecords",
+              "testDisableLeavesStaffIntact",
+              "testEvidenceFailureRollsBackTheExpense",
+              "testSourceDoesNotReferenceWorkforceOrDiscoveryCommands",
+              "testLoadedClassesDoNotExtendCommandTypes",
+            ];
+            echo "Executed expense boundaries: " . count(array_intersect($required, $executed)) . "\n";
+            if (array_diff($required, $executed)) { exit(1); }
+          '
       - name: Run agency_host unit, kernel and functional tests
         working-directory: drupal
         env:

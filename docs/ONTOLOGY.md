@@ -20,7 +20,7 @@ Where a fact is already specified for Discovery, that contract wins.
 
 | Status | Meaning |
 | --- | --- |
-| Implemented | Present in current storage and commands. Discovery types live in `agency_staff`. Posting and application storage live in `agency_recruiting`. Campaign storage and launch live in `agency_campaign`; YAML status stays proposed. |
+| Implemented | Present in current storage and commands. Discovery types live in `agency_staff`. Posting and application storage live in `agency_recruiting`. Campaign storage and launch live in `agency_campaign`. Expense storage and recordExpense live in `agency_expense`. YAML status for those Slice 5 types stays proposed. |
 | Proposed | Design for a later slice. Not a route, command, copier or authority transfer. |
 
 Implemented object types are the five internal Discovery records
@@ -31,11 +31,13 @@ Implemented object types are the five internal Discovery records
 Campaign as proposed. Implemented actions are the Discovery commands,
 invitation issue/resend/accept/revoke/inspect, and expired-record
 removal. Recruiting actions are not shipped. Campaign launch is
-registered storage-and-action, not an ontology status flip.
+registered storage-and-action, not an ontology status flip. Expense
+recording is the same pattern in `agency_expense`.
 
 Expense, Credential, Availability and Campaign stay proposed for slice 5
-in YAML. `agency_campaign` registers Campaign storage and launch without
-flipping that status. Agreement is also proposed for that slice.
+in YAML. `agency_campaign` and `agency_expense` register storage and the
+named actions without flipping that status. Agreement is also proposed
+for that slice.
 Organization, Membership, ProfileEvidence, StaffInvitation and
 StaffOnboard are proposed for slice 2 under `agency_workforce`.
 CareerPosting and Application storage is registered in

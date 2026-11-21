@@ -25,6 +25,9 @@ engines remain independent dependencies.
 - `agency_campaign` registers marketing campaign storage and the launch
   action. Enabling it creates no campaigns and grants no relationship or
   roster authority.
+- `agency_expense` registers expense storage and the record action.
+  Enabling it creates no expenses and grants no assignment or roster
+  authority.
 - `agency_migrate` copies host records into Agency types with lineage, shadow
   reconciliation and operational authority. Host adapters supply copier plugins
   and verified writer exclusion. Qualified nonempty rollback is available for
@@ -56,6 +59,11 @@ File Gate UUID. See the [recruiting module note](modules/agency_recruiting/READM
 by default. `launchCampaign` creates a draft or activates an owned draft
 after an explicit coordinator grant. Required evidence shares the write
 transaction. See the [campaign module note](modules/agency_campaign/README.md).
+
+`agency_expense` stores `agency_expense` records. Entity access is denied
+by default. `recordExpense` creates a drafted expense after an explicit
+coordinator grant. Amounts stay off the evidence metadata. See the
+[expense module note](modules/agency_expense/README.md).
 
 The alpha7 migration scope adds a value-based post-cutover writer with a durable
 operation journal, ordered replay for reviewed equal-layout copiers, and
