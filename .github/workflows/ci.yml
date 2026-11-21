@@ -368,6 +368,60 @@ jobs:
               echo "$file: " . count($executed) . " cases executed\n";
             }
           '
+      - name: Run engagement deny-path tests
+        working-directory: drupal
+        env:
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          # PHPUnit 9 (Drupal 10.6) accepts one test file per invocation.
+          # PHPUnit 10+ accepts a list; looping keeps both matrix legs honest.
+          dir="$PWD/web/modules/contrib/agency/modules/agency_engagement/tests/src/Unit"
+          tests=(
+            AgencyEngagementCrossTenantDenyTest.php
+            AgencyEngagementDiscoveryCrmWallTest.php
+            AgencyEngagementVendorNeutralPackageTest.php
+            AgencyTimeForeignEntrySubmitTest.php
+            AgencyStatementPaymentBoundaryTest.php
+            AgencyAssignmentAdminNotBypassTest.php
+            AgencyEngagementConsumeOnceTimeoutTest.php
+            AgencyClientMembershipPolicyTest.php
+          )
+          i=0
+          for name in "${tests[@]}"; do
+            vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+              --log-junit "$PWD/engagement-deny-part-${i}.xml" \
+              "$dir/$name"
+            i=$((i+1))
+          done
+          # PHP expressions are intentionally passed literally to PHP.
+          # shellcheck disable=SC2016
+          php -r '
+            $executed = [];
+            foreach (glob("engagement-deny-part-*.xml") ?: [] as $file) {
+              $xml = simplexml_load_file($file);
+              if ($xml === false) { exit(1); }
+              foreach ($xml->xpath("//testcase") as $case) {
+                if (isset($case->failure) || isset($case->error) || isset($case->skipped)) { exit(1); }
+                $executed[] = (string) $case["name"];
+              }
+            }
+            $required = [
+              "testForeignTenantObjectIsNotFound",
+              "testHatchMissingTenantIsNotRenamedToNotFound",
+              "testOfferAssignmentDoesNotWriteDiscoveryOrCrm",
+              "testDiscoveryActionDoesNotCreateEngagement",
+              "testPackageOmitsTrackerAndGatewayIdentifiers",
+              "testSubmitTimeRefusesForeignEntriesWithHostTimeDoor",
+              "testPersonRecordReadUsesDiscoveryNotFound",
+              "testIssueStatementDoesNotCallPaymentEngine",
+              "testAdministratorFlagIsNotABypass",
+              "testConsumedKeyReplayIsNotFound",
+              "testExpiredHoldIsNotFoundWithoutClaim",
+              "testMembershipGrantDoesNotMintStaffRoles",
+            ];
+            if (array_diff($required, $executed)) { exit(1); }
+            echo "engagement-deny-junit.xml: " . count($executed) . " cases executed\n";
+          '
       - name: Start test server
         working-directory: drupal
         run: |
