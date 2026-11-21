@@ -159,26 +159,14 @@ final class ExpenseOutbox {
   }
 
   /**
-   * Refuses metadata that names a forbidden or unknown field.
+   * Refuses metadata that names a field outside the allowlist.
    *
    * @param array<string, mixed> $metadata
    *   Candidate evidence.
    */
   private function assertMinimized(array $metadata): void {
-    $forbidden = [
-      'contact',
-      'note',
-      'token',
-      'credential',
-      'file',
-      'guessed_identifier',
-      'title',
-      'amount',
-      'assignment_uuid',
-    ];
     foreach (array_keys($metadata) as $field) {
-      if (!in_array($field, self::FIELDS, TRUE)
-        || in_array($field, $forbidden, TRUE)) {
+      if (!in_array($field, self::FIELDS, TRUE)) {
         throw new \InvalidArgumentException('Invalid evidence metadata.');
       }
     }

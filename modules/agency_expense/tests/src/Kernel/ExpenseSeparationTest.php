@@ -38,8 +38,7 @@ final class ExpenseSeparationTest extends ExpenseKernelTestBase {
   /**
    * Source files in the submodule do not reference those command classes.
    */
-  public function testSourceDoesNotReferenceWorkforceOrDiscoveryCommands(
-  ): void {
+  public function testSourceDoesNotReferenceWorkforceOrDiscoveryCommands(): void {
     $root = dirname(__DIR__, 3);
     $this->assertDirectoryExists($root . '/src');
     $iterator = new \RecursiveIteratorIterator(
