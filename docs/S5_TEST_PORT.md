@@ -22,9 +22,13 @@ exists in this 1.x stack:
 | No agreement write service | `AgreementAccessTest` |
 | Agreement stays a proposed S5 type | `OntologyContractTest` |
 | YAML has no later write actions | `SliceFiveTransitionTest` |
+| Credential, availability and roster modules are absent | `SliceFiveTransitionTest` |
+| Service YAML omits those writes | `SliceFiveTransitionTest` |
+| Roster has no object or action | `SliceFiveTransitionTest` |
 
 Credential, Availability and Roster stay unregistered. Placement
-questions remain in [S5_OPEN_QUESTIONS.md](S5_OPEN_QUESTIONS.md).
+questions remain in [S5_OPEN_QUESTIONS.md](S5_OPEN_QUESTIONS.md). This
+change does not register them or choose a home.
 
 ## Cuts
 

@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Drupal\Tests\agency\Unit;
 
+use FilesystemIterator;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\TestCase;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 use Symfony\Component\Yaml\Yaml;
 
 /**
@@ -63,6 +66,36 @@ final class SliceFiveTransitionTest extends TestCase {
       $ids[] = $action['id'];
     }
     return $ids;
+  }
+
+  /**
+   * Package service definition files, including test doubles.
+   *
+   * @return list<string>
+   *   Absolute paths.
+   */
+  private function serviceDefinitionFiles(): array {
+    $root = dirname(__DIR__, 3);
+    $files = [$root . '/agency.services.yml'];
+    foreach (['modules', 'tests'] as $dir) {
+      $path = $root . '/' . $dir;
+      if (!is_dir($path)) {
+        continue;
+      }
+      $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator(
+          $path,
+          FilesystemIterator::SKIP_DOTS,
+        ),
+      );
+      foreach ($iterator as $file) {
+        if (str_ends_with($file->getFilename(), '.services.yml')) {
+          $files[] = $file->getPathname();
+        }
+      }
+    }
+    sort($files);
+    return $files;
   }
 
   /**
@@ -142,6 +175,55 @@ final class SliceFiveTransitionTest extends TestCase {
     $this->assertSame('proposed', $by_id['offerAvailability']['status']);
     $this->assertSame('S5', $by_id['verifyCredential']['slice']);
     $this->assertSame('S5', $by_id['offerAvailability']['slice']);
+  }
+
+  /**
+   * Credential, availability and roster have no submodule on disk.
+   */
+  public function testCredentialAvailabilityRosterModulesAreAbsent(): void {
+    $root = dirname(__DIR__, 3) . '/modules';
+    foreach ([
+      'agency_credential',
+      'agency_availability',
+      'agency_roster',
+    ] as $module) {
+      $this->assertFalse(is_dir($root . '/' . $module), $module);
+      $this->assertFalse(
+        file_exists($root . '/' . $module . '/' . $module . '.info.yml'),
+        $module,
+      );
+    }
+  }
+
+  /**
+   * Service YAML omits unregistered Slice 5 writes and module ids.
+   */
+  public function testPackageServicesOmitUnregisteredSliceFiveWrites(): void {
+    $needles = [
+      'verifyCredential',
+      'offerAvailability',
+      'agency_credential',
+      'agency_availability',
+      'agency_roster',
+    ];
+    $files = $this->serviceDefinitionFiles();
+    $this->assertNotEmpty($files);
+    foreach ($files as $path) {
+      $contents = file_get_contents($path);
+      $this->assertNotFalse($contents, $path);
+      foreach ($needles as $needle) {
+        $this->assertStringNotContainsString($needle, $contents, $path);
+      }
+    }
+  }
+
+  /**
+   * Roster has no object type and no action id.
+   */
+  public function testRosterHasNoAction(): void {
+    foreach ($this->actionIds() as $id) {
+      $this->assertStringNotContainsStringIgnoringCase('roster', $id);
+    }
   }
 
 }
