@@ -329,11 +329,18 @@ jobs:
           vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
             --log-junit "$PWD/signed-document-junit.xml" \
             "$PWD/web/modules/contrib/agency/tests/src/Unit/SignedDocument/SignedDocumentPolicyTest.php"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/workforce-unit-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/Workforce"
           # PHP expressions are intentionally passed literally to PHP.
           # shellcheck disable=SC2016
           php -r '
             $required = [
               "contact-preflight-junit.xml" => ["testRequiresReviewForBothIdentitiesBeforeProjection"],
+              "workforce-unit-junit.xml" => [
+                "testStaffClassificationRefusesHostRoleIds",
+                "testInviteStaffRejectsCrossDomainClassification",
+              ],
               "signed-document-junit.xml" => [
                 "testVerificationRefusesChangedEvidenceAndStrictExpiry",
                 "testVerifiedRetryCannotSubstituteAnotherCleanDocument",
@@ -342,6 +349,8 @@ jobs:
                 "testHistoricalQualificationAndMetadataBoundary",
                 "testHistoryRequiresContiguousOrderedDeltas",
                 "testHistoryRefusesConflictingProtectionForTheSameFile",
+                "testTerminateRequiresExplicitPermissionAndOpenState",
+                "testAttachRefusesExistingEnvelope",
               ],
               "statement-preflight-junit.xml" => [
                 "testKeepsExactSnapshotBytesAndDistinctAnchors",
@@ -362,6 +371,60 @@ jobs:
               if (array_diff($names, $executed)) { exit(1); }
               echo "$file: " . count($executed) . " cases executed\n";
             }
+          '
+      - name: Run engagement deny-path tests
+        working-directory: drupal
+        env:
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          # PHPUnit 9 (Drupal 10.6) accepts one test file per invocation.
+          # PHPUnit 10+ accepts a list; looping keeps both matrix legs honest.
+          dir="$PWD/web/modules/contrib/agency/modules/agency_engagement/tests/src/Unit"
+          tests=(
+            AgencyEngagementCrossTenantDenyTest.php
+            AgencyEngagementDiscoveryCrmWallTest.php
+            AgencyEngagementVendorNeutralPackageTest.php
+            AgencyTimeForeignEntrySubmitTest.php
+            AgencyStatementPaymentBoundaryTest.php
+            AgencyAssignmentAdminNotBypassTest.php
+            AgencyEngagementConsumeOnceTimeoutTest.php
+            AgencyClientMembershipPolicyTest.php
+          )
+          i=0
+          for name in "${tests[@]}"; do
+            vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+              --log-junit "$PWD/engagement-deny-part-${i}.xml" \
+              "$dir/$name"
+            i=$((i+1))
+          done
+          # PHP expressions are intentionally passed literally to PHP.
+          # shellcheck disable=SC2016
+          php -r '
+            $executed = [];
+            foreach (glob("engagement-deny-part-*.xml") ?: [] as $file) {
+              $xml = simplexml_load_file($file);
+              if ($xml === false) { exit(1); }
+              foreach ($xml->xpath("//testcase") as $case) {
+                if (isset($case->failure) || isset($case->error) || isset($case->skipped)) { exit(1); }
+                $executed[] = (string) $case["name"];
+              }
+            }
+            $required = [
+              "testForeignTenantObjectIsNotFound",
+              "testHatchMissingTenantIsNotRenamedToNotFound",
+              "testOfferAssignmentDoesNotWriteDiscoveryOrCrm",
+              "testDiscoveryActionDoesNotCreateEngagement",
+              "testPackageOmitsTrackerAndGatewayIdentifiers",
+              "testSubmitTimeRefusesForeignEntriesWithHostTimeDoor",
+              "testPersonRecordReadUsesDiscoveryNotFound",
+              "testIssueStatementDoesNotCallPaymentEngine",
+              "testAdministratorFlagIsNotABypass",
+              "testConsumedKeyReplayIsNotFound",
+              "testExpiredHoldIsNotFoundWithoutClaim",
+              "testMembershipGrantDoesNotMintStaffRoles",
+            ];
+            if (array_diff($required, $executed)) { exit(1); }
+            echo "engagement-deny-junit.xml: " . count($executed) . " cases executed\n";
           '
       - name: Start test server
         working-directory: drupal
@@ -645,6 +708,12 @@ jobs:
               "testDifferentTokensSameContactConcurrency",
               "testAuthorityChangeWaitsForAcceptanceCommit",
               "testExpiryIsFreshAfterWaitingForWriterBoundary",
+              "testIssueRefusesCrossDomainClassification",
+              "testMalformedBearerInspectsInvalidWithoutWrites",
+              "testUnavailableIssuerNeverWrites",
+              "testProvisionedAccountDoesNotGainForeignRoles",
+              "testProvisionedUsernameStaysWithinDrupalLimit",
+              "testExistingMixedCaseAccountIsCollision",
             ];
             echo "Executed workforce boundaries: " . count(array_intersect($workforceRequired, $executed)) . "\n";
             if (array_diff($workforceRequired, $executed)) { exit(1); }
@@ -895,5 +964,6 @@ jobs:
             drupal/contact-preflight-junit.xml
             drupal/statement-preflight-junit.xml
             drupal/signed-document-junit.xml
+            drupal/workforce-unit-junit.xml
             drupal/composer.lock
             drupal/server.log

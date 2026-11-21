@@ -177,6 +177,7 @@ Actual passing results, not the presence of a workflow, establish compatibility.
 - [Migration](docs/MIGRATION.md): identity-preserving copy, reconciliation and rollback.
 - [Workforce transfer](docs/WORKFORCE_TRANSFER.md): Slice 2 design; posting and application storage is registered, copiers and recruiting authority are not.
 - [Staff onboarding compatibility](docs/WORKFORCE_INVITATION_CONTRACT.md): anonymous invitation, transaction and migration requirements; implementation and host qualification remain separate.
+- [Test port](docs/TEST_PORT.md): generic proofs copied from the host scan; tenant values stay on the webcms host.
 - [CRM transfer](docs/CRM_TRANSFER.md): proposed Slice 3 CRM, intake and contact-lookup design.
 - [Time transfer](docs/TIME_TRANSFER.md): proposed Slice 4 engagement, time, client-membership and feed design. No record types.
 - [Maintaining](docs/MAINTAINING.md): development line, remotes and release verification.
