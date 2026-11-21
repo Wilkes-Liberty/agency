@@ -306,6 +306,13 @@ jobs:
               "testPackageSourceOmitsVendorIdentifiers",
               "testKeys",
               "testInvalidEncodingRefuses",
+              "testDailyReviewKeepsCivilTimeAcrossSpringChange",
+              "testRepeatedHourHasDistinctStableKeys",
+              "testMissingHourDoesNotInventAnOccurrence",
+              "testAdjacentPollsDoNotDuplicateBoundary",
+              "testWeekdayHourlyIntakeExcludesWeekend",
+              "testUnboundedCatchupIsRefused",
+              "testMalformedConfigurationIsRefused",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
