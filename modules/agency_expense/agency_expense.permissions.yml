@@ -1,0 +1,4 @@
+coordinate agency expenses:
+  title: 'Coordinate agency expenses'
+  description: 'Explicit grant. Does not grant assignment or roster authority.'
+  restrict access: true
