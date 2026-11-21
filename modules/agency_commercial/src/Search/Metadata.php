@@ -93,18 +93,17 @@ final class Metadata {
     }
     $read = static fn(string $name): string => $entity->hasField($name)
       ? (string) ($entity->get($name)->value ?? '') : '';
-    $title = match ($type) {
-      'agency_opportunity' => trim(
+    if ($type === 'agency_opportunity') {
+      $title = trim(
         $read('title') . ' ' . $read('organization_name'),
-      ),
-      'agency_activity' => trim(
+      );
+    }
+    else {
+      // Remaining indexed type: agency_activity.
+      $title = trim(
         (Vocabulary::ACTIVITIES[$read('type')] ?? 'Activity')
         . ' ' . $read('occurred_at'),
-      ),
-      default => NULL,
-    };
-    if ($title === NULL) {
-      return NULL;
+      );
     }
     $owner = 0;
     if ($type === 'agency_opportunity' && $entity->hasField('owner')) {
