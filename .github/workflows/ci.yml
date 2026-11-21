@@ -344,6 +344,8 @@ jobs:
               "testTypedActionsExcludeAuthorityInputs",
               "testUnknownInputIsRejectedWithoutPayload",
               "testUnknownActionAndFailureCode",
+              "testAppliesMatchesCommercialRoutesOnly",
+              "testAppliesRecordsRouteCacheMetadata",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
