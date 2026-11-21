@@ -331,6 +331,11 @@ jobs:
               "testProtectedParentIsRejected",
               "testOwnershipChangeIsRejected",
               "testSeatOperations",
+              "testIntentValidation",
+              "testSubjectAndPreference",
+              "testInquiry",
+              "testAccount",
+              "testUnsupportedForm",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
