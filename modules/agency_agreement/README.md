@@ -14,9 +14,9 @@ the sole authority for this type; there is no Chronicle source.
 | --- | --- | --- |
 | Agreement | `agency_agreement` | `draft`, `signed`, `active`, `terminated` |
 
-Entity access is denied by default, including for user 1. Ontology
-lifecycle lists those states and no transitions. This module does not
-invent a write action.
+Entity access is denied by default, including for user 1. Access-checked
+entity queries return no rows. Ontology lifecycle lists those states and
+no transitions. This module does not invent a write action.
 
 `engagement_uuid` is an opaque UUID string. It is not resolved against
 engagement storage. `terms` is confidential long text.

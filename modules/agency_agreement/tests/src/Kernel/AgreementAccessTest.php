@@ -55,7 +55,9 @@ final class AgreementAccessTest extends AgreementKernelTestBase {
     $storage = $this->container->get('entity_type.manager')
       ->getStorage('agency_agreement');
     $storage->create($this->agreementValues())->save();
-    $this->container->get('current_user')->setAccount(User::load(1));
+    $admin = User::load(1);
+    $this->assertInstanceOf(User::class, $admin);
+    $this->container->get('current_user')->setAccount($admin);
     $ids = $storage->getQuery()->accessCheck(TRUE)->execute();
     $this->assertSame([], $ids);
   }
