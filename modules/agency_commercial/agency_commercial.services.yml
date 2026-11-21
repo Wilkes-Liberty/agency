@@ -1,3 +1,7 @@
 services:
   agency_commercial.contact_policy:
     class: Drupal\agency_commercial\UnavailableContactPolicyReader
+  agency_commercial.records:
+    class: Drupal\agency_commercial\UnavailableCommercialRecords
+  agency_commercial.contact_match:
+    class: Drupal\agency_commercial\UnavailableContactMatch
