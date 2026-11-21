@@ -1,0 +1,81 @@
+<?php
+
+/**
+ * @file
+ * Expense records use the Entity API; intents and evidence are local.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function agency_expense_schema(): array {
+  return [
+    'agency_expense_outbox' => [
+      'description' => 'Required minimized expense intents.',
+      'fields' => [
+        'id' => [
+          'type' => 'varchar',
+          'length' => 36,
+          'not null' => TRUE,
+        ],
+        'expense_uuid' => [
+          'type' => 'varchar',
+          'length' => 128,
+          'not null' => TRUE,
+        ],
+        'operation' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'metadata' => [
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+        'recorded' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+        'delivered' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => FALSE,
+        ],
+        'attempts' => [
+          'type' => 'int',
+          'size' => 'big',
+          'not null' => TRUE,
+          'default' => 0,
+        ],
+      ],
+      'primary key' => ['id'],
+      'indexes' => [
+        'queued' => ['delivered', 'recorded'],
+        'expense' => ['expense_uuid'],
+      ],
+    ],
+    'agency_expense_intent' => [
+      'description' => 'Idempotency fingerprints and expense receipts.',
+      'fields' => [
+        'id' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'payload_hash' => [
+          'type' => 'varchar',
+          'length' => 64,
+          'not null' => TRUE,
+        ],
+        'receipt' => [
+          'type' => 'text',
+          'size' => 'big',
+          'not null' => TRUE,
+        ],
+      ],
+      'primary key' => ['id'],
+    ],
+  ];
+}
