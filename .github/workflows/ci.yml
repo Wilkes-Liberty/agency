@@ -330,6 +330,18 @@ jobs:
           vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
             --log-junit "$PWD/workforce-unit-junit.xml" \
             "$PWD/web/modules/contrib/agency/tests/src/Unit/Workforce"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/s3-instruction-release-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/S3/InstructionReleasePolicyTest.php"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/s3-pipeline-stage-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/S3/PipelineStagePolicyTest.php"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/s3-intake-draft-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/S3/IntakeDraftPolicyTest.php"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/s3-inquiry-review-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/S3/InquiryReviewPolicyTest.php"
           # PHP expressions are intentionally passed literally to PHP.
           # shellcheck disable=SC2016
           php -r '
@@ -356,6 +368,39 @@ jobs:
                 "testDocumentReplayRefusesForeignEmptySlot",
                 "testChallengeQualificationRefusesForeignStatementBeforeReceiptRead",
                 "testChallengeReplayRefusesForeignNamespaceBeforeKeyReads",
+              ],
+              "s3-instruction-release-junit.xml" => [
+                "testDisabledOrUnsafeSettingsRefuseWithoutRequests",
+                "testPermissionIsRequired",
+                "testListOffersReleaseOnlyWhenItCanProceed",
+                "testFormRequiresCsrfToken",
+                "testHeldInstructionIsAccepted",
+                "testDefinitiveRefusalIsTerminal",
+                "testNotFoundOrDeniedRetriesToAcceptance",
+                "testBadRequestIsRefusedAsFault",
+                "testUncertainOutcomesRetryWithTheSameKey",
+                "testConcurrentReleaseIsRefusedWhileInFlight",
+                "testAuditFailureRollsBackTheTransition",
+                "testCredentialsNeverLeak",
+              ],
+              "s3-pipeline-stage-junit.xml" => [
+                "testLostAndParkedCannotSkipStages",
+                "testDirectStageBypassDenied",
+                "testTransitionAndStaleWrite",
+                "testConversionAndWrongOwnerDenial",
+              ],
+              "s3-intake-draft-junit.xml" => [
+                "testUndeclaredFormsWriteNothing",
+                "testClaimOnlyNeverDraftsAnOpportunity",
+                "testIntakeOwnerFailsClosed",
+                "testDraftAuditRollback",
+                "testConcurrentFirstArrival",
+                "testBusinessDraftsAndReplay",
+              ],
+              "s3-inquiry-review-junit.xml" => [
+                "testReviewDenials",
+                "testUndeclaredInquiryFormIsNotReviewable",
+                "testReviewedSourceIntake",
               ],
             ];
             foreach ($required as $file => $names) {
