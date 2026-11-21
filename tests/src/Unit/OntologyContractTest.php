@@ -113,6 +113,7 @@ final class OntologyContractTest extends TestCase {
     'Credential',
     'Availability',
     'Campaign',
+    'Agreement',
   ];
 
   /**
@@ -1000,7 +1001,7 @@ final class OntologyContractTest extends TestCase {
    *   Object type definitions.
    *
    * @return bool
-   *   TRUE when the four later types are proposed for S5.
+   *   TRUE when the five Slice 5 types stay proposed.
    */
   private function sliceFiveProposed(array $objects): bool {
     $found = [];

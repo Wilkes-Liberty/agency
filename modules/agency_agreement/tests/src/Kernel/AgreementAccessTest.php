@@ -49,6 +49,24 @@ final class AgreementAccessTest extends AgreementKernelTestBase {
   }
 
   /**
+   * No write action is registered. Later agreement states have no service.
+   */
+  public function testNoWriteActionIsRegistered(): void {
+    foreach ([
+      'agency_agreement.draft',
+      'agency_agreement.sign',
+      'agency_agreement.activate',
+      'agency_agreement.terminate',
+      'agency_agreement.write',
+    ] as $id) {
+      $this->assertFalse($this->hasService($id), $id);
+    }
+    $this->assertFileDoesNotExist(
+      dirname(__DIR__, 3) . '/agency_agreement.services.yml',
+    );
+  }
+
+  /**
    * Access-checked queries do not list agreements, including for user 1.
    */
   public function testAccessCheckedQueryReturnsNothing(): void {

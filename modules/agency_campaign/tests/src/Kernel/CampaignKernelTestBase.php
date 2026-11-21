@@ -105,6 +105,15 @@ abstract class CampaignKernelTestBase extends KernelTestBase {
   }
 
   /**
+   * Whether a service id is registered.
+   *
+   * PHPStan treats ContainerInterface::has() as false for unknown ids.
+   */
+  protected function hasService(string $id): bool {
+    return in_array($id, $this->container->getServiceIds(), TRUE);
+  }
+
+  /**
    * Creates an authenticated account that is not user 1.
    */
   protected function authenticatedUser(): User {

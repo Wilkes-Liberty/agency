@@ -315,6 +315,36 @@ jobs:
             if (array_diff($required, $executed)) { exit(1); }
             echo "s3-deny-junit.xml: " . count($executed) . " cases executed\n";
           '
+      - name: Run Slice 5 unimplemented-transition proofs
+        working-directory: drupal
+        env:
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/s5-transition-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/SliceFiveTransitionTest.php"
+          # PHP expressions are intentionally passed literally to PHP.
+          # shellcheck disable=SC2016
+          php -r '
+            $xml = simplexml_load_file("s5-transition-junit.xml");
+            if ($xml === false) { exit(1); }
+            $executed = [];
+            foreach ($xml->xpath("//testcase") as $case) {
+              $name = (string) $case["name"];
+              if (isset($case->failure) || isset($case->error)) { exit(1); }
+              if (isset($case->skipped)) { exit(1); }
+              $executed[] = $name;
+            }
+            echo "Executed Slice 5 transition tests: " . count($executed) . "\n";
+            $required = [
+              "testSliceFiveTypesRemainProposed",
+              "testCampaignPauseAndCompleteHaveNoAction",
+              "testExpenseLaterStatesHaveNoAction",
+              "testAgreementHasEmptyTransitions",
+              "testCredentialAndAvailabilityStayProposedActions",
+            ];
+            if (array_diff($required, $executed)) { exit(1); }
+          '
       - name: Run contact, statement and signed-document preflight tests
         working-directory: drupal
         env:
@@ -970,6 +1000,8 @@ jobs:
               "testDisableLeavesStaffIntact",
               "testEvidenceFailureRollsBackTheCampaign",
               "testUnknownCampaignIsNotFound",
+              "testLaunchOnActiveCampaignIsNotFound",
+              "testPauseAndCompleteAreNotRegisteredServices",
               "testForeignCampaignIsNotFound",
               "testSourceDoesNotReferenceWorkforceOrDiscoveryCommands",
               "testLoadedClassesDoNotExtendCommandTypes",
@@ -1036,6 +1068,7 @@ jobs:
               "testReplayWithDifferentPayloadIsRefused",
               "testReplayReturnsOriginalReceipt",
               "testRecordCreatesDraftedWithRequiredEvidence",
+              "testLaterExpenseStatesHaveNoRegisteredActions",
               "testRecordDoesNotCreateDiscoveryRecords",
               "testDisableLeavesStaffIntact",
               "testEvidenceFailureRollsBackTheExpense",
@@ -1093,6 +1126,7 @@ jobs:
               "testOccupiedUuidIsRefused",
               "testOccupiedRevisionIdIsRefused",
               "testDefaultAccessDeniesEverything",
+              "testNoWriteActionIsRegistered",
               "testAccessCheckedQueryReturnsNothing",
               "testSourceDoesNotReferenceWorkforceOrDiscoveryCommands",
               "testLoadedClassesDoNotExtendCommandTypes",
@@ -1296,6 +1330,7 @@ jobs:
             drupal/agency-intake-junit.xml
             drupal/tenant-strings-junit.xml
             drupal/s3-deny-junit.xml
+            drupal/s5-transition-junit.xml
             drupal/contact-preflight-junit.xml
             drupal/contact-field-junit.xml
             drupal/statement-preflight-junit.xml
