@@ -7,10 +7,8 @@ namespace Drupal\agency_intake;
 /**
  * Vendor-neutral intake dispatch. Host adapters supply the transport.
  *
- * CRM transfer §5. The interface names no vendor. Payload shape, retry
- * and uncertain-delivery semantics stay open.
- *
- * @todo S3 G1 D7 Retry and uncertain-delivery semantics stay open.
+ * Timeout and 5xx are uncertain delivery. Retry reuses the original
+ * key. The interface names no vendor. Default gateway stays unavailable.
  */
 interface IntakeDispatchGatewayInterface {
 
@@ -20,9 +18,12 @@ interface IntakeDispatchGatewayInterface {
    * @param string $dispatch_key
    *   Opaque idempotency key for this intent.
    * @param mixed $intent
-   *   Opaque payload. Shape is not frozen while G1 is open.
+   *   Opaque payload. Shape is not frozen.
    *
    * @throws \Drupal\agency_intake\Exception\IntakeRefusal
+   *   Default implementation throws unavailable.
+   * @throws \Drupal\agency_intake\Exception\UncertainDelivery
+   *   Timeout or 5xx. Occupancy becomes uncertain. Retry uses this key.
    */
   public function dispatch(string $dispatch_key, mixed $intent): void;
 

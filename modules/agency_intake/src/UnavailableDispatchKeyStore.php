@@ -14,7 +14,28 @@ final class UnavailableDispatchKeyStore implements DispatchKeyStoreInterface {
   /**
    * {@inheritdoc}
    */
-  public function reserve(string $dispatch_key): void {
+  public function reserve(string $key, string $intent_digest = ''): void {
+    throw new IntakeRefusal('unavailable');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function occupancy(?string $key): ?string {
+    throw new IntakeRefusal('unavailable');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function rememberUncertain(string $key): void {
+    throw new IntakeRefusal('unavailable');
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function rememberSent(string $key): void {
     throw new IntakeRefusal('unavailable');
   }
 

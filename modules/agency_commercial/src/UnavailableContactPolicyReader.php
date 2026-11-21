@@ -10,9 +10,7 @@ use Drupal\agency_commercial\Exception\CommercialRefusal;
  * Default contact-policy port. Throws until a host adapter is supplied.
  *
  * Scaffolding only. Opportunity and activity types stay unregistered.
- *
- * @todo S3 G1 D4 Activity revisionability is not encoded here.
- * @todo S3 G1 D5 Opportunity amount and currency are not encoded here.
+ * Slice 3 G1 is accepted. This package still ships no entity types.
  */
 final class UnavailableContactPolicyReader implements ContactPolicyReaderInterface {
 
