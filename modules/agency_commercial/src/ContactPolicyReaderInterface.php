@@ -7,12 +7,10 @@ namespace Drupal\agency_commercial;
 /**
  * Allow/deny contact lookup. Never returns contact data.
  *
- * CRM transfer §4. Slice 3 G1 is open. The signature does not encode a
- * person/organization discriminator, opportunity amount, activity
- * revisionability or an authority-row name.
- *
- * @todo S3 G1 D3 Discriminator stays off this read path.
- * @todo S3 G1 D6 Authority-row names stay unnamed until G1.
+ * CRM transfer §4. Slice 3 G1 is accepted. This package still ships no
+ * entity types. Kind is a contact route, not a person or organization
+ * discriminator. The signature does not encode opportunity amount,
+ * activity revisionability or an authority-row name.
  */
 interface ContactPolicyReaderInterface {
 
