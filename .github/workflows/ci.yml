@@ -326,6 +326,11 @@ jobs:
               "testDeliveryAndToolsShareNotFoundWithoutPayload",
               "testPendingOccupancyIsUncertainDelivery",
               "testConsumedKeyReplayIsNotFound",
+              "testUpdatePreservesOmissionsAndExplicitClearing",
+              "testActivityPreservesRetryAndParent",
+              "testProtectedParentIsRejected",
+              "testOwnershipChangeIsRejected",
+              "testSeatOperations",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
@@ -1224,6 +1229,13 @@ jobs:
               "testOpportunityQueryRemainsDenied",
               "testActivityQueryRemainsDenied",
               "testStageBypassIsRefused",
+              "testIndexedTypesAreOpportunityAndActivityOnly",
+              "testActivityDoesNotReadNotesOrDocumentReferences",
+              "testOpportunityFilterMetadata",
+              "testUnrelatedEntitiesAreRejectedWithoutReadingFields",
+              "testRevokedRecordIsNotPresented",
+              "testHiddenSearchableFieldExcludesEntireHit",
+              "testVisibleRecordUsesCurrentMetadata",
             ];
             echo "Executed commercial boundaries: " . count(array_intersect($required, $executed)) . "\n";
             if (array_diff($required, $executed)) { exit(1); }
