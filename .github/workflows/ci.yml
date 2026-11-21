@@ -295,11 +295,18 @@ jobs:
           vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
             --log-junit "$PWD/signed-document-junit.xml" \
             "$PWD/web/modules/contrib/agency/tests/src/Unit/SignedDocument/SignedDocumentPolicyTest.php"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/workforce-unit-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/Workforce"
           # PHP expressions are intentionally passed literally to PHP.
           # shellcheck disable=SC2016
           php -r '
             $required = [
               "contact-preflight-junit.xml" => ["testRequiresReviewForBothIdentitiesBeforeProjection"],
+              "workforce-unit-junit.xml" => [
+                "testStaffClassificationRefusesHostRoleIds",
+                "testInviteStaffRejectsCrossDomainClassification",
+              ],
               "signed-document-junit.xml" => [
                 "testVerificationRefusesChangedEvidenceAndStrictExpiry",
                 "testVerifiedRetryCannotSubstituteAnotherCleanDocument",
@@ -611,6 +618,12 @@ jobs:
               "testDifferentTokensSameContactConcurrency",
               "testAuthorityChangeWaitsForAcceptanceCommit",
               "testExpiryIsFreshAfterWaitingForWriterBoundary",
+              "testIssueRefusesCrossDomainClassification",
+              "testMalformedBearerInspectsInvalidWithoutWrites",
+              "testUnavailableIssuerNeverWrites",
+              "testProvisionedAccountDoesNotGainForeignRoles",
+              "testProvisionedUsernameStaysWithinDrupalLimit",
+              "testExistingMixedCaseAccountIsCollision",
             ];
             echo "Executed workforce boundaries: " . count(array_intersect($workforceRequired, $executed)) . "\n";
             if (array_diff($workforceRequired, $executed)) { exit(1); }
@@ -790,5 +803,6 @@ jobs:
             drupal/contact-preflight-junit.xml
             drupal/statement-preflight-junit.xml
             drupal/signed-document-junit.xml
+            drupal/workforce-unit-junit.xml
             drupal/composer.lock
             drupal/server.log
