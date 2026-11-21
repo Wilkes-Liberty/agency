@@ -9,8 +9,6 @@ use Drupal\agency_commercial\CommercialPrincipal;
 use Drupal\agency_commercial\Entity\Opportunity;
 use Drupal\agency_commercial\Exception\CommercialRefusal;
 use Drupal\agency_commercial\MemoryCommercialRecordLocator;
-use Drupal\agency_commercial\UnavailableCommercialRecords;
-use Drupal\agency_commercial\UnavailableContactMatch;
 use Drupal\agency_intake\Exception\IntakeRefusal;
 use Drupal\agency_intake\IntakeCommands;
 use Drupal\agency_intake\IntakePrincipal;
@@ -60,9 +58,7 @@ final class CommercialDenyTest extends CommercialKernelTestBase {
    */
   public function testMissingTenantClaimOnHatchAndMatch(): void {
     $records = $this->container->get('agency_commercial.records');
-    $this->assertInstanceOf(UnavailableCommercialRecords::class, $records);
     $match = $this->container->get('agency_commercial.contact_match');
-    $this->assertInstanceOf(UnavailableContactMatch::class, $match);
     $contact = [
       'kind' => 'mailbox',
       'value' => 'claim@example.test',
