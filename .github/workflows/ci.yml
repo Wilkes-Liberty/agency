@@ -322,6 +322,10 @@ jobs:
               "testSignedSignal",
               "testOutboxAndPolicyMissingTenantClaim",
               "testOutboxAndPolicyShareNotFoundWithoutPayload",
+              "testDeliveryAndToolsMissingTenantClaim",
+              "testDeliveryAndToolsShareNotFoundWithoutPayload",
+              "testPendingOccupancyIsUncertainDelivery",
+              "testConsumedKeyReplayIsNotFound",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
@@ -865,6 +869,9 @@ jobs:
               "testMissingAndForeignIntentsShareNotFound",
               "testEnqueueNeverCreatesOpportunity",
               "testIntakeQueryRemainsDenied",
+              "testMissingTenantClaimOnDeliveryAndTools",
+              "testMissingAndForeignDeliveryShareNotFound",
+              "testDeliveryNeverCreatesOpportunity",
             ];
             echo "Executed intake boundaries: " . count(array_intersect($required, $executed)) . "\n";
             if (array_diff($required, $executed)) { exit(1); }
