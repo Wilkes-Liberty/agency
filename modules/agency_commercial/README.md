@@ -1,6 +1,7 @@
 Registers internal opportunity and activity storage. Enabling it copies
 no host data and transfers no CRM authority. Entity access is denied by
-default. There are no routes, forms, Views or menu links.
+default. Access-checked entity queries return no rows while stored
+records exist. There are no routes, forms, Views or menu links.
 
 Default contact-policy, records and contact-match ports stay unavailable
 so legacy remains the only writer. Missing and foreign records share

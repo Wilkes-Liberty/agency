@@ -174,6 +174,17 @@ final class CommercialDenyTest extends CommercialKernelTestBase {
   }
 
   /**
+   * Access-checked activity queries stay empty while rows exist.
+   */
+  public function testActivityQueryRemainsDenied(): void {
+    $activity = $this->createActivity();
+    $activity->save();
+    $storage = $this->container->get('entity_type.manager')
+      ->getStorage('agency_activity');
+    $this->assertSame([], $storage->getQuery()->accessCheck(TRUE)->execute());
+  }
+
+  /**
    * Stage changes through the records port do not mutate stored rows.
    */
   public function testStageBypassIsRefused(): void {
