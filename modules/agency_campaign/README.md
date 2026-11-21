@@ -15,8 +15,8 @@ the sole authority for this type; there is no Chronicle source.
 | --- | --- | --- |
 | Campaign | `agency_campaign` | `draft`, `active`, `paused`, `completed` |
 
-Entity access is denied by default, including for user 1. Writes go
-through `launchCampaign` only.
+Entity access is denied by default, including for user 1. Access-checked
+entity queries return no rows. Writes go through `launchCampaign` only.
 
 ## launchCampaign
 

@@ -56,7 +56,9 @@ final class CampaignAccessTest extends CampaignKernelTestBase {
     $storage = $this->container->get('entity_type.manager')
       ->getStorage('agency_campaign');
     $storage->create($this->campaignValues())->save();
-    $this->container->get('current_user')->setAccount(User::load(1));
+    $admin = User::load(1);
+    $this->assertInstanceOf(User::class, $admin);
+    $this->container->get('current_user')->setAccount($admin);
     $ids = $storage->getQuery()->accessCheck(TRUE)->execute();
     $this->assertSame([], $ids);
   }
