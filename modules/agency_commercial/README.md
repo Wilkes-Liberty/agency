@@ -7,3 +7,9 @@ writer. ContactEmail is a value object and is not a runtime service.
 Activity is revisionable (accepted vault D4) even though the ontology
 draft marks it not revisionable. Opportunity amount is stored when
 supplied and is never given a default.
+
+InstructionReleasePolicy, PipelineStagePolicy, IntakeDraftPolicy and
+InquiryReviewPolicy are storage-free refuse/retry contracts for the
+remaining S3 CRM kernel tests (InstructionReleaseTest, PipelineTest,
+IntakeDraftTest, InquiryReviewTest). HTTP, Webform, Jira, Views and
+Gin stay host.

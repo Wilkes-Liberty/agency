@@ -22,6 +22,12 @@ engines remain independent dependencies.
   and an audited own-profile read through explicitly configured host adapters.
 - `agency_recruiting` registers career posting and application storage. Enabling
   it copies no host data and transfers no recruiting authority.
+- `agency_campaign` registers marketing campaign storage and the launch
+  action. Enabling it creates no campaigns and grants no relationship or
+  roster authority.
+- `agency_expense` registers expense storage and the record action.
+  Enabling it creates no expenses and grants no assignment or roster
+  authority.
 - `agency_migrate` copies host records into Agency types with lineage, shadow
   reconciliation and operational authority. Host adapters supply copier plugins
   and verified writer exclusion. Qualified nonempty rollback is available for
@@ -48,6 +54,16 @@ records. Entity access is denied by default. There are no routes, forms, Views
 or menu links. A published open posting requires a future close deadline. An
 application may omit a posting. Résumé bytes stay in File Gate; the row stores a
 File Gate UUID. See the [recruiting module note](modules/agency_recruiting/README.md).
+
+`agency_campaign` stores `agency_campaign` records. Entity access is denied
+by default. `launchCampaign` creates a draft or activates an owned draft
+after an explicit coordinator grant. Required evidence shares the write
+transaction. See the [campaign module note](modules/agency_campaign/README.md).
+
+`agency_expense` stores `agency_expense` records. Entity access is denied
+by default. `recordExpense` creates a drafted expense after an explicit
+coordinator grant. Amounts stay off the evidence metadata. See the
+[expense module note](modules/agency_expense/README.md).
 
 The alpha7 migration scope adds a value-based post-cutover writer with a durable
 operation journal, ordered replay for reviewed equal-layout copiers, and
@@ -169,6 +185,7 @@ Actual passing results, not the presence of a workflow, establish compatibility.
 - [Migration](docs/MIGRATION.md): identity-preserving copy, reconciliation and rollback.
 - [Workforce transfer](docs/WORKFORCE_TRANSFER.md): Slice 2 design; posting and application storage is registered, copiers and recruiting authority are not.
 - [Staff onboarding compatibility](docs/WORKFORCE_INVITATION_CONTRACT.md): anonymous invitation, transaction and migration requirements; implementation and host qualification remain separate.
+- [Test port](docs/TEST_PORT.md): generic proofs copied from the host scan; tenant values stay on the webcms host.
 - [CRM transfer](docs/CRM_TRANSFER.md): proposed Slice 3 CRM, intake and contact-lookup design.
 - [Time transfer](docs/TIME_TRANSFER.md): proposed Slice 4 engagement, time, client-membership and feed design. No record types.
 - [Maintaining](docs/MAINTAINING.md): development line, remotes and release verification.

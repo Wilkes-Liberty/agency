@@ -171,6 +171,55 @@ final class SignedDocumentPolicyTest extends UnitTestCase {
   }
 
   /**
+   * Termination needs an explicit grant and an open mapping.
+   *
+   * Generic SignedDocumentRolePermissions / operator-form deny path.
+   * Host role YAML and form CSRF stay on the host.
+   */
+  public function testTerminateRequiresExplicitPermissionAndOpenState(): void {
+    $policy = new SignedDocumentPolicy();
+    $pending = $this->mapping('pending');
+    $this->refused(
+      fn() => $policy->terminate($pending, 'revoked', 99, FALSE),
+    );
+    $this->refused(
+      fn() => $policy->terminate($pending, 'attached', 99, TRUE),
+    );
+    $this->refused(
+      fn() => $policy->terminate(
+        $this->mapping('attached'),
+        'revoked',
+        99,
+        TRUE,
+      ),
+    );
+    $intent = $policy->terminate($pending, 'dead', 99, TRUE);
+    $this->assertSame('terminate', $intent->operation);
+    $this->assertSame(['dead'], $intent->states);
+  }
+
+  /**
+   * Attach refuses a pin that already holds the mapping envelope.
+   *
+   * Generic SignedDocumentAttachService envelope collision. Host
+   * paragraphs, profile dates and field_user_type stay on the host.
+   */
+  public function testAttachRefusesExistingEnvelope(): void {
+    $policy = new SignedDocumentPolicy();
+    $mapping = $this->mapping('verified');
+    $this->refused(fn() => $policy->attach(
+      $mapping,
+      $this->subject(),
+      $this->reports(),
+      [$this->attachment('docusign')],
+      99,
+      FALSE,
+      TRUE,
+      FALSE,
+    ));
+  }
+
+  /**
    * Repeated managed file identities must carry the same protection snapshot.
    */
   public function testHistoryRefusesConflictingProtectionForTheSameFile(): void {
