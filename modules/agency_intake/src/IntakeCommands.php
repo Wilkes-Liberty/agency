@@ -7,7 +7,7 @@ namespace Drupal\agency_intake;
 use Drupal\agency_intake\Exception\IntakeRefusal;
 
 /**
- * Storage-free intake receive. Entity types stay unregistered.
+ * Storage-free intake receive. Commands do not persist entity rows.
  *
  * Constructed in tests. The default container has no command service.
  */
