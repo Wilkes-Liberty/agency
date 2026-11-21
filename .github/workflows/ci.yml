@@ -444,6 +444,11 @@ jobs:
             AgencyTimeInputTest.php
             AgencyCommercialAccountProjectionTest.php
             AgencyClientDocumentListingTest.php
+            AgencyInstructionSourcePolicyTest.php
+            AgencyMembershipAuditTest.php
+            AgencyTimeCommandPolicyTest.php
+            AgencyEngagementLineageMapTest.php
+            AgencyPublicStatementProjectionTest.php
           )
           i=0
           for name in "${tests[@]}"; do
@@ -501,6 +506,22 @@ jobs:
               "testUnpublishedExpiredAndUnreachableAreOmitted",
               "testExpiryUsesCallerToday",
               "testPayKeysAreAbsent",
+              "testDedicatedConsumerQualifies",
+              "testMixedGrantsAndForeignConsumerAreDenied",
+              "testMissingAuditIsUnavailable",
+              "testScopePermissionIsExact",
+              "testBindRefusedIsMinimized",
+              "testRolesReconciledIsMinimized",
+              "testAnonymousWorkspaceIsNotFound",
+              "testPrivateAccessIsOwnerAssigned",
+              "testVisitorAndMachineRolesAreDenied",
+              "testReviewerOnlyCannotReadDraft",
+              "testClientReferenceBoundary",
+              "testAssignmentConflictUsesCurrentRevision",
+              "testProposePreservesIdentity",
+              "testPersistIsUnmapped",
+              "testExtraKeysAreUnmapped",
+              "testPublicLineIsTheAllowlist",
             ];
             if (array_diff($required, $executed)) { exit(1); }
             echo "engagement-deny-junit.xml: " . count($executed) . " cases executed\n";
