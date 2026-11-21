@@ -304,6 +304,8 @@ jobs:
               "testMissingTenantClaimIsNotNotFound",
               "testDenyAndMissingShareNotFoundWithoutPayload",
               "testPackageSourceOmitsVendorIdentifiers",
+              "testKeys",
+              "testInvalidEncodingRefuses",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
