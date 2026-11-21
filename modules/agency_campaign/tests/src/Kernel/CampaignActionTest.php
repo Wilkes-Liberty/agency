@@ -268,6 +268,41 @@ final class CampaignActionTest extends CampaignKernelTestBase {
   }
 
   /**
+   * Launch refuses an already-active campaign.
+   */
+  public function testLaunchOnActiveCampaignIsNotFound(): void {
+    $launch = $this->container->get('agency_campaign.launch');
+    $created = $launch->launch(
+      ['title' => 'Active campaign'],
+      'launch-active-src',
+    );
+    $activated = $launch->launch([
+      'campaign_uuid' => $created['receipt']['campaign_id'],
+    ], 'launch-active-go');
+    $this->assertSame('active', $activated['receipt']['state']);
+    $this->assertRefusal('not_found', [
+      'campaign_uuid' => $created['receipt']['campaign_id'],
+    ], 'launch-active-again');
+    $storage = $this->container->get('entity_type.manager')
+      ->getStorage('agency_campaign');
+    $loaded = $storage->loadByProperties([
+      'uuid' => $created['receipt']['campaign_id'],
+    ]);
+    $campaign = reset($loaded);
+    $this->assertInstanceOf(Campaign::class, $campaign);
+    $this->assertSame('active', $campaign->get('status')->value);
+  }
+
+  /**
+   * Pause and complete are not registered container services.
+   */
+  public function testPauseAndCompleteAreNotRegisteredServices(): void {
+    $this->assertFalse($this->container->has('agency_campaign.pause'));
+    $this->assertFalse($this->container->has('agency_campaign.complete'));
+    $this->assertTrue($this->container->has('agency_campaign.launch'));
+  }
+
+  /**
    * A coordinator cannot activate another coordinator's draft.
    */
   public function testForeignCampaignIsNotFound(): void {
