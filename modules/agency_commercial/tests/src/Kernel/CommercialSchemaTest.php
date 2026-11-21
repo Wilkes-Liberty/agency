@@ -82,9 +82,6 @@ final class CommercialSchemaTest extends CommercialKernelTestBase {
     $this->assertTrue($loaded->get('amount')->isEmpty());
     $value = $loaded->get('amount')->value;
     $this->assertTrue($value === NULL || $value === '');
-    $this->assertNotSame(0, $value);
-    $this->assertNotSame(0.0, $value);
-    $this->assertNotSame('0', (string) ($value ?? ''));
 
     $with_amount = $this->createOpportunity([
       'amount' => '123.45',
