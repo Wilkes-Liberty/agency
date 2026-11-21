@@ -124,8 +124,8 @@ because lock, savepoint and transaction behavior differs by engine. Each job ass
 the resolved version and candidate symlink and requires executed, non-skipped
 functional tests. A separate job runs PHPStan against a Drupal 11.4 analysis host.
 Every database lane also executes the domain suite and explicitly checks that
-the independent-writer, interrupted-drain, delivery-marker, summary-savepoint
-and retention removal cases ran without skips. The domain suite also requires
+the independent-writer, interrupted-drain, delivery-marker, summary-savepoint,
+retention removal and Discovery access-denial cases ran without skips. The domain suite also requires
 all named operation-journal cases, including real SQL faults and independent
 authority and retry workers. The same lanes run `modules/agency_host` unit and
 kernel tests. The 11.x lanes, including

@@ -28,6 +28,11 @@ final class DiscoveryIdentityFixture implements IdentityProviderInterface {
    */
   public bool $contactAllowed = TRUE;
 
+  /**
+   * Count of current() resolutions in this test process.
+   */
+  public int $currentCalls = 0;
+
   public function __construct() {
     $this->principal = new Principal('https://identity.example.test', 'person-one');
   }
@@ -36,6 +41,7 @@ final class DiscoveryIdentityFixture implements IdentityProviderInterface {
    * {@inheritdoc}
    */
   public function current(): ?Principal {
+    $this->currentCalls++;
     return $this->principal;
   }
 
