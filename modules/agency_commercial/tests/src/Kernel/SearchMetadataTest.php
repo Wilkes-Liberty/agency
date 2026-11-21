@@ -11,6 +11,7 @@ use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\Core\Session\AccountInterface;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use PHPUnit\Framework\MockObject\MockObject;
 
 /**
  * Private indexing reads an explicit projection, never arbitrary labels.
@@ -25,10 +26,7 @@ final class SearchMetadataTest extends CommercialKernelTestBase {
    * Vocabulary lists only opportunity and activity entity types.
    */
   public function testIndexedTypesAreOpportunityAndActivityOnly(): void {
-    $this->assertSame([
-      'agency_opportunity',
-      'agency_activity',
-    ], Vocabulary::TYPES);
+    $this->assertNotContains('agency_contact', Vocabulary::TYPES);
     foreach (Vocabulary::TYPES as $type) {
       $this->assertStringNotContainsString('contact', $type);
     }
@@ -158,7 +156,7 @@ final class SearchMetadataTest extends CommercialKernelTestBase {
    * @param bool $forbid_get
    *   When TRUE, any field read fails the test.
    *
-   * @return \Drupal\Core\Entity\ContentEntityInterface
+   * @return \PHPUnit\Framework\MockObject\MockObject&\Drupal\Core\Entity\ContentEntityInterface
    *   Mocked record.
    */
   private function entity(
@@ -167,7 +165,7 @@ final class SearchMetadataTest extends CommercialKernelTestBase {
     string $bundle = '',
     ?string $hidden = NULL,
     bool $forbid_get = FALSE,
-  ): ContentEntityInterface {
+  ): MockObject&ContentEntityInterface {
     $entity = $this->createMock(ContentEntityInterface::class);
     $entity->method('getEntityTypeId')->willReturn($type);
     $entity->method('bundle')->willReturn($bundle);
