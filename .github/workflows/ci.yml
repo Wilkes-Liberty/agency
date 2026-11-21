@@ -313,6 +313,12 @@ jobs:
               "testWeekdayHourlyIntakeExcludesWeekend",
               "testUnboundedCatchupIsRefused",
               "testMalformedConfigurationIsRefused",
+              "testEquivalentPropertyOrdersProduceSameReceipt",
+              "testInventedEvidenceIsRefused",
+              "testUnknownActionFieldIsRefused",
+              "testMarkupCannotEnterDraft",
+              "testOversizedDraftIsRefused",
+              "testMissingWorkDeclarationIsNotSuccess",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
