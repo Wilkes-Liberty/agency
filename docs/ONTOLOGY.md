@@ -20,7 +20,7 @@ Where a fact is already specified for Discovery, that contract wins.
 
 | Status | Meaning |
 | --- | --- |
-| Implemented | Present in current storage and commands. Discovery types live in `agency_staff`. Posting and application storage live in `agency_recruiting`. Campaign storage and launch live in `agency_campaign`. Expense storage and recordExpense live in `agency_expense`. YAML status for those Slice 5 types stays proposed. |
+| Implemented | Present in current storage and commands. Discovery types live in `agency_staff`. Posting and application storage live in `agency_recruiting`. Campaign storage and launch live in `agency_campaign`. Expense storage and recordExpense live in `agency_expense`. Agreement storage lives in `agency_agreement` with no write action. YAML status for those Slice 5 types stays proposed. |
 | Proposed | Design for a later slice. Not a route, command, copier or authority transfer. |
 
 Implemented object types are the five internal Discovery records
@@ -36,12 +36,13 @@ recording is the same pattern in `agency_expense`.
 
 Expense, Credential, Availability and Campaign stay proposed for slice 5
 in YAML. `agency_campaign` and `agency_expense` register storage and the
-named actions without flipping that status. Agreement is also proposed
-for that slice.
+named actions without flipping that status. `agency_agreement`
+registers storage with empty ontology transitions and no action.
 Organization, Membership, ProfileEvidence, StaffInvitation and
 StaffOnboard are proposed for slice 2 under `agency_workforce`.
 CareerPosting and Application storage is registered in
-`agency_recruiting`; ontology YAML still marks those types as proposed. Opportunity, Activity and IntakeSubmission are
+`agency_recruiting`; ontology YAML still marks those types as proposed.
+Opportunity, Activity and IntakeSubmission are
 proposed for slice 3. The proposed Slice 3 transfer design is
 [CRM transfer](CRM_TRANSFER.md). Engagement, assignment, time and
 statement types are proposed for slice 4. The proposed transfer design is

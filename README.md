@@ -28,6 +28,10 @@ engines remain independent dependencies.
 - `agency_expense` registers expense storage and the record action.
   Enabling it creates no expenses and grants no assignment or roster
   authority.
+- `agency_agreement` registers agreement storage. Enabling it creates no
+  agreements and grants no engagement or roster authority. Ontology
+  transitions remain empty; this registration does not invent a write
+  action.
 - `agency_migrate` copies host records into Agency types with lineage, shadow
   reconciliation and operational authority. Host adapters supply copier plugins
   and verified writer exclusion. Qualified nonempty rollback is available for
@@ -64,6 +68,10 @@ transaction. See the [campaign module note](modules/agency_campaign/README.md).
 by default. `recordExpense` creates a drafted expense after an explicit
 coordinator grant. Amounts stay off the evidence metadata. See the
 [expense module note](modules/agency_expense/README.md).
+
+`agency_agreement` stores `agency_agreement` records. Entity access is
+denied by default. There is no named write action yet. See the
+[agreement module note](modules/agency_agreement/README.md).
 
 The alpha7 migration scope adds a value-based post-cutover writer with a durable
 operation journal, ordered replay for reviewed equal-layout copiers, and
