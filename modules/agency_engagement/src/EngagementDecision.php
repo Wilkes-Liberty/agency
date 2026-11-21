@@ -134,6 +134,23 @@ final class EngagementDecision {
   }
 
   /**
+   * Membership reconcile succeeded with visitor roles only.
+   *
+   * @param list<string> $roles
+   *   Visitor roles the attempt would add or keep.
+   * @param list<string> $absent_roles
+   *   Staff roles and created objects that stay absent.
+   */
+  public static function granted(array $roles, array $absent_roles = []): self {
+    return new self(
+      self::OUTCOME_PROVISIONED,
+      NULL,
+      ['roles' => $roles],
+      $absent_roles,
+    );
+  }
+
+  /**
    * Operator-visible migrate or authority refuse. Not not_found.
    *
    * @param list<array<string, mixed>> $evidence

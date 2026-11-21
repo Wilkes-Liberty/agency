@@ -45,6 +45,24 @@ profile, engagement or Discovery relationship.
 Tracker URLs, project refs, gateway class names and tenant hostnames stay
 out of this package.
 
+## Time input, commercial projection and membership
+
+`TimeInput` normalizes duration and interval provenance without tracker
+identifiers. Unknown keys are refused rather than copied. Host adapters
+may still accept tracker context.
+
+`CommercialAccountProjection` emits only account number, billing legal
+name and payment-method label from a caller-supplied record. Tax,
+address, contact, terms, instruments, financial totals, opportunities
+and entity dumps stay unread. Host GraphQL and Profile transport stay on
+the adapter until a later pin.
+
+`ClientMembershipPolicy` maps configured group paths to visitor roles,
+refuses missing groups and privileged accounts with reasons that are not
+`not_found`, never revokes a visitor role the claim no longer carries,
+and ignores staff roles in the host map. The OIDC ceremony stays on the
+host adapter.
+
 ## Statement preservation preflight
 
 Use `StatementPreflight` with a reviewed `StatementSourceInterface` adapter
