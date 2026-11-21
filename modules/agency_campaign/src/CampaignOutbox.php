@@ -163,18 +163,8 @@ final class CampaignOutbox {
    *   Candidate evidence.
    */
   private function assertMinimized(array $metadata): void {
-    $forbidden = [
-      'contact',
-      'note',
-      'token',
-      'credential',
-      'file',
-      'guessed_identifier',
-      'title',
-    ];
     foreach (array_keys($metadata) as $field) {
-      if (!in_array($field, self::FIELDS, TRUE)
-        || in_array($field, $forbidden, TRUE)) {
+      if (!in_array($field, self::FIELDS, TRUE)) {
         throw new \InvalidArgumentException('Invalid evidence metadata.');
       }
     }
