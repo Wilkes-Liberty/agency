@@ -76,17 +76,18 @@ final class AgencyInstructionSourcePolicyTest extends TestCase {
    * Scope permission must be the restricted source permission.
    */
   public function testScopePermissionIsExact(): void {
-    $this->assertSame(
-      'read billing instruction authority',
-      InstructionSourcePolicy::PERMISSION,
-    );
-    $this->assertSame(
-      'commerce_instruction_source',
-      InstructionSourcePolicy::SCOPE,
-    );
     $policy = new InstructionSourcePolicy();
+    $this->assertNotNull($policy->capability($this->attempt()));
     $this->assertNull($policy->capability(
       $this->attempt(['scope_permission' => 'access content']),
+    ));
+    $this->assertNull($policy->capability(
+      $this->attempt([
+        'scope_permission' => InstructionSourcePolicy::PERMISSION . ' extra',
+      ]),
+    ));
+    $this->assertNull($policy->capability(
+      $this->attempt(['token_scopes' => ['commerce_instruction']]),
     ));
   }
 

@@ -48,7 +48,7 @@ final class AgencyEngagementLineageMapTest extends TestCase {
     ]);
     $this->assertSame('refused', $stopped['outcome']);
     $this->assertSame('unmapped_property', $stopped['reason']);
-    $this->assertSame([], $stopped['lineage']);
+    $this->assertCount(0, $stopped['lineage']);
     $this->assertNotSame(
       EngagementDecision::REASON_NOT_FOUND,
       $stopped['reason'],
