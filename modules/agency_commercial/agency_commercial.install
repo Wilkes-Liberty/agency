@@ -2,5 +2,5 @@
 
 /**
  * @file
- * Scaffolding only. This module ships no schema.
+ * Commercial records use the Entity API; this module ships no extra tables.
  */
