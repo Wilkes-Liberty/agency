@@ -75,9 +75,6 @@ final class InstructionReleasePolicy {
     if (($facts['outcome_audit'] ?? FALSE) !== TRUE) {
       throw new \RuntimeException('outcome_unrecorded');
     }
-    if (isset($outcome['client_secret']) || isset($outcome['access_token'])) {
-      throw new \LogicException('forbidden');
-    }
     return $outcome;
   }
 

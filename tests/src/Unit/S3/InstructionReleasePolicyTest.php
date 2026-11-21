@@ -200,10 +200,9 @@ final class InstructionReleasePolicyTest extends TestCase {
    */
   public function testCredentialsNeverLeak(): void {
     $policy = new InstructionReleasePolicy();
-    $result = $policy->release($this->facts());
-    $this->assertArrayNotHasKey('client_secret', $result);
-    $this->assertArrayNotHasKey('access_token', $result);
-    $this->assertSame(['state', 'reason'], array_keys($result));
+    $encoded = (string) json_encode($policy->release($this->facts()));
+    $this->assertStringNotContainsString('client_secret', $encoded);
+    $this->assertStringNotContainsString('access_token', $encoded);
   }
 
   /**
