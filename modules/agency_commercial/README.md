@@ -19,6 +19,9 @@ renewal seats with typed claim, context, submit and fail inputs.
 Those seats are not ToolOperations finance, marketing or outbound
 seats. Unknown action keys fail closed without dumping payload.
 The deny-closed operating-run hatch never claims a live run.
+CommercialRoutes matches opportunity, activity and
+agency_commercial. route names only. Host CRM route prefixes stay
+host. Optional cache metadata records the route on a hit and a miss.
 ContactEmail, OperatingSchedule and OperatingDraft are value
 objects and are not runtime services. Activity is revisionable
 (accepted vault D4) even though the ontology draft marks it not
