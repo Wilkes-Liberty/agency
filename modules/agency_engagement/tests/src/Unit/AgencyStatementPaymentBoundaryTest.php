@@ -17,7 +17,7 @@ use PHPUnit\Framework\Attributes\Group;
 final class AgencyStatementPaymentBoundaryTest extends EngagementDenyTestCase {
 
   /**
-   * issueStatement succeeds and does not call the payment engine.
+   * Issue statement succeeds and does not call the payment engine.
    */
   public function testIssueStatementDoesNotCallPaymentEngine(): void {
     $decision = $this->policy()->issueStatement($this->actorA(), 'tenant-a');
@@ -28,7 +28,7 @@ final class AgencyStatementPaymentBoundaryTest extends EngagementDenyTestCase {
   }
 
   /**
-   * acceptTimeSubmission succeeds and does not call the payment engine.
+   * Accept time submission succeeds and does not call the payment engine.
    */
   public function testAcceptTimeSubmissionDoesNotCallPaymentEngine(): void {
     $decision = $this->policy()->acceptTimeSubmission(

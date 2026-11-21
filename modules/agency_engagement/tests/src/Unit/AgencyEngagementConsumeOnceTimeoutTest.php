@@ -13,8 +13,7 @@ use PHPUnit\Framework\Attributes\Group;
  * @group agency
  */
 #[Group('agency')]
-final class AgencyEngagementConsumeOnceTimeoutTest
-  extends EngagementDenyTestCase {
+final class AgencyEngagementConsumeOnceTimeoutTest extends EngagementDenyTestCase {
 
   /**
    * Replay of a consumed key is not_found and issues no second claim.

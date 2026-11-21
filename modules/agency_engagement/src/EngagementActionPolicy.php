@@ -98,7 +98,7 @@ final class EngagementActionPolicy {
   }
 
   /**
-   * offerAssignment. Provisioned; Discovery/CRM/workforce stay absent.
+   * Offer assignment. Provisioned; Discovery/CRM/workforce stay absent.
    */
   public function offerAssignment(
     EngagementPrincipal $principal,
@@ -109,7 +109,7 @@ final class EngagementActionPolicy {
   }
 
   /**
-   * acceptAssignment. Same wall as offer.
+   * Accept assignment. Same wall as offer.
    */
   public function acceptAssignment(
     EngagementPrincipal $principal,
@@ -120,8 +120,12 @@ final class EngagementActionPolicy {
   }
 
   /**
-   * submitTime. Foreign entries keep the host time-door string.
+   * Submit time. Foreign entries keep the host time-door string.
    *
+   * @param \Drupal\agency_engagement\EngagementPrincipal $principal
+   *   Caller whose tenant and id bound the submission.
+   * @param string $object_tenant
+   *   Tenant that owns the time object.
    * @param list<string> $entry_owner_ids
    *   Owner ids of entries in the submission.
    */
@@ -143,7 +147,7 @@ final class EngagementActionPolicy {
   }
 
   /**
-   * acceptTimeSubmission. Admin flag is not a bypass. Self-approval refused.
+   * Accept time submission. Admin flag is not a bypass. Self-approval refused.
    */
   public function acceptTimeSubmission(
     EngagementPrincipal $principal,
@@ -173,7 +177,7 @@ final class EngagementActionPolicy {
   }
 
   /**
-   * issueStatement. Provisioned; payment engine stays uncalled.
+   * Issue statement. Provisioned; payment engine stays uncalled.
    */
   public function issueStatement(
     EngagementPrincipal $principal,
@@ -199,6 +203,10 @@ final class EngagementActionPolicy {
   /**
    * Client-membership grant. Visitor roles only; no staff objects.
    *
+   * @param \Drupal\agency_engagement\EngagementPrincipal $principal
+   *   Caller whose tenant bounds the grant.
+   * @param string $object_tenant
+   *   Tenant that owns the membership object.
    * @param list<string> $requested_roles
    *   Roles the caller asked to mint.
    */

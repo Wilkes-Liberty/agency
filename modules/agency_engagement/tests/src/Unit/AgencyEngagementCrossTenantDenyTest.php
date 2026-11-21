@@ -13,8 +13,7 @@ use PHPUnit\Framework\Attributes\Group;
  * @group agency
  */
 #[Group('agency')]
-final class AgencyEngagementCrossTenantDenyTest
-  extends EngagementDenyTestCase {
+final class AgencyEngagementCrossTenantDenyTest extends EngagementDenyTestCase {
 
   /**
    * A token whose tenant does not own the object returns not_found.

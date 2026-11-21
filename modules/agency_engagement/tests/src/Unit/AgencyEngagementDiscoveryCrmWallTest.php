@@ -13,11 +13,10 @@ use PHPUnit\Framework\Attributes\Group;
  * @group agency
  */
 #[Group('agency')]
-final class AgencyEngagementDiscoveryCrmWallTest
-  extends EngagementDenyTestCase {
+final class AgencyEngagementDiscoveryCrmWallTest extends EngagementDenyTestCase {
 
   /**
-   * offerAssignment succeeds and does not write Discovery or CRM.
+   * Offer assignment succeeds and does not write Discovery or CRM.
    */
   public function testOfferAssignmentDoesNotWriteDiscoveryOrCrm(): void {
     $decision = $this->policy()->offerAssignment($this->actorA(), 'tenant-a');
@@ -28,7 +27,7 @@ final class AgencyEngagementDiscoveryCrmWallTest
   }
 
   /**
-   * submitTime succeeds and does not write Discovery or CRM.
+   * Submit time succeeds and does not write Discovery or CRM.
    */
   public function testSubmitTimeDoesNotWriteDiscoveryOrCrm(): void {
     $decision = $this->policy()->submitTime(
@@ -43,7 +42,7 @@ final class AgencyEngagementDiscoveryCrmWallTest
   }
 
   /**
-   * issueStatement succeeds and does not write Discovery or CRM.
+   * Issue statement succeeds and does not write Discovery or CRM.
    */
   public function testIssueStatementDoesNotWriteDiscoveryOrCrm(): void {
     $decision = $this->policy()->issueStatement($this->actorA(), 'tenant-a');

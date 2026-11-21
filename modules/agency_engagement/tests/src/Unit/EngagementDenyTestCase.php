@@ -58,9 +58,14 @@ abstract class EngagementDenyTestCase extends TestCase {
       JSON_THROW_ON_ERROR,
     );
     $this->assertIsArray($data);
+    $this->assertArrayHasKey('outcome', $data);
+    $this->assertArrayHasKey('reason', $data);
     $this->assertSame('refused', $data['outcome']);
     $this->assertSame('not_found', $data['reason']);
-    return $data;
+    return [
+      'outcome' => (string) $data['outcome'],
+      'reason' => (string) $data['reason'],
+    ];
   }
 
   /**
@@ -93,6 +98,8 @@ abstract class EngagementDenyTestCase extends TestCase {
   /**
    * In-scope success keeps named other-domain roles absent.
    *
+   * @param \Drupal\agency_engagement\EngagementDecision $decision
+   *   Provisioned decision under test.
    * @param list<string> $absent
    *   Roles or records that must stay absent.
    */

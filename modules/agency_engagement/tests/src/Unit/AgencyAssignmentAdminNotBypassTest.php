@@ -21,7 +21,10 @@ final class AgencyAssignmentAdminNotBypassTest extends EngagementDenyTestCase {
 
   /**
    * Administrator flag without an accepted assignment is refused.
+   *
+   * GitHub CI requires this case by name.
    */
+  // phpcs:ignore Drupal.NamingConventions.ValidFunctionName.ScopeNotCamelCaps
   public function testAdministratorFlagIsNotABypass(): void {
     $decision = $this->policy()->acceptTimeSubmission(
       $this->actorA(),

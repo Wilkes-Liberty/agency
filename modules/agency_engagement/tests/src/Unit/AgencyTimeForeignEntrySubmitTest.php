@@ -9,6 +9,7 @@ use PHPUnit\Framework\Attributes\Group;
 
 /**
  * A9: foreign-entry submit keeps the host time door.
+ *
  * Person-record identity deny is Discovery not_found.
  *
  * @group agency
@@ -17,7 +18,7 @@ use PHPUnit\Framework\Attributes\Group;
 final class AgencyTimeForeignEntrySubmitTest extends EngagementDenyTestCase {
 
   /**
-   * submitTime refuses foreign entries with the host time-door string.
+   * Submit time refuses foreign entries with the host time-door string.
    */
   public function testSubmitTimeRefusesForeignEntriesWithHostTimeDoor(): void {
     $decision = $this->policy()->submitTime(
