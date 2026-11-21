@@ -47,11 +47,34 @@ Landed in this package:
 - `tests/src/Kernel/WorkforceIntegration/StaffInvitationTest.php`
 - `tests/src/Unit/Workforce/WorkforceInputValidationTest.php`
 
-## Remaining `to-port` (74)
+## Batch 2 — S2 personnel signed-document (9 scanned classes)
+
+Generic qualification already lives in
+`tests/src/Unit/SignedDocument/SignedDocumentPolicyTest.php`. This batch
+adds terminate-permission and existing-envelope attach refusals. Host
+Field Guard, Drupal roles, GraphQL, SQL compare-and-set storage and
+operator forms stay on the host.
+
+| Host class | Agency status | Reason |
+| --- | --- | --- |
+| `PersonnelAccessAuditTest` | cut | Host Field Guard adapter (`wl_personnel.auditor`). Audit Chain stays shared. |
+| `SignedDocumentFieldGuardTest` | cut | Host `field_guard.settings`, GraphQL denylist and recipe copy. |
+| `SignedDocumentRolePermissionsTest` | cut | Host `user.role.*` YAML including operator roles. Generic terminate/attach grants are policy flags. |
+| `SignedDocumentMutantKillTest` | cut | Host SQL compare-and-set mutants. Agency has no mapping table. |
+| `SignedDocumentMappingConstraintsTest` | cut | Host entity unique keys on `signed_document_mapping`. |
+| `SignedDocumentStateMachineTest` | cut | Host SQL transitions. Generic lease, expiry and illegal edges are in `SignedDocumentPolicyTest`. |
+| `SignedDocumentAttachServiceTest` | partial | Envelope collision and permission denials added. Paragraphs, profile NDA dates and `field_user_type` stay on the host. |
+| `SignedDocumentOperatorFormTest` | cut | Host form CSRF and route ceremony. |
+| `SignedDocumentMappingTestBase` | cut | Shared host kernel helper, not an assertion class. |
+
+Landed in this package:
+
+- `tests/src/Unit/SignedDocument/SignedDocumentPolicyTest.php`
+
+## Remaining `to-port` (65)
 
 Later reviewable batches, not this pull request:
 
-- S2 personnel signed-document (9)
 - S2 Agency projection and host adapter (12)
 - S2 host client-access adapted invitation (9)
 - S3 CRM (20)
