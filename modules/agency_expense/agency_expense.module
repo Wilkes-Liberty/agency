@@ -1,0 +1,20 @@
+<?php
+
+/**
+ * @file
+ * Access-checked expense queries return no rows.
+ */
+
+use Drupal\Core\Database\Query\AlterableInterface;
+use Drupal\Core\Database\Query\SelectInterface;
+
+/**
+ * Implements hook_query_TAG_alter() for agency_expense_access.
+ */
+function agency_expense_query_agency_expense_access_alter(
+  AlterableInterface $query,
+): void {
+  if ($query instanceof SelectInterface) {
+    $query->where('1 = 0');
+  }
+}

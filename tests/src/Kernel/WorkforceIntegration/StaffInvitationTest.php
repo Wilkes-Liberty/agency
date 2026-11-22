@@ -20,6 +20,7 @@ use Drupal\key\Entity\Key;
 use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\user\Entity\Role;
 use Drupal\user\Entity\User;
+use Drupal\user\UserInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -137,6 +138,170 @@ class StaffInvitationTest extends KernelTestBase {
     $this->assertSame('es', $profile['language']);
     $this->assertSame(4, $this->countRows('agency_workforce_outbox'));
     $this->assertSame([], $this->container->get('state')->get('system.test_mail_collector', []));
+  }
+
+  /**
+   * Issuance refuses client, administrator and intern classifications.
+   *
+   * Generic StaffUserType and provisioner refusals. Host role and profile
+   * maps stay on the webcms host.
+   */
+  public function testIssueRefusesCrossDomainClassification(): void {
+    $this->container->get('current_user')->setAccount(User::load(2));
+    $before = $this->freshSnapshot();
+    foreach ([
+      'client',
+      'partner',
+      'administrator',
+      'intern',
+      'publisher',
+      'content_editor',
+      'consultant',
+    ] as $kind) {
+      $this->assertRefused(
+        fn () => $this->service()->issue('staff@example.test', $kind),
+        'invalid_invitation',
+      );
+    }
+    $this->assertSame($before, $this->freshSnapshot());
+  }
+
+  /**
+   * A malformed bearer inspects as invalid and never writes.
+   *
+   * Generic InviteTokenStore deny path. Retired claim APIs stay on the
+   * host adapter.
+   */
+  public function testMalformedBearerInspectsInvalidWithoutWrites(): void {
+    $before = $this->freshSnapshot();
+    foreach ([
+      '',
+      'short',
+      str_repeat('A', 42),
+      str_repeat('A', 43) . '+',
+      str_repeat('A', 44),
+    ] as $bearer) {
+      $view = $this->service()->inspect($bearer);
+      $this->assertSame(['valid' => FALSE], $view);
+    }
+    $this->assertSame($before, $this->freshSnapshot());
+  }
+
+  /**
+   * An unavailable issuer never stores an invitation.
+   *
+   * Generic InviteTokenStore unavailable-port case.
+   */
+  public function testUnavailableIssuerNeverWrites(): void {
+    $this->container->get('current_user')->setAccount(User::load(2));
+    $before = $this->freshSnapshot();
+    $this->container->set(
+      'agency_workforce.policy',
+      new UnavailableInvitationPorts($this->container->get('database')),
+    );
+    $this->assertRefused(
+      fn () => $this->service()->issue('staff@example.test', 'employee'),
+      'unavailable',
+    );
+    $this->assertSame($before, $this->freshSnapshot());
+  }
+
+  /**
+   * Acceptance grants only the assigned classification role.
+   *
+   * Generic StaffInviteProvisioner extra-role refusal. field_user_type
+   * ACL and preferred-name usernames stay on the host.
+   */
+  public function testProvisionedAccountDoesNotGainForeignRoles(): void {
+    foreach ([
+      'client',
+      'partner',
+      'content_editor',
+      'administrator',
+    ] as $id) {
+      if (!Role::load($id)) {
+        Role::create(['id' => $id, 'label' => $id])->save();
+      }
+    }
+    $token = $this->legacy([
+      'email' => 'role-bound@example.test',
+      'type' => 'employee',
+    ]);
+    $result = $this->service()->accept($token);
+    $this->assertSame('completed', $result['status']);
+    $profile = $this->container->get('database')
+      ->select('agency_workforce_test_profile', 'p')
+      ->fields('p')
+      ->execute()
+      ->fetchAssoc();
+    $account = User::load($profile['uid']);
+    $this->assertSame(
+      ['authenticated', 'synthetic_employee'],
+      $account->getRoles(),
+    );
+    foreach ([
+      'client',
+      'partner',
+      'content_editor',
+      'administrator',
+    ] as $id) {
+      $this->assertFalse($account->hasRole($id));
+    }
+  }
+
+  /**
+   * The test provisioner keeps usernames within Drupal's length bound.
+   *
+   * Host StaffAccountProvisioner derives names from preferred name; that
+   * mapping stays on the host. The synthetic provisioner still respects
+   * the Drupal username ceiling.
+   */
+  public function testProvisionedUsernameStaysWithinDrupalLimit(): void {
+    $token = $this->legacy([
+      'email' => 'named@example.test',
+      'type' => 'contractor',
+    ]);
+    $result = $this->service()->accept($token, str_repeat('N', 255));
+    $this->assertSame('completed', $result['status']);
+    $profile = $this->container->get('database')
+      ->select('agency_workforce_test_profile', 'p')
+      ->fields('p')
+      ->execute()
+      ->fetchAssoc();
+    $account = User::load($profile['uid']);
+    $this->assertNotSame('', $account->getAccountName());
+    $this->assertLessThanOrEqual(
+      UserInterface::USERNAME_MAX_LENGTH,
+      strlen($account->getAccountName()),
+    );
+  }
+
+  /**
+   * An existing mixed-case mailbox collides and leaves the invitation.
+   *
+   * Generic StaffInviteProvisioner accountExists case.
+   */
+  public function testExistingMixedCaseAccountIsCollision(): void {
+    User::create([
+      'name' => 'existing-cased',
+      'mail' => 'Cased@Example.COM',
+      'status' => 1,
+    ])->save();
+    $token = $this->legacy([
+      'email' => 'cased@example.com',
+      'type' => 'employee',
+    ]);
+    $before = $this->freshSnapshot();
+    $this->assertRefused(
+      fn () => $this->service()->accept($token),
+      'collision',
+    );
+    $this->container->get('current_user')->setAccount(User::load(2));
+    $this->assertRefused(
+      fn () => $this->service()->issue('cased@example.com', 'employee'),
+      'collision',
+    );
+    $this->assertSame($before, $this->freshSnapshot());
   }
 
   /**
