@@ -306,6 +306,20 @@ jobs:
               "testPackageSourceOmitsVendorIdentifiers",
               "testKeys",
               "testInvalidEncodingRefuses",
+              "testDailyReviewKeepsCivilTimeAcrossSpringChange",
+              "testRepeatedHourHasDistinctStableKeys",
+              "testMissingHourDoesNotInventAnOccurrence",
+              "testAdjacentPollsDoNotDuplicateBoundary",
+              "testWeekdayHourlyIntakeExcludesWeekend",
+              "testUnboundedCatchupIsRefused",
+              "testMalformedConfigurationIsRefused",
+              "testEquivalentPropertyOrdersProduceSameReceipt",
+              "testInventedEvidenceIsRefused",
+              "testUnknownActionFieldIsRefused",
+              "testMarkupCannotEnterDraft",
+              "testOversizedDraftIsRefused",
+              "testMissingWorkDeclarationIsNotSuccess",
+              "testSignedSignal",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
