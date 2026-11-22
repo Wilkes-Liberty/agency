@@ -5,8 +5,8 @@ not a webcms pin bump. The maintainer chooses the tag name; 1.0.0-alpha8
 is the next identifier after 1.0.0-alpha7. Do not tag, merge, or deploy
 from this document.
 
-Inventory date: 2026-11-21. Head of `1.x` at that time:
-`9a7ea6b` (merged #122). webcms remains on
+Inventory date: 2026-11-22. Head of `1.x` at that time:
+`06da891` (merged #123). webcms remains on
 `drupal/agency: 1.0.0-alpha7`.
 
 Tracking: DEV-807. Slice stories DEV-988 / WL-918 (S3), DEV-989 / WL-919
@@ -36,6 +36,7 @@ Slice 5 (DEV-990):
 - #112: fail-closed unimplemented Slice 5 transitions
 - #113: Slice 5 transfer inventory; pin unchanged
 - #122: credential, availability and roster stay unregistered
+- #123: those types stay unregistered at runtime with workforce enabled
 
 Slice 4 (DEV-989):
 
