@@ -418,13 +418,19 @@ final class RelationshipCommands {
     $grant = $this->store->find('agency_entitlement', ['relationship_uuid' => $relationship->uuid()]);
     if ($grant && in_array($relationship->scalar('state'), ['withdrawn', 'closed'], TRUE)) {
       if ($grant->scalar('status') === 'summary_only') {
-        // The summary window is measured from this receipt, not from an
-        // earlier clock read inside the same command.
-        $until = $this->policy->deadline('summary_window', $now);
-        if ((int) $grant->scalar('readable_until') !== $until) {
-          $grant->set('readable_until', $until)->save();
+        if (in_array($operation, ['close', 'withdrawRelationship'], TRUE)) {
+          // The summary window is measured from this receipt, not from an
+          // earlier clock read inside the same command.
+          $until = $this->policy->deadline('summary_window', $now);
+          if ((int) $grant->scalar('readable_until') !== $until) {
+            $grant->set('readable_until', $until)->save();
+          }
+          $receipt['readable_until'] = $until;
         }
-        $receipt['readable_until'] = $until;
+        else {
+          // Later commands must not remeasure or extend a stored window.
+          $receipt['readable_until'] = (int) $grant->scalar('readable_until');
+        }
       }
       else {
         $receipt['readable_until'] = NULL;
