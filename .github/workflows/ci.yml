@@ -329,6 +329,39 @@ jobs:
             if (array_diff($required, $executed)) { exit(1); }
             echo "s3-deny-junit.xml: " . count($executed) . " cases executed\n";
           '
+      - name: Run Slice 5 unimplemented-transition proofs
+        working-directory: drupal
+        env:
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/s5-transition-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/SliceFiveTransitionTest.php"
+          # PHP expressions are intentionally passed literally to PHP.
+          # shellcheck disable=SC2016
+          php -r '
+            $xml = simplexml_load_file("s5-transition-junit.xml");
+            if ($xml === false) { exit(1); }
+            $executed = [];
+            foreach ($xml->xpath("//testcase") as $case) {
+              $name = (string) $case["name"];
+              if (isset($case->failure) || isset($case->error)) { exit(1); }
+              if (isset($case->skipped)) { exit(1); }
+              $executed[] = $name;
+            }
+            echo "Executed Slice 5 transition tests: " . count($executed) . "\n";
+            $required = [
+              "testSliceFiveTypesRemainProposed",
+              "testCampaignPauseAndCompleteHaveNoAction",
+              "testExpenseLaterStatesHaveNoAction",
+              "testAgreementHasEmptyTransitions",
+              "testCredentialAndAvailabilityStayProposedActions",
+              "testCredentialAvailabilityRosterModulesAreAbsent",
+              "testPackageServicesOmitUnregisteredSliceFiveWrites",
+              "testRosterHasNoAction",
+            ];
+            if (array_diff($required, $executed)) { exit(1); }
+          '
       - name: Run contact, statement and signed-document preflight tests
         working-directory: drupal
         env:
@@ -338,16 +371,44 @@ jobs:
             --log-junit "$PWD/contact-preflight-junit.xml" \
             "$PWD/web/modules/contrib/agency/tests/src/Unit/ContactPreflightTest.php"
           vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/contact-field-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/ContactFieldContractTest.php"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
             --log-junit "$PWD/statement-preflight-junit.xml" \
             "$PWD/web/modules/contrib/agency/modules/agency_engagement/tests/src/Unit/StatementPreflightTest.php"
           vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
             --log-junit "$PWD/signed-document-junit.xml" \
             "$PWD/web/modules/contrib/agency/tests/src/Unit/SignedDocument/SignedDocumentPolicyTest.php"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/workforce-unit-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/Workforce"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/s3-instruction-release-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/S3/InstructionReleasePolicyTest.php"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/s3-pipeline-stage-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/S3/PipelineStagePolicyTest.php"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/s3-intake-draft-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/S3/IntakeDraftPolicyTest.php"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/s3-inquiry-review-junit.xml" \
+            "$PWD/web/modules/contrib/agency/tests/src/Unit/S3/InquiryReviewPolicyTest.php"
           # PHP expressions are intentionally passed literally to PHP.
           # shellcheck disable=SC2016
           php -r '
             $required = [
-              "contact-preflight-junit.xml" => ["testRequiresReviewForBothIdentitiesBeforeProjection"],
+              "contact-preflight-junit.xml" => [
+                "testRequiresReviewForBothIdentitiesBeforeProjection",
+              ],
+              "contact-field-junit.xml" => [
+                "testReviewedLayoutKeepsTypedContactFields",
+                "testStringStandInsForContactFieldsAreUnreviewed",
+              ],
+              "workforce-unit-junit.xml" => [
+                "testStaffClassificationRefusesHostRoleIds",
+                "testInviteStaffRejectsCrossDomainClassification",
+              ],
               "signed-document-junit.xml" => [
                 "testVerificationRefusesChangedEvidenceAndStrictExpiry",
                 "testVerifiedRetryCannotSubstituteAnotherCleanDocument",
@@ -356,6 +417,8 @@ jobs:
                 "testHistoricalQualificationAndMetadataBoundary",
                 "testHistoryRequiresContiguousOrderedDeltas",
                 "testHistoryRefusesConflictingProtectionForTheSameFile",
+                "testTerminateRequiresExplicitPermissionAndOpenState",
+                "testAttachRefusesExistingEnvelope",
               ],
               "statement-preflight-junit.xml" => [
                 "testKeepsExactSnapshotBytesAndDistinctAnchors",
@@ -363,6 +426,39 @@ jobs:
                 "testDocumentReplayRefusesForeignEmptySlot",
                 "testChallengeQualificationRefusesForeignStatementBeforeReceiptRead",
                 "testChallengeReplayRefusesForeignNamespaceBeforeKeyReads",
+              ],
+              "s3-instruction-release-junit.xml" => [
+                "testDisabledOrUnsafeSettingsRefuseWithoutRequests",
+                "testPermissionIsRequired",
+                "testListOffersReleaseOnlyWhenItCanProceed",
+                "testFormRequiresCsrfToken",
+                "testHeldInstructionIsAccepted",
+                "testDefinitiveRefusalIsTerminal",
+                "testNotFoundOrDeniedRetriesToAcceptance",
+                "testBadRequestIsRefusedAsFault",
+                "testUncertainOutcomesRetryWithTheSameKey",
+                "testConcurrentReleaseIsRefusedWhileInFlight",
+                "testAuditFailureRollsBackTheTransition",
+                "testCredentialsNeverLeak",
+              ],
+              "s3-pipeline-stage-junit.xml" => [
+                "testLostAndParkedCannotSkipStages",
+                "testDirectStageBypassDenied",
+                "testTransitionAndStaleWrite",
+                "testConversionAndWrongOwnerDenial",
+              ],
+              "s3-intake-draft-junit.xml" => [
+                "testUndeclaredFormsWriteNothing",
+                "testClaimOnlyNeverDraftsAnOpportunity",
+                "testIntakeOwnerFailsClosed",
+                "testDraftAuditRollback",
+                "testConcurrentFirstArrival",
+                "testBusinessDraftsAndReplay",
+              ],
+              "s3-inquiry-review-junit.xml" => [
+                "testReviewDenials",
+                "testUndeclaredInquiryFormIsNotReviewable",
+                "testReviewedSourceIntake",
               ],
             ];
             foreach ($required as $file => $names) {
@@ -376,6 +472,108 @@ jobs:
               if (array_diff($names, $executed)) { exit(1); }
               echo "$file: " . count($executed) . " cases executed\n";
             }
+          '
+      - name: Run engagement deny-path tests
+        working-directory: drupal
+        env:
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          # PHPUnit 9 (Drupal 10.6) accepts one test file per invocation.
+          # PHPUnit 10+ accepts a list; looping keeps both matrix legs honest.
+          dir="$PWD/web/modules/contrib/agency/modules/agency_engagement/tests/src/Unit"
+          tests=(
+            AgencyEngagementCrossTenantDenyTest.php
+            AgencyEngagementDiscoveryCrmWallTest.php
+            AgencyEngagementVendorNeutralPackageTest.php
+            AgencyTimeForeignEntrySubmitTest.php
+            AgencyStatementPaymentBoundaryTest.php
+            AgencyAssignmentAdminNotBypassTest.php
+            AgencyEngagementConsumeOnceTimeoutTest.php
+            AgencyClientMembershipPolicyTest.php
+            AgencyTimeInputTest.php
+            AgencyCommercialAccountProjectionTest.php
+            AgencyClientDocumentListingTest.php
+            AgencyInstructionSourcePolicyTest.php
+            AgencyMembershipAuditTest.php
+            AgencyTimeCommandPolicyTest.php
+            AgencyEngagementLineageMapTest.php
+            AgencyPublicStatementProjectionTest.php
+          )
+          i=0
+          for name in "${tests[@]}"; do
+            vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+              --log-junit "$PWD/engagement-deny-part-${i}.xml" \
+              "$dir/$name"
+            i=$((i+1))
+          done
+          # PHP expressions are intentionally passed literally to PHP.
+          # shellcheck disable=SC2016
+          php -r '
+            $executed = [];
+            foreach (glob("engagement-deny-part-*.xml") ?: [] as $file) {
+              $xml = simplexml_load_file($file);
+              if ($xml === false) { exit(1); }
+              foreach ($xml->xpath("//testcase") as $case) {
+                if (isset($case->failure) || isset($case->error) || isset($case->skipped)) { exit(1); }
+                $executed[] = (string) $case["name"];
+              }
+            }
+            $required = [
+              "testForeignTenantObjectIsNotFound",
+              "testHatchMissingTenantIsNotRenamedToNotFound",
+              "testOfferAssignmentDoesNotWriteDiscoveryOrCrm",
+              "testDiscoveryActionDoesNotCreateEngagement",
+              "testPackageOmitsTrackerAndGatewayIdentifiers",
+              "testSubmitTimeRefusesForeignEntriesWithHostTimeDoor",
+              "testPersonRecordReadUsesDiscoveryNotFound",
+              "testIssueStatementDoesNotCallPaymentEngine",
+              "testAdministratorFlagIsNotABypass",
+              "testConsumedKeyReplayIsNotFound",
+              "testExpiredHoldIsNotFoundWithoutClaim",
+              "testMembershipGrantDoesNotMintStaffRoles",
+              "testExactTimeProvenance",
+              "testInvalidInputs",
+              "testTrackerContextIsUnsupported",
+              "testEmptyProjectionIsExactlyTheAllowlist",
+              "testForbiddenKeysAreAbsent",
+              "testMissingRecordIsEmpty",
+              "testUnknownPaymentMethodIsNull",
+              "testForbiddenRecordKeysDoNotPassThrough",
+              "testMissingVisitorGroupIsRefused",
+              "testNearMissGroupIsRefused",
+              "testNonPortalClientIgnored",
+              "testPrivilegedAccountIsRefused",
+              "testVisitorRolesGrantedWithoutStaff",
+              "testPostAuthorizeNeverRevokes",
+              "testStaffRoleInGroupMapIsIgnored",
+              "testAuthorizedEmptyIsOk",
+              "testNotLinkedIsEmpty",
+              "testNotClientIsEmpty",
+              "testUnauthorizedIsRefused",
+              "testFloodIsUnavailable",
+              "testInvoiceKindOnlyOnInvoiceListing",
+              "testUnpublishedExpiredAndUnreachableAreOmitted",
+              "testExpiryUsesCallerToday",
+              "testPayKeysAreAbsent",
+              "testDedicatedConsumerQualifies",
+              "testMixedGrantsAndForeignConsumerAreDenied",
+              "testMissingAuditIsUnavailable",
+              "testScopePermissionIsExact",
+              "testBindRefusedIsMinimized",
+              "testRolesReconciledIsMinimized",
+              "testAnonymousWorkspaceIsNotFound",
+              "testPrivateAccessIsOwnerAssigned",
+              "testVisitorAndMachineRolesAreDenied",
+              "testReviewerOnlyCannotReadDraft",
+              "testClientReferenceBoundary",
+              "testAssignmentConflictUsesCurrentRevision",
+              "testProposePreservesIdentity",
+              "testPersistIsUnmapped",
+              "testExtraKeysAreUnmapped",
+              "testPublicLineIsTheAllowlist",
+            ];
+            if (array_diff($required, $executed)) { exit(1); }
+            echo "engagement-deny-junit.xml: " . count($executed) . " cases executed\n";
           '
       - name: Start test server
         working-directory: drupal
@@ -659,9 +857,21 @@ jobs:
               "testDifferentTokensSameContactConcurrency",
               "testAuthorityChangeWaitsForAcceptanceCommit",
               "testExpiryIsFreshAfterWaitingForWriterBoundary",
+              "testIssueRefusesCrossDomainClassification",
+              "testMalformedBearerInspectsInvalidWithoutWrites",
+              "testUnavailableIssuerNeverWrites",
+              "testProvisionedAccountDoesNotGainForeignRoles",
+              "testProvisionedUsernameStaysWithinDrupalLimit",
+              "testExistingMixedCaseAccountIsCollision",
             ];
             echo "Executed workforce boundaries: " . count(array_intersect($workforceRequired, $executed)) . "\n";
             if (array_diff($workforceRequired, $executed)) { exit(1); }
+            $s5RuntimeRequired = [
+              "testRegisteredSliceFiveAndWorkforceStayEnabled",
+              "testCredentialAvailabilityRosterStayUnregisteredAtRuntime",
+            ];
+            echo "Executed Slice 5 unregistered runtime proofs: " . count(array_intersect($s5RuntimeRequired, $executed)) . "\n";
+            if (array_diff($s5RuntimeRequired, $executed)) { exit(1); }
             echo "Executed authority boundaries: " . count(array_intersect($authorityRequired, $executed)) . "\n";
             if (array_diff($authorityRequired, $executed)) { exit(1); }
             echo "Executed domain tests: " . count($executed) . "\n";
@@ -748,6 +958,203 @@ jobs:
               "testLoadedClassesDoNotExtendCommandTypes",
             ];
             echo "Executed recruiting boundaries: " . count(array_intersect($required, $executed)) . "\n";
+            if (array_diff($required, $executed)) { exit(1); }
+          '
+      - name: Run agency_campaign kernel tests
+        working-directory: drupal
+        env:
+          SIMPLETEST_DB: ${{ matrix.driver }}://agency_test:test_only@127.0.0.1/agency_test
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          campaign="$PWD/web/modules/contrib/agency/modules/agency_campaign/tests/src"
+          test -d "$campaign/Kernel"
+          # Drupal 10.6's PHPUnit 9 runner is the unit suite. Campaign
+          # kernel proofs use PHPUnit 10 attributes and run on 11.x,
+          # including PostgreSQL 16.
+          if [ "${{ matrix.minor }}" = "10.6" ]; then
+            echo "Skipping agency_campaign kernel tests on Drupal 10.6"
+            exit 0
+          fi
+          export BROWSERTEST_OUTPUT_DIRECTORY="$PWD/web/sites/simpletest/browser_output"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/agency-campaign-junit.xml" \
+            "$campaign/Kernel"
+          # PHP expressions are intentionally passed literally to PHP.
+          # shellcheck disable=SC2016
+          php -r '
+            $xml = simplexml_load_file("agency-campaign-junit.xml");
+            if ($xml === false) { exit(1); }
+            $executed = [];
+            $skipped = [];
+            foreach ($xml->xpath("//testcase") as $case) {
+              $name = (string) $case["name"];
+              if (isset($case->failure) || isset($case->error)) { exit(1); }
+              if (isset($case->skipped)) {
+                $skipped[] = $name;
+                continue;
+              }
+              $executed[] = $name;
+            }
+            echo "Executed agency_campaign tests: " . count($executed) . "\n";
+            echo "Skipped agency_campaign tests: " . count($skipped) . "\n";
+            if ($skipped) { exit(1); }
+            $required = [
+              "testInstallRegistersEntityTypes",
+              "testEnablementCreatesNoBusinessRecords",
+              "testEmptyModuleCanBeUninstalled",
+              "testSchemaMatchesOntologyPropertiesAndMarkings",
+              "testExplicitIdentifiersArePreserved",
+              "testOccupiedIdIsRefused",
+              "testOccupiedUuidIsRefused",
+              "testOccupiedRevisionIdIsRefused",
+              "testDefaultAccessDeniesEverything",
+              "testAccessCheckedQueryReturnsNothing",
+              "testAnonymousIsForbidden",
+              "testAuthenticatedWithoutPermissionIsForbidden",
+              "testUserOneWithoutExplicitGrantIsForbidden",
+              "testTenantArgumentIsForbidden",
+              "testExpiredNotAfterIsTimeout",
+              "testInvalidIdempotencyKeyIsRefused",
+              "testReplayWithDifferentPayloadIsRefused",
+              "testReplayReturnsOriginalReceipt",
+              "testLaunchCreatesDraftWithRequiredEvidence",
+              "testLaunchActivatesOwnedDraft",
+              "testLaunchDoesNotCreateDiscoveryRecords",
+              "testDisableLeavesStaffIntact",
+              "testEvidenceFailureRollsBackTheCampaign",
+              "testUnknownCampaignIsNotFound",
+              "testLaunchOnActiveCampaignIsNotFound",
+              "testPauseAndCompleteAreNotRegisteredServices",
+              "testForeignCampaignIsNotFound",
+              "testSourceDoesNotReferenceWorkforceOrDiscoveryCommands",
+              "testLoadedClassesDoNotExtendCommandTypes",
+            ];
+            echo "Executed campaign boundaries: " . count(array_intersect($required, $executed)) . "\n";
+            if (array_diff($required, $executed)) { exit(1); }
+          '
+      - name: Run agency_expense kernel tests
+        working-directory: drupal
+        env:
+          SIMPLETEST_DB: ${{ matrix.driver }}://agency_test:test_only@127.0.0.1/agency_test
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          expense="$PWD/web/modules/contrib/agency/modules/agency_expense/tests/src"
+          test -d "$expense/Kernel"
+          # Drupal 10.6's PHPUnit 9 runner is the unit suite. Expense
+          # kernel proofs use PHPUnit 10 attributes and run on 11.x,
+          # including PostgreSQL 16.
+          if [ "${{ matrix.minor }}" = "10.6" ]; then
+            echo "Skipping agency_expense kernel tests on Drupal 10.6"
+            exit 0
+          fi
+          export BROWSERTEST_OUTPUT_DIRECTORY="$PWD/web/sites/simpletest/browser_output"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/agency-expense-junit.xml" \
+            "$expense/Kernel"
+          # PHP expressions are intentionally passed literally to PHP.
+          # shellcheck disable=SC2016
+          php -r '
+            $xml = simplexml_load_file("agency-expense-junit.xml");
+            if ($xml === false) { exit(1); }
+            $executed = [];
+            $skipped = [];
+            foreach ($xml->xpath("//testcase") as $case) {
+              $name = (string) $case["name"];
+              if (isset($case->failure) || isset($case->error)) { exit(1); }
+              if (isset($case->skipped)) {
+                $skipped[] = $name;
+                continue;
+              }
+              $executed[] = $name;
+            }
+            echo "Executed agency_expense tests: " . count($executed) . "\n";
+            echo "Skipped agency_expense tests: " . count($skipped) . "\n";
+            if ($skipped) { exit(1); }
+            $required = [
+              "testInstallRegistersEntityTypes",
+              "testEnablementCreatesNoBusinessRecords",
+              "testEmptyModuleCanBeUninstalled",
+              "testSchemaMatchesOntologyPropertiesAndMarkings",
+              "testExplicitIdentifiersArePreserved",
+              "testOccupiedIdIsRefused",
+              "testOccupiedUuidIsRefused",
+              "testOccupiedRevisionIdIsRefused",
+              "testDefaultAccessDeniesEverything",
+              "testAccessCheckedQueryReturnsNothing",
+              "testAnonymousIsForbidden",
+              "testAuthenticatedWithoutPermissionIsForbidden",
+              "testUserOneWithoutExplicitGrantIsForbidden",
+              "testTenantArgumentIsForbidden",
+              "testExpiredNotAfterIsTimeout",
+              "testInvalidIdempotencyKeyIsRefused",
+              "testInvalidAmountIsRefused",
+              "testReplayWithDifferentPayloadIsRefused",
+              "testReplayReturnsOriginalReceipt",
+              "testRecordCreatesDraftedWithRequiredEvidence",
+              "testLaterExpenseStatesHaveNoRegisteredActions",
+              "testRecordDoesNotCreateDiscoveryRecords",
+              "testDisableLeavesStaffIntact",
+              "testEvidenceFailureRollsBackTheExpense",
+              "testSourceDoesNotReferenceWorkforceOrDiscoveryCommands",
+              "testLoadedClassesDoNotExtendCommandTypes",
+            ];
+            echo "Executed expense boundaries: " . count(array_intersect($required, $executed)) . "\n";
+            if (array_diff($required, $executed)) { exit(1); }
+          '
+      - name: Run agency_agreement kernel tests
+        working-directory: drupal
+        env:
+          SIMPLETEST_DB: ${{ matrix.driver }}://agency_test:test_only@127.0.0.1/agency_test
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          agreement="$PWD/web/modules/contrib/agency/modules/agency_agreement/tests/src"
+          test -d "$agreement/Kernel"
+          # Drupal 10.6's PHPUnit 9 runner is the unit suite. Agreement
+          # kernel proofs use PHPUnit 10 attributes and run on 11.x,
+          # including PostgreSQL 16.
+          if [ "${{ matrix.minor }}" = "10.6" ]; then
+            echo "Skipping agency_agreement kernel tests on Drupal 10.6"
+            exit 0
+          fi
+          export BROWSERTEST_OUTPUT_DIRECTORY="$PWD/web/sites/simpletest/browser_output"
+          vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+            --log-junit "$PWD/agency-agreement-junit.xml" \
+            "$agreement/Kernel"
+          # PHP expressions are intentionally passed literally to PHP.
+          # shellcheck disable=SC2016
+          php -r '
+            $xml = simplexml_load_file("agency-agreement-junit.xml");
+            if ($xml === false) { exit(1); }
+            $executed = [];
+            $skipped = [];
+            foreach ($xml->xpath("//testcase") as $case) {
+              $name = (string) $case["name"];
+              if (isset($case->failure) || isset($case->error)) { exit(1); }
+              if (isset($case->skipped)) {
+                $skipped[] = $name;
+                continue;
+              }
+              $executed[] = $name;
+            }
+            echo "Executed agency_agreement tests: " . count($executed) . "\n";
+            echo "Skipped agency_agreement tests: " . count($skipped) . "\n";
+            if ($skipped) { exit(1); }
+            $required = [
+              "testInstallRegistersEntityTypes",
+              "testEnablementCreatesNoBusinessRecords",
+              "testEmptyModuleCanBeUninstalled",
+              "testSchemaMatchesOntologyPropertiesAndMarkings",
+              "testExplicitIdentifiersArePreserved",
+              "testOccupiedIdIsRefused",
+              "testOccupiedUuidIsRefused",
+              "testOccupiedRevisionIdIsRefused",
+              "testDefaultAccessDeniesEverything",
+              "testNoWriteActionIsRegistered",
+              "testAccessCheckedQueryReturnsNothing",
+              "testSourceDoesNotReferenceWorkforceOrDiscoveryCommands",
+              "testLoadedClassesDoNotExtendCommandTypes",
+            ];
+            echo "Executed agreement boundaries: " . count(array_intersect($required, $executed)) . "\n";
             if (array_diff($required, $executed)) { exit(1); }
           '
       - name: Run agency_commercial kernel tests
@@ -951,8 +1358,11 @@ jobs:
             drupal/agency-intake-junit.xml
             drupal/tenant-strings-junit.xml
             drupal/s3-deny-junit.xml
+            drupal/s5-transition-junit.xml
             drupal/contact-preflight-junit.xml
+            drupal/contact-field-junit.xml
             drupal/statement-preflight-junit.xml
             drupal/signed-document-junit.xml
+            drupal/workforce-unit-junit.xml
             drupal/composer.lock
             drupal/server.log

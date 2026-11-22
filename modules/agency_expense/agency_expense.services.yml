@@ -1,0 +1,16 @@
+services:
+  agency_expense.committer:
+    class: Drupal\agency_expense\TransactionCommitter
+  agency_expense.outbox:
+    class: Drupal\agency_expense\ExpenseOutbox
+    arguments: ['@database', '@audit_chain.logger', '@uuid', '@datetime.time']
+  agency_expense.record:
+    class: Drupal\agency_expense\RecordExpense
+    arguments:
+      - '@database'
+      - '@entity_type.manager'
+      - '@current_user'
+      - '@field_guard.explicit_permission_checker'
+      - '@agency_expense.outbox'
+      - '@datetime.time'
+      - '@agency_expense.committer'

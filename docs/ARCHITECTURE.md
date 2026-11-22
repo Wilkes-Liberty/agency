@@ -14,6 +14,9 @@ its [service contract](DISCOVERY_CONTRACT.md) through explicit adapters.
 | `modules/agency_staff` | Initial workforce capability boundary |
 | `modules/agency_workforce` | Transactional staff invitations with explicit host ports |
 | `modules/agency_recruiting` | Career posting and application storage; deny-by-default; no copiers or authority |
+| `modules/agency_campaign` | Marketing campaign storage and launchCampaign; deny-by-default; no copiers or authority |
+| `modules/agency_expense` | Expense storage and recordExpense; deny-by-default; no copiers or authority |
+| `modules/agency_agreement` | Agreement storage; deny-by-default; no write action, copiers or authority |
 | `modules/agency_host` | Generic Discovery host adapter |
 | `modules/agency_migrate` | Identity-preserving copy, lineage and authority |
 | `ontology/` | Draft object, link and action contract |
@@ -24,6 +27,11 @@ its [service contract](DISCOVERY_CONTRACT.md) through explicit adapters.
 
 The four product loops are journeys across domains. Final package boundaries should
 follow cohesive responsibilities and dependency direction, not the four loop names.
+
+Slice 5 credential, availability and roster placement is still proposed;
+see [Slice 5 remaining placement](S5_OPEN_QUESTIONS.md). Transfer tables
+and the unchanged alpha7 pin are in
+[Slice 5 transfer inventory](S5_TRANSFER.md).
 
 ## Domain ownership
 

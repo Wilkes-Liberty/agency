@@ -79,6 +79,14 @@ vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
   "$PWD/web/modules/contrib/agency/modules/agency_host/tests/src"
 vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
   "$PWD/web/modules/contrib/agency/modules/agency_recruiting/tests"
+vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+  "$PWD/web/modules/contrib/agency/modules/agency_campaign/tests"
+vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+  "$PWD/web/modules/contrib/agency/tests/src/Unit/Workforce"
+vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+  "$PWD/web/modules/contrib/agency/modules/agency_expense/tests"
+vendor/bin/phpunit -c "$PWD/web/core/phpunit.xml.dist" \
+  "$PWD/web/modules/contrib/agency/modules/agency_agreement/tests"
 ```
 
 The GitHub matrix installs the host identity/OAuth stack and Drush so
@@ -125,11 +133,19 @@ the resolved version and candidate symlink and requires executed, non-skipped
 functional tests. A separate job runs PHPStan against a Drupal 11.4 analysis host.
 Every database lane also executes the domain suite and explicitly checks that
 the independent-writer, interrupted-drain, delivery-marker, summary-savepoint,
-retention removal and Discovery access-denial cases ran without skips. The domain suite also requires
+retention removal and Discovery access-denial cases ran without skips. The
+same lanes run `tests/src/Unit/Workforce` and require the named staff
+classification and invitation deny cases recorded in
+[TEST_PORT.md](TEST_PORT.md). Contact preflight lanes also
+require typed email, telephone and address refusals on
+`ContactFields`. The domain suite also requires
 all named operation-journal cases, including real SQL faults and independent
 authority and retry workers. The same lanes run `modules/agency_host` unit and
 kernel tests. The 11.x lanes, including
-PostgreSQL 16, also run `modules/agency_recruiting` kernel tests. The PostgreSQL 16 leg must
+PostgreSQL 16, also run `modules/agency_recruiting`,
+`modules/agency_campaign`, `modules/agency_expense` and
+`modules/agency_agreement` kernel tests.
+The PostgreSQL 16 leg must
 execute the deferred clean-origin COMMIT-fault cases; it must not skip them.
 smtp and postmark_webhooks cases may skip when those modules are absent.
 The CLI-only workers accept kernel-test-prefixed connection options via

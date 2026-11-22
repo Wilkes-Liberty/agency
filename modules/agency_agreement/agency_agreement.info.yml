@@ -1,0 +1,7 @@
+name: Agency Agreement
+type: module
+description: 'Stores agreement records. Enabling it creates no agreements and grants no engagement or roster authority.'
+core_version_requirement: ^10.6 || ^11.3
+package: Agency
+dependencies:
+  - agency:agency

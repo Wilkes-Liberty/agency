@@ -25,6 +25,44 @@ amendments to an already approved submission; pin exact entry revision
 ids; bulk approval is all-approved or a conflict list, never partial.
 A time actor is never derived from a Discovery entitlement.
 
+## Deny, replay and timeout
+
+`EngagementActionPolicy` is storage-free. It does not register record
+types. Tenant comes from the principal. Cross-tenant and missing-object
+reads use the Discovery body `{outcome: refused, reason: not_found}`.
+A hatch principal with no tenant is `missing_tenant_claim` and is not
+renamed to `not_found`. `offerAssignment`, `submitTime` and
+`issueStatement` may be provisioned; they mint no Discovery relationship,
+roster membership, CRM contact or opportunity. `submitTime` with a
+foreign entry keeps the host time-door `{error: denied}` and does not
+invent a time-specific `not_found`. `issueStatement` and
+`acceptTimeSubmission` do not call the payment engine. An administrator
+flag is not a review assignment. A consumed or expired submit key is
+`not_found` and issues no second financial claim. Membership grants do
+not mint employee, contractor or extra visitor roles, or create a user,
+profile, engagement or Discovery relationship.
+
+Tracker URLs, project refs, gateway class names and tenant hostnames stay
+out of this package.
+
+## Time input, commercial projection and membership
+
+`TimeInput` normalizes duration and interval provenance without tracker
+identifiers. Unknown keys are refused rather than copied. Host adapters
+may still accept tracker context.
+
+`CommercialAccountProjection` emits only account number, billing legal
+name and payment-method label from a caller-supplied record. Tax,
+address, contact, terms, instruments, financial totals, opportunities
+and entity dumps stay unread. Host GraphQL and Profile transport stay on
+the adapter until a later pin.
+
+`ClientMembershipPolicy` maps configured group paths to visitor roles,
+refuses missing groups and privileged accounts with reasons that are not
+`not_found`, never revokes a visitor role the claim no longer carries,
+and ignores staff roles in the host map. The OIDC ceremony stays on the
+host adapter.
+
 ## Statement preservation preflight
 
 Use `StatementPreflight` with a reviewed `StatementSourceInterface` adapter
