@@ -6,7 +6,7 @@ is the next identifier after 1.0.0-alpha7. Do not tag, merge, or deploy
 from this document.
 
 Inventory date: 2026-11-22. Head of `1.x` at that time:
-`06da891` (merged #123). webcms remains on
+`1053378` (merged #100). webcms remains on
 `drupal/agency: 1.0.0-alpha7`.
 
 Tracking: DEV-807. Slice stories DEV-988 / WL-918 (S3), DEV-989 / WL-919
@@ -53,6 +53,9 @@ Slice 3 (DEV-988) already on `1.x`:
 - #121: remaining S3 CRM kernel deny proofs
 - #93: conservative contact-email keys
 - #97: opportunity, activity, intake-submission types
+- #98: civil-time operating schedule
+- #99: bounded operating-draft receipts
+- #100: intake proxy-signal verifier
 
 Test-port (generic host proofs):
 
@@ -68,11 +71,10 @@ its parent.
 
 ### Slice 3 (9b0a) — commercial and intake remainder
 
-Merge order: **#98 → #99 → #100 → #101 → #102 → #103 → #107 → #108 →
+Merge order: **#101 → #102 → #103 → #107 → #108 →
 #109 → #114 → #115 → #116 → #117 → #118 → #119**.
 
-#101–#119 are ready but sit on drafts #98–#100. Those drafts have to
-merge (or be marked ready and merged) before #101 can land on `1.x`.
+#101 is the remaining stack parent on `1.x` after #100.
 
 - #101 ready: deny-closed commercial record and match ports
 - #102 ready: deny-closed intake outbox and policy ports
@@ -87,24 +89,24 @@ merge (or be marked ready and merged) before #101 can land on `1.x`.
 - #118 ready: deny-closed private search lookup
 - #119 ready: deny-closed seat isolation and account issuance
 
-Slice 4 and Slice 5 have no remaining open product pull requests on
-`1.x`.
+Slice 5 open on `1.x`: #124 disable-isolation proofs; #127 production
+surface omit proofs. #125 (DEV-988) keeps a closed discovery summary
+window after owner recovery. This notes change is stacked on #125.
 
 ## Draft pull requests not ready for the tag yet
 
 Include them only after each is marked ready on its current head.
 
-- #98 S3: operating schedule. Blocks #101 and above
-- #99 S3: operating-draft receipts. Blocks #101 and above
-- #100 S3: intake proxy-signal. Blocks #101 and above
 - #120 this file: draft release-prep notes. Not a tag.
+- #125 S3: closed summary window after later owner recovery
+- #127 S5: production surfaces omit unregistered Slice 5 ids
 
 ## Merge order the remaining stack needs
 
 1. `1.x` already has the foundation, Slice 5, Slice 4, test-port, and
-   Slice 3 through #97.
-2. S3 remainder: #98, #99, #100, then #101, #102, #103, #107, #108,
-   #109, #114, #115, #116, #117, #118, #119 when the drafts are ready.
+   Slice 3 through #100.
+2. S3 remainder: #101, #102, #103, #107, #108, #109, #114, #115, #116,
+   #117, #118, #119.
 3. After those merges, compile changelog fragments on a dedicated prep
    commit (same pattern as #79). Then the maintainer tags. This file is
    not that compile.
@@ -119,9 +121,10 @@ and adds three Slice 5 modules that are already on `1.x`.
 - `agency_expense`: not in alpha7. Expense entity; `recordExpense`.
 - `agency_agreement`: not in alpha7. Agreement entity; no write action.
 - `agency_commercial`: alpha7 refusing scaffold. `1.x` adds
-  `agency_opportunity` and `agency_activity`.
+  `agency_opportunity` and `agency_activity`, plus operating schedule
+  and operating-draft receipts.
 - `agency_intake`: alpha7 refusing scaffold. `1.x` adds
-  `agency_intake_submission`.
+  `agency_intake_submission` and the intake proxy-signal verifier.
 - `agency_engagement`: alpha7 refusing scaffold. Merged Slice 4 work
   still adds no engagement entity types.
 
