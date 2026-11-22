@@ -852,6 +852,12 @@ jobs:
             ];
             echo "Executed workforce boundaries: " . count(array_intersect($workforceRequired, $executed)) . "\n";
             if (array_diff($workforceRequired, $executed)) { exit(1); }
+            $s5RuntimeRequired = [
+              "testRegisteredSliceFiveAndWorkforceStayEnabled",
+              "testCredentialAvailabilityRosterStayUnregisteredAtRuntime",
+            ];
+            echo "Executed Slice 5 unregistered runtime proofs: " . count(array_intersect($s5RuntimeRequired, $executed)) . "\n";
+            if (array_diff($s5RuntimeRequired, $executed)) { exit(1); }
             echo "Executed authority boundaries: " . count(array_intersect($authorityRequired, $executed)) . "\n";
             if (array_diff($authorityRequired, $executed)) { exit(1); }
             echo "Executed domain tests: " . count($executed) . "\n";
