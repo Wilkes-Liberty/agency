@@ -24,6 +24,7 @@ exists in this 1.x stack:
 | YAML has no later write actions | `SliceFiveTransitionTest` |
 | Credential, availability and roster modules are absent | `SliceFiveTransitionTest` |
 | Service YAML omits those writes | `SliceFiveTransitionTest` |
+| Routing, permissions, info, install and module PHP omit those ids | `SliceFiveTransitionTest` |
 | Roster has no object or action | `SliceFiveTransitionTest` |
 | Enabling campaign, expense, agreement and workforce does not enable those modules, types, tables or services | `SliceFiveUnregisteredRuntimeTest` |
 
