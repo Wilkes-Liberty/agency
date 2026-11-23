@@ -92,7 +92,12 @@ final class CommercialScaffoldingTest extends CommercialKernelTestBase {
         $service_ids[] = $id;
       }
     }
-    $this->assertSame(['agency_commercial.contact_policy'], $service_ids);
+    sort($service_ids);
+    $this->assertSame([
+      'agency_commercial.contact_match',
+      'agency_commercial.contact_policy',
+      'agency_commercial.records',
+    ], $service_ids);
   }
 
   /**

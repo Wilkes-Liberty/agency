@@ -1212,6 +1212,12 @@ jobs:
               "testSourceDoesNotReferenceWorkforceOrDiscoveryCommands",
               "testLoadedClassesDoNotExtendCommandTypes",
               "testContactPolicyPortRefuses",
+              "testMissingTenantClaimOnHatchAndMatch",
+              "testMissingAndForeignRecordsShareNotFound",
+              "testClaimOnlyNeverCreatesOpportunity",
+              "testOpportunityQueryRemainsDenied",
+              "testActivityQueryRemainsDenied",
+              "testStageBypassIsRefused",
             ];
             echo "Executed commercial boundaries: " . count(array_intersect($required, $executed)) . "\n";
             if (array_diff($required, $executed)) { exit(1); }
@@ -1265,6 +1271,7 @@ jobs:
               "testDefaultAccessDeniesEverything",
               "testSourceDoesNotReferenceWorkforceOrDiscoveryCommands",
               "testLoadedClassesDoNotExtendCommandTypes",
+              "testIntakeQueryRemainsDenied",
             ];
             echo "Executed intake boundaries: " . count(array_intersect($required, $executed)) . "\n";
             if (array_diff($required, $executed)) { exit(1); }
