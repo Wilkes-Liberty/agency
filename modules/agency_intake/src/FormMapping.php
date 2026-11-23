@@ -23,7 +23,7 @@ final class FormMapping {
   /**
    * Constructs a mapping from injected form ids.
    *
-   * @param array<string, string> $mappings
+   * @param array<array-key, mixed> $mappings
    *   Form ids mapped to inquiry or account. Default empty.
    *
    * @throws \InvalidArgumentException

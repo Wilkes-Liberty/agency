@@ -50,7 +50,7 @@ final class BusinessSubmissionMapper {
   /**
    * Constructs a mapper from injected form-id contracts.
    *
-   * @param array<string, string> $formMappings
+   * @param array<array-key, mixed> $formMappings
    *   Form ids mapped to inquiry or account. Default empty.
    *
    * @throws \InvalidArgumentException
