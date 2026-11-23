@@ -6,7 +6,7 @@ is the next identifier after 1.0.0-alpha7. Do not tag, merge, or deploy
 from this document.
 
 Inventory date: 2026-11-23. Head of `1.x` at that time:
-`5fb2e6e` (merged #124). webcms remains on
+`a08a6d1` (merged #127). webcms remains on
 `drupal/agency: 1.0.0-alpha7`.
 
 Tracking: DEV-807. Slice stories DEV-988 / WL-918 (S3), DEV-989 / WL-919
@@ -38,6 +38,7 @@ Slice 5 (DEV-990):
 - #122: credential, availability and roster stay unregistered
 - #123: those types stay unregistered at runtime with workforce enabled
 - #124: uninstalling campaign, expense or agreement leaves other domains intact
+- #127: production surfaces omit unregistered Slice 5 ids
 
 Slice 4 (DEV-989):
 
@@ -91,13 +92,13 @@ Merge order: **#101 → #102 → #103 → #107 → #108 →
 - #118 ready: deny-closed private search lookup
 - #119 ready: deny-closed seat isolation and account issuance
 
-Slice 5 open on `1.x`: #127 production surface omit proofs. #124 and
-#125 are on `1.x`. This notes change targets `1.x` directly.
+Slice 5 proofs #122, #123, #124 and #127 are on `1.x`. Credential,
+availability and roster stay unregistered. This notes change targets
+`1.x` directly.
 
 ## Remaining ready pull requests outside the Slice 3 stack
 
 - #120 this file: ready release-prep notes. Not a tag.
-- #127 S5: production surfaces omit unregistered Slice 5 ids
 
 ## Merge order the remaining stack needs
 
