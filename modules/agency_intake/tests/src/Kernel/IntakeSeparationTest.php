@@ -7,8 +7,11 @@ namespace Drupal\Tests\agency_intake\Kernel;
 use Drupal\agency_intake\Access\DenyAccess;
 use Drupal\agency_intake\Entity\IntakeSubmission;
 use Drupal\agency_intake\Storage\IdentityPreservingStorage;
+use Drupal\agency_intake\IntakeDeliveryWorker;
+use Drupal\agency_intake\UnavailableIntakeDeliveryWorker;
 use Drupal\agency_intake\UnavailableIntakeOutbox;
 use Drupal\agency_intake\UnavailableIntakePolicy;
+use Drupal\agency_intake\UnavailableIntakeTools;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 
@@ -89,8 +92,11 @@ final class IntakeSeparationTest extends IntakeKernelTestBase {
       IntakeSubmission::class,
       DenyAccess::class,
       IdentityPreservingStorage::class,
+      IntakeDeliveryWorker::class,
+      UnavailableIntakeDeliveryWorker::class,
       UnavailableIntakeOutbox::class,
       UnavailableIntakePolicy::class,
+      UnavailableIntakeTools::class,
     ];
     foreach ($classes as $class) {
       $reflection = new \ReflectionClass($class);

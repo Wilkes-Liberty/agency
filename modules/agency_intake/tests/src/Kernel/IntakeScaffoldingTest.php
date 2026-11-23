@@ -89,10 +89,12 @@ final class IntakeScaffoldingTest extends IntakeKernelTestBase {
     }
     sort($service_ids);
     $this->assertSame([
+      'agency_intake.delivery',
       'agency_intake.dispatch_gateway',
       'agency_intake.dispatch_keys',
       'agency_intake.outbox',
       'agency_intake.policy',
+      'agency_intake.tools',
     ], $service_ids);
   }
 
