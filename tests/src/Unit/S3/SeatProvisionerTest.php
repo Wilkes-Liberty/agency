@@ -60,6 +60,10 @@ final class SeatProvisionerTest extends TestCase {
     $this->assertFalse(SeatIsolation::ownersAllowed('steward', []));
     $this->assertFalse(SeatIsolation::ownersAllowed('unknown', [1]));
     $this->assertFalse(SeatIsolation::ownersAllowed('finance', [1]));
+    foreach ([[0], [-1], [NULL], [''], ['1'], [1, 0], ['a' => 1]] as $owners) {
+      $this->assertFalse(SeatIsolation::ownersAllowed('steward', $owners));
+    }
+    $this->assertTrue(SeatIsolation::ownersAllowed('steward', [1, 2]));
   }
 
   /**

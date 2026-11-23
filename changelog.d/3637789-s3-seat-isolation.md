@@ -6,3 +6,5 @@ and account-issuance hatches. Steward, intake, delivery and renewal
 are not portal roles. Unbounded owner scope and unknown seats fail
 closed. Machine credentials never inherit human grants. Live user
 provisioning stays host. Drupal.org issue 3637789.
+Owners must be a list of positive integer identifiers; the anonymous
+account is not an owner.
