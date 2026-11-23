@@ -320,6 +320,8 @@ jobs:
               "testOversizedDraftIsRefused",
               "testMissingWorkDeclarationIsNotSuccess",
               "testSignedSignal",
+              "testOutboxAndPolicyMissingTenantClaim",
+              "testOutboxAndPolicyShareNotFoundWithoutPayload",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {
@@ -1271,6 +1273,9 @@ jobs:
               "testDefaultAccessDeniesEverything",
               "testSourceDoesNotReferenceWorkforceOrDiscoveryCommands",
               "testLoadedClassesDoNotExtendCommandTypes",
+              "testMissingTenantClaimOnOutboxAndPolicy",
+              "testMissingAndForeignIntentsShareNotFound",
+              "testEnqueueNeverCreatesOpportunity",
               "testIntakeQueryRemainsDenied",
             ];
             echo "Executed intake boundaries: " . count(array_intersect($required, $executed)) . "\n";
