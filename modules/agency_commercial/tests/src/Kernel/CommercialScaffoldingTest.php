@@ -96,6 +96,7 @@ final class CommercialScaffoldingTest extends CommercialKernelTestBase {
     $this->assertSame([
       'agency_commercial.contact_match',
       'agency_commercial.contact_policy',
+      'agency_commercial.operating_runs',
       'agency_commercial.records',
     ], $service_ids);
   }
