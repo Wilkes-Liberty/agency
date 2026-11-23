@@ -9,9 +9,11 @@ never replaces the generic choices. Overlay catalogs, FormProvenance
 and vendor option ids stay host. BusinessSubmissionMapper copies
 inquiry and account fields from submitted values, drops private
 tokens and résumé values, and refuses unbound staff or hiring form
-ids. IntakePolicy validates an injected catalog; explicit
+ids. TicketSubmissionMapper copies allowlisted ticket fields and
+caps priority at Medium. JSM option ids and customfield keys stay
+host. IntakePolicy validates an injected catalog; explicit
 declarations fail closed. Overlay catalogs and Webform third-party
-settings stay host. Inquiry, BusinessSubmissionMapper and
+settings stay host. Inquiry, BusinessSubmissionMapper, TicketSubmissionMapper and
 IntakePolicy are not runtime services. They do not enqueue, create
 tickets or grant access.
 
