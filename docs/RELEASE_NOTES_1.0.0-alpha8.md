@@ -5,8 +5,8 @@ not a webcms pin bump. The maintainer chooses the tag name; 1.0.0-alpha8
 is the next identifier after 1.0.0-alpha7. Do not tag, merge, or deploy
 from this document.
 
-Inventory date: 2026-11-22. Head of `1.x` at that time:
-`1053378` (merged #100). webcms remains on
+Inventory date: 2026-11-23. Head of `1.x` at that time:
+`5fb2e6e` (merged #124). webcms remains on
 `drupal/agency: 1.0.0-alpha7`.
 
 Tracking: DEV-807. Slice stories DEV-988 / WL-918 (S3), DEV-989 / WL-919
@@ -37,6 +37,7 @@ Slice 5 (DEV-990):
 - #113: Slice 5 transfer inventory; pin unchanged
 - #122: credential, availability and roster stay unregistered
 - #123: those types stay unregistered at runtime with workforce enabled
+- #124: uninstalling campaign, expense or agreement leaves other domains intact
 
 Slice 4 (DEV-989):
 
@@ -56,6 +57,7 @@ Slice 3 (DEV-988) already on `1.x`:
 - #98: civil-time operating schedule
 - #99: bounded operating-draft receipts
 - #100: intake proxy-signal verifier
+- #125: keep a closed discovery summary window after later owner recovery
 
 Test-port (generic host proofs):
 
@@ -89,16 +91,12 @@ Merge order: **#101 → #102 → #103 → #107 → #108 →
 - #118 ready: deny-closed private search lookup
 - #119 ready: deny-closed seat isolation and account issuance
 
-Slice 5 open on `1.x`: #124 disable-isolation proofs; #127 production
-surface omit proofs. #125 (DEV-988) keeps a closed discovery summary
-window after owner recovery. This notes change is stacked on #125.
+Slice 5 open on `1.x`: #127 production surface omit proofs. #124 and
+#125 are on `1.x`. This notes change targets `1.x` directly.
 
-## Draft pull requests not ready for the tag yet
+## Remaining ready pull requests outside the Slice 3 stack
 
-Include them only after each is marked ready on its current head.
-
-- #120 this file: draft release-prep notes. Not a tag.
-- #125 S3: closed summary window after later owner recovery
+- #120 this file: ready release-prep notes. Not a tag.
 - #127 S5: production surfaces omit unregistered Slice 5 ids
 
 ## Merge order the remaining stack needs
