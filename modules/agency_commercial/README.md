@@ -24,6 +24,10 @@ agency_commercial. route names only. Host CRM route prefixes stay
 host. Optional cache metadata records the route on a hit and a miss.
 The deny-closed private-search hatch never echoes query text or
 client account numbers. Live search indexes stay host.
+Operating seats are not portal roles. Unbounded owner scope and
+unknown seats fail closed. Machine credentials never inherit human
+grants. Seat-provisioner and account-issuance hatches stay
+unavailable. Live identity issuance stays host.
 ContactEmail, OperatingSchedule and OperatingDraft are value
 objects and are not runtime services. Activity is revisionable
 (accepted vault D4) even though the ontology draft marks it not
