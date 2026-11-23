@@ -215,6 +215,76 @@ final class SliceFiveTransitionTest extends TestCase {
   }
 
   /**
+   * Production routing, permissions, info, install and PHP omit those ids.
+   *
+   * Ontology YAML may still name proposed Credential and Availability.
+   * Tests and docs may mention the ids as absence proofs.
+   */
+  public function testPackageSurfaceOmitsUnregisteredSliceFiveIds(): void {
+    $needles = [
+      'verifyCredential',
+      'offerAvailability',
+      'agency_credential',
+      'agency_availability',
+      'agency_roster',
+    ];
+    $root = dirname(__DIR__, 3);
+    $skip = [
+      $root . '/ontology',
+      $root . '/docs',
+      $root . '/changelog.d',
+    ];
+    $suffixes = [
+      '.yml',
+      '.yaml',
+      '.install',
+      '.module',
+      '.php',
+    ];
+    $files = [];
+    $iterator = new \RecursiveIteratorIterator(
+      new \RecursiveDirectoryIterator(
+        $root,
+        \FilesystemIterator::SKIP_DOTS,
+      ),
+    );
+    foreach ($iterator as $file) {
+      if (!$file->isFile()) {
+        continue;
+      }
+      $path = $file->getPathname();
+      if (str_contains($path, '/tests/') || str_contains($path, '/.git/')) {
+        continue;
+      }
+      foreach ($skip as $prefix) {
+        if (str_starts_with($path, $prefix . '/')) {
+          continue 2;
+        }
+      }
+      $match = FALSE;
+      foreach ($suffixes as $suffix) {
+        if (str_ends_with($path, $suffix)) {
+          $match = TRUE;
+          break;
+        }
+      }
+      if (!$match) {
+        continue;
+      }
+      $files[] = $path;
+    }
+    sort($files);
+    $this->assertNotEmpty($files);
+    foreach ($files as $path) {
+      $contents = file_get_contents($path);
+      $this->assertNotFalse($contents, $path);
+      foreach ($needles as $needle) {
+        $this->assertStringNotContainsString($needle, $contents, $path);
+      }
+    }
+  }
+
+  /**
    * Roster has no object type and no action id.
    */
   public function testRosterHasNoAction(): void {

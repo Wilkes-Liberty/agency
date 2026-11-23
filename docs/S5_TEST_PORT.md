@@ -24,8 +24,10 @@ exists in this 1.x stack:
 | YAML has no later write actions | `SliceFiveTransitionTest` |
 | Credential, availability and roster modules are absent | `SliceFiveTransitionTest` |
 | Service YAML omits those writes | `SliceFiveTransitionTest` |
+| Routing, permissions, info, install and module PHP omit those ids | `SliceFiveTransitionTest` |
 | Roster has no object or action | `SliceFiveTransitionTest` |
 | Enabling campaign, expense, agreement and workforce does not enable those modules, types, tables or services | `SliceFiveUnregisteredRuntimeTest` |
+| Uninstalling campaign, expense or agreement leaves the other domains intact and those types unregistered | `SliceFiveUnregisteredRuntimeTest` |
 
 Credential, Availability and Roster stay unregistered. Placement
 questions remain in [S5_OPEN_QUESTIONS.md](S5_OPEN_QUESTIONS.md). This

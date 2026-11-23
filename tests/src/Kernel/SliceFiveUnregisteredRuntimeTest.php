@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Drupal\Tests\agency\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;
+use Drupal\agency_staff\Storage\DomainStore;
 use Drupal\agency_workforce\WorkforceTypes;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -97,6 +98,14 @@ final class SliceFiveUnregisteredRuntimeTest extends KernelTestBase {
       'agency_workforce_receipt',
       'agency_workforce_outbox',
     ]);
+    foreach (DomainStore::TYPES as $type) {
+      $this->installEntitySchema($type);
+    }
+    $this->installSchema('agency_staff', [
+      'agency_staff_mutex',
+      'agency_staff_outbox',
+      'agency_staff_intent',
+    ]);
     $this->installConfig(['system', 'user', 'audit_chain']);
   }
 
@@ -127,6 +136,75 @@ final class SliceFiveUnregisteredRuntimeTest extends KernelTestBase {
    * Credential, availability and roster stay off the enabled container.
    */
   public function testCredentialAvailabilityRosterStayUnregisteredAtRuntime(): void {
+    $this->assertUnregisteredStayAbsent();
+  }
+
+  /**
+   * Uninstalling campaign leaves expense, agreement, workforce and staff.
+   */
+  public function testUninstallCampaignLeavesOtherDomainsIntact(): void {
+    $this->assertTrue(
+      $this->container->get('module_installer')->uninstall(['agency_campaign']),
+    );
+    $this->assertRegisteredExcept(['agency_campaign']);
+    $this->assertUnregisteredStayAbsent();
+  }
+
+  /**
+   * Uninstalling expense leaves campaign, agreement, workforce and staff.
+   */
+  public function testUninstallExpenseLeavesOtherDomainsIntact(): void {
+    $this->assertTrue(
+      $this->container->get('module_installer')->uninstall(['agency_expense']),
+    );
+    $this->assertRegisteredExcept(['agency_expense']);
+    $this->assertUnregisteredStayAbsent();
+  }
+
+  /**
+   * Uninstalling agreement leaves campaign, expense, workforce and staff.
+   */
+  public function testUninstallAgreementLeavesOtherDomainsIntact(): void {
+    $this->assertTrue(
+      $this->container->get('module_installer')->uninstall(['agency_agreement']),
+    );
+    $this->assertRegisteredExcept(['agency_agreement']);
+    $this->assertUnregisteredStayAbsent();
+  }
+
+  /**
+   * Registered Slice 5 and workforce modules except the uninstalled one.
+   *
+   * @param list<string> $disabled
+   *   Module ids that must be off.
+   */
+  private function assertRegisteredExcept(array $disabled): void {
+    $handler = $this->container->get('module_handler');
+    foreach ([
+      'agency_campaign',
+      'agency_expense',
+      'agency_agreement',
+      'agency_workforce',
+      'agency_staff',
+    ] as $module) {
+      if (in_array($module, $disabled, TRUE)) {
+        $this->assertFalse($handler->moduleExists($module), $module);
+        continue;
+      }
+      $this->assertTrue($handler->moduleExists($module), $module);
+    }
+    $definitions = $this->container->get('entity_type.manager')
+      ->getDefinitions();
+    $this->assertArrayHasKey('agency_discovery', $definitions);
+    foreach (WorkforceTypes::ALL as $type) {
+      $this->assertArrayHasKey($type, $definitions);
+    }
+  }
+
+  /**
+   * Credential, availability and roster stay unregistered.
+   */
+  private function assertUnregisteredStayAbsent(): void {
     $handler = $this->container->get('module_handler');
     foreach (self::UNREGISTERED_MODULES as $module) {
       $this->assertFalse($handler->moduleExists($module), $module);

@@ -360,6 +360,7 @@ jobs:
               "testCredentialAndAvailabilityStayProposedActions",
               "testCredentialAvailabilityRosterModulesAreAbsent",
               "testPackageServicesOmitUnregisteredSliceFiveWrites",
+              "testPackageSurfaceOmitsUnregisteredSliceFiveIds",
               "testRosterHasNoAction",
             ];
             if (array_diff($required, $executed)) { exit(1); }
@@ -871,6 +872,9 @@ jobs:
             $s5RuntimeRequired = [
               "testRegisteredSliceFiveAndWorkforceStayEnabled",
               "testCredentialAvailabilityRosterStayUnregisteredAtRuntime",
+              "testUninstallCampaignLeavesOtherDomainsIntact",
+              "testUninstallExpenseLeavesOtherDomainsIntact",
+              "testUninstallAgreementLeavesOtherDomainsIntact",
             ];
             echo "Executed Slice 5 unregistered runtime proofs: " . count(array_intersect($s5RuntimeRequired, $executed)) . "\n";
             if (array_diff($s5RuntimeRequired, $executed)) { exit(1); }
@@ -1214,6 +1218,7 @@ jobs:
               "testMissingAndForeignRecordsShareNotFound",
               "testClaimOnlyNeverCreatesOpportunity",
               "testOpportunityQueryRemainsDenied",
+              "testActivityQueryRemainsDenied",
               "testStageBypassIsRefused",
             ];
             echo "Executed commercial boundaries: " . count(array_intersect($required, $executed)) . "\n";
