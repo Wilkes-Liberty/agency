@@ -358,6 +358,7 @@ jobs:
               "testCredentialAndAvailabilityStayProposedActions",
               "testCredentialAvailabilityRosterModulesAreAbsent",
               "testPackageServicesOmitUnregisteredSliceFiveWrites",
+              "testPackageSurfaceOmitsUnregisteredSliceFiveIds",
               "testRosterHasNoAction",
             ];
             if (array_diff($required, $executed)) { exit(1); }
