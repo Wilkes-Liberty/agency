@@ -63,15 +63,7 @@ final class TicketSubmissionMapperTest extends TestCase {
     $this->assertArrayNotHasKey('unexpected_private_field', $result['fields']);
     $this->assertSame('moderate_limited', $result['fields']['impact']);
     $this->assertSame(
-      ['name' => 'Medium'],
-      $result['request_field_values']['priority'],
-    );
-    $this->assertArrayNotHasKey(
-      'customfield_10004',
-      $result['request_field_values'],
-    );
-    $this->assertArrayNotHasKey(
-      'customfield_10068',
+      ['priority' => ['name' => 'Medium']],
       $result['request_field_values'],
     );
   }
@@ -87,17 +79,29 @@ final class TicketSubmissionMapperTest extends TestCase {
       'impact' => 'not-a-real-option',
     ], 8);
     $this->assertSame(
-      ['name' => 'Medium'],
-      $result['request_field_values']['priority'],
-    );
-    $this->assertArrayNotHasKey(
-      'customfield_10004',
+      ['priority' => ['name' => 'Medium']],
       $result['request_field_values'],
     );
-    $this->assertArrayNotHasKey(
-      'customfield_10068',
-      $result['request_field_values'],
-    );
+  }
+
+  /**
+   * The summary is bounded single-line text; non-text values are ignored.
+   */
+  public function testSummaryAndEmailAreBoundedText(): void {
+    $mapper = new TicketSubmissionMapper();
+    $result = $mapper->map([
+      'summary' => "Outage\r\nBcc: victim@example.com" . str_repeat('x', 400),
+      'work_email' => 'ada@example.com',
+    ], 9);
+    $this->assertStringStartsWith('Outage Bcc:', $result['summary']);
+    $this->assertStringNotContainsString("\n", $result['summary']);
+    $this->assertSame(200, mb_strlen($result['summary']));
+    $result = $mapper->map([
+      'summary' => ['Forged'],
+      'work_email' => ['ada@example.com'],
+    ], 10);
+    $this->assertSame('Open a ticket', $result['summary']);
+    $this->assertSame('', $result['requester_email']);
   }
 
 }
