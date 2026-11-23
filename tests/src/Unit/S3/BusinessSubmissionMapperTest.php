@@ -119,4 +119,34 @@ final class BusinessSubmissionMapperTest extends TestCase {
     );
   }
 
+  /**
+   * Non-text submitted values never become requester or summary text.
+   */
+  public function testNonTextValuesAreNotCastToText(): void {
+    $mapper = new BusinessSubmissionMapper(self::MAPPINGS);
+    $inquiry = $mapper->map('contact', [
+      'email' => ['a@example.com', 'b@example.com'],
+      'subject' => ['Forged'],
+    ], 3);
+    $this->assertSame('', $inquiry['requester_email']);
+    $this->assertSame('Business inquiry', $inquiry['summary']);
+    $account = $mapper->map('account_request', [
+      'work_email' => ['a@example.com'],
+      'organization_name' => ['Forged'],
+    ], 4);
+    $this->assertSame('', $account['requester_email']);
+    $this->assertSame(
+      'Account access request — Unknown organization',
+      $account['summary'],
+    );
+  }
+
+  /**
+   * A list in place of a keyed mapping is refused, not a type error.
+   */
+  public function testListMappingIsRefused(): void {
+    $this->expectException(\InvalidArgumentException::class);
+    new BusinessSubmissionMapper(['inquiry']);
+  }
+
 }

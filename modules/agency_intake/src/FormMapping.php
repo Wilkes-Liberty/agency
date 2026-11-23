@@ -33,7 +33,7 @@ final class FormMapping {
     private readonly array $mappings = [],
   ) {
     foreach ($mappings as $id => $mapper) {
-      if (!preg_match('/^[a-z][a-z0-9_]*$/D', $id)
+      if (!is_string($id) || !preg_match('/^[a-z][a-z0-9_]*$/D', $id)
         || !in_array($mapper, self::CONTRACTS, TRUE)) {
         throw new \InvalidArgumentException(
           'Intake mappings require a form ID and a supported mapper '

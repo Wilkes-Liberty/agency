@@ -72,6 +72,23 @@ final class InquiryTest extends TestCase {
   }
 
   /**
+   * An optional message is still refused when it is not text.
+   */
+  public function testNonTextMessageIsRefused(): void {
+    $this->assertSame([], Inquiry::errors([
+      'intent' => 'demo',
+      'platform' => 'multiple',
+    ]));
+    foreach ([['nested' => ['value']], 7, TRUE] as $message) {
+      $this->assertArrayHasKey('message', Inquiry::errors([
+        'intent' => 'demo',
+        'platform' => 'multiple',
+        'message' => $message,
+      ]));
+    }
+  }
+
+  /**
    * Subject is derived, marketing preference must be explicit.
    */
   public function testSubjectAndPreference(): void {
