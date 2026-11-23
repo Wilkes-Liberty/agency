@@ -351,6 +351,8 @@ jobs:
               "testLookupMissingTenantClaim",
               "testLookupShareNotFoundWithoutPayload",
               "testClaimNeverCreatesOpportunity",
+              "testSearchMissingTenantClaim",
+              "testSearchShareNotFoundWithoutPayload",
             ];
             $executed = [];
             foreach ($xml->xpath("//testcase") as $case) {

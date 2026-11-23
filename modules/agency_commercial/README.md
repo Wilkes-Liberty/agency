@@ -22,6 +22,8 @@ The deny-closed operating-run hatch never claims a live run.
 CommercialRoutes matches opportunity, activity and
 agency_commercial. route names only. Host CRM route prefixes stay
 host. Optional cache metadata records the route on a hit and a miss.
+The deny-closed private-search hatch never echoes query text or
+client account numbers. Live search indexes stay host.
 ContactEmail, OperatingSchedule and OperatingDraft are value
 objects and are not runtime services. Activity is revisionable
 (accepted vault D4) even though the ontology draft marks it not
