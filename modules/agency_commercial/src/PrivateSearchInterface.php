@@ -29,7 +29,10 @@ interface PrivateSearchInterface {
    * @throws \Drupal\agency_commercial\Exception\CommercialRefusal
    *   Missing tenant claim, or no visible hit.
    */
-  public function lookup(CommercialPrincipal $principal, string $query): array;
+  public function lookup(
+    CommercialPrincipal $principal,
+    #[\SensitiveParameter] string $query,
+  ): array;
 
   /**
    * Filters records by opaque criteria.
@@ -49,7 +52,7 @@ interface PrivateSearchInterface {
    */
   public function filter(
     CommercialPrincipal $principal,
-    array $criteria,
+    #[\SensitiveParameter] array $criteria,
   ): array;
 
 }

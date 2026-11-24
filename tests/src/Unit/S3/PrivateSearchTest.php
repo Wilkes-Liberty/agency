@@ -124,6 +124,10 @@ final class PrivateSearchTest extends TestCase {
         $query,
         $exception->getMessage(),
       );
+      $this->assertNotContains(
+        $query,
+        $exception->getTrace()[0]['args'] ?? [],
+      );
       return $this->assertRefusal($exception, CommercialRefusal::NOT_FOUND);
     }
     $this->fail('Private search lookup must be not_found.');
@@ -158,6 +162,10 @@ final class PrivateSearchTest extends TestCase {
       $this->assertStringNotContainsString(
         'secret-account',
         $exception->getMessage(),
+      );
+      $this->assertNotContains(
+        $criteria,
+        $exception->getTrace()[0]['args'] ?? [],
       );
       return $this->assertRefusal($exception, CommercialRefusal::NOT_FOUND);
     }

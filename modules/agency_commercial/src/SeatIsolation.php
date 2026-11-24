@@ -34,19 +34,28 @@ final class SeatIsolation {
   }
 
   /**
-   * Whether a seat may be provisioned without explicit owners.
+   * Whether a seat may be provisioned for the given explicit owners.
    *
    * @param string $seat
    *   Candidate seat name.
-   * @param list<int> $owners
+   * @param array<array-key, mixed> $owners
    *   Explicit owner identifiers.
    *
    * @return bool
-   *   TRUE only for a known operating seat with at least one owner.
+   *   TRUE only for a known operating seat whose owners are a non-empty
+   *   list of positive integer identifiers.
    */
   public static function ownersAllowed(string $seat, array $owners): bool {
-    if (!in_array($seat, OperatingRuns::SEATS, TRUE) || $owners === []) {
+    if (!in_array($seat, OperatingRuns::SEATS, TRUE)
+      || $owners === []
+      || !array_is_list($owners)) {
       return FALSE;
+    }
+    foreach ($owners as $owner) {
+      // Zero is the anonymous account, never an explicit owner.
+      if (!is_int($owner) || $owner < 1) {
+        return FALSE;
+      }
     }
     return TRUE;
   }

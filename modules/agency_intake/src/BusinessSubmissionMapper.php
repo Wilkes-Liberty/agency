@@ -50,7 +50,7 @@ final class BusinessSubmissionMapper {
   /**
    * Constructs a mapper from injected form-id contracts.
    *
-   * @param array<string, string> $formMappings
+   * @param array<array-key, mixed> $formMappings
    *   Form ids mapped to inquiry or account. Default empty.
    *
    * @throws \InvalidArgumentException
@@ -106,10 +106,11 @@ final class BusinessSubmissionMapper {
       array_flip([...self::COMMON_FIELDS, ...$specific]),
     );
     $is_inquiry = $mapper === 'inquiry';
-    $organization_name = (string) ($fields['organization_name']
-      ?? 'Unknown organization');
+    $text = static fn(string $key, string $default): string =>
+      is_string($fields[$key] ?? NULL) ? $fields[$key] : $default;
+    $organization_name = $text('organization_name', 'Unknown organization');
     $summary = $is_inquiry
-      ? (string) ($fields['subject'] ?? 'Business inquiry')
+      ? $text('subject', 'Business inquiry')
       : 'Account access request — ' . $organization_name;
     $summary = mb_substr(
       trim(preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $summary) ?? ''),
@@ -120,7 +121,7 @@ final class BusinessSubmissionMapper {
 
     return [
       'external_reference' => $form_id . '-' . $submission_id,
-      'requester_email' => (string) ($fields[$email_key] ?? ''),
+      'requester_email' => $text($email_key, ''),
       'summary' => $summary ?: 'Website request',
       'route' => $form_id,
       'recommendation' => 'operator_review',

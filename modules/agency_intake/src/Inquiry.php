@@ -88,8 +88,10 @@ final class Inquiry {
       $errors['platform'] = 'Choose a platform or Not sure yet.';
     }
     $message = $data['message'] ?? NULL;
-    if (in_array($intent, ['general', 'project', 'partnership'], TRUE)
-      && (!is_string($message) || trim($message) === '')) {
+    $required = in_array($intent, ['general', 'project', 'partnership'], TRUE);
+    // A message is optional for demo and walkthrough, but never non-text.
+    if (($message !== NULL && !is_string($message))
+      || ($required && trim((string) $message) === '')) {
       $errors['message'] = 'Tell us briefly what you would like to accomplish.';
     }
     return $errors;

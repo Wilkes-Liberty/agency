@@ -63,14 +63,20 @@ final class TicketSubmissionMapper {
    */
   public function map(array $values, string|int $submission_id): array {
     $fields = array_intersect_key($values, array_flip(self::FIELD_ALLOWLIST));
-    $summary = trim((string) ($fields['summary'] ?? ''));
+    $text = static fn(string $key): string =>
+      is_string($fields[$key] ?? NULL) ? $fields[$key] : '';
+    $summary = mb_substr(
+      trim(preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $text('summary')) ?? ''),
+      0,
+      200,
+    );
     if ($summary === '') {
       $summary = 'Open a ticket';
     }
 
     return [
       'external_reference' => 'ticket-' . $submission_id,
-      'requester_email' => (string) ($fields['work_email'] ?? ''),
+      'requester_email' => $text('work_email'),
       'summary' => $summary,
       'route' => 'ticket',
       'recommendation' => 'operator_review',

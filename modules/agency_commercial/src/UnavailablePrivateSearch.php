@@ -17,7 +17,10 @@ final class UnavailablePrivateSearch implements PrivateSearchInterface {
   /**
    * {@inheritdoc}
    */
-  public function lookup(CommercialPrincipal $principal, string $query): array {
+  public function lookup(
+    CommercialPrincipal $principal,
+    #[\SensitiveParameter] string $query,
+  ): array {
     $principal->requireTenant();
     throw new CommercialRefusal(CommercialRefusal::NOT_FOUND);
   }
@@ -27,7 +30,7 @@ final class UnavailablePrivateSearch implements PrivateSearchInterface {
    */
   public function filter(
     CommercialPrincipal $principal,
-    array $criteria,
+    #[\SensitiveParameter] array $criteria,
   ): array {
     $principal->requireTenant();
     throw new CommercialRefusal(CommercialRefusal::NOT_FOUND);
